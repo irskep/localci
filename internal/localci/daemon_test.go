@@ -11,15 +11,20 @@ func TestDaemonManagerRunWritesAndClearsState(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
+	paths := Paths{Root: root}
+	if !canBindUnixSocket(t, paths.DaemonSocketPath()) {
+		t.Skip("unix sockets are not permitted in this environment")
+	}
+
 	manager := DaemonManager{
-		Paths: Paths{Root: root},
+		Paths: paths,
 		Now: func() time.Time {
 			return time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC)
 		},
 		PollInterval: 10 * time.Millisecond,
 		Scheduler: Scheduler{
-			Queue:  QueueStore{Paths: Paths{Root: root}},
-			Runner: Runner{Paths: Paths{Root: root}},
+			Queue:  QueueStore{Paths: paths},
+			Runner: Runner{Paths: paths},
 		},
 	}
 
