@@ -10,7 +10,8 @@ import (
 // Paths centralizes the on-disk layout so later implementation work can
 // tighten the details without spreading path logic across the codebase.
 type Paths struct {
-	Root string
+	Root                 string
+	DaemonSocketOverride string
 }
 
 func (p Paths) GlobalCacheRoot() string {

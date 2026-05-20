@@ -61,7 +61,7 @@ func (m DaemonManager) Start(ctx context.Context) (StartResult, error) {
 	}
 	_ = cmd.Process.Release()
 
-	state, err = m.waitForStateFile()
+	state, err = m.waitForReady(ctx)
 	if err != nil {
 		return StartResult{}, err
 	}
@@ -84,12 +84,15 @@ func (m DaemonManager) Stop() error {
 		return nil
 	}
 
-	process, err := os.FindProcess(state.PID)
-	if err != nil {
-		return err
-	}
-	if err := process.Signal(syscall.SIGTERM); err != nil && !errors.Is(err, os.ErrProcessDone) {
-		return err
+	client := DaemonClient{Paths: m.Paths}
+	if err := client.Shutdown(context.Background()); err != nil {
+		process, findErr := os.FindProcess(state.PID)
+		if findErr != nil {
+			return findErr
+		}
+		if signalErr := process.Signal(syscall.SIGTERM); signalErr != nil && !errors.Is(signalErr, os.ErrProcessDone) {
+			return signalErr
+		}
 	}
 
 	deadline := time.Now().Add(5 * time.Second)
@@ -102,6 +105,7 @@ func (m DaemonManager) Stop() error {
 			if removeErr := os.Remove(m.Paths.DaemonStatePath()); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
 				return removeErr
 			}
+			_ = os.Remove(m.Paths.DaemonSocketPath())
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -115,6 +119,9 @@ func (m DaemonManager) Run(ctx context.Context) error {
 		return err
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	state := DaemonState{
 		PID:       os.Getpid(),
 		StartedAt: m.now(),
@@ -124,6 +131,19 @@ func (m DaemonManager) Run(ctx context.Context) error {
 	}
 	defer func() {
 		_ = os.Remove(m.Paths.DaemonStatePath())
+		_ = os.Remove(m.Paths.DaemonSocketPath())
+	}()
+
+	server := &DaemonServer{
+		Paths:     m.Paths,
+		Queue:     m.Scheduler.Queue,
+		ReadState: m.ReadState,
+		Shutdown:  cancel,
+	}
+
+	serverErrs := make(chan error, 1)
+	go func() {
+		serverErrs <- server.Serve(ctx)
 	}()
 
 	ticker := time.NewTicker(m.pollInterval())
@@ -132,7 +152,9 @@ func (m DaemonManager) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return <-serverErrs
+		case err := <-serverErrs:
+			return err
 		case <-ticker.C:
 			_, err := m.Scheduler.RunNext(ctx)
 			if err != nil && !errors.Is(err, errTaskFailed) && !errors.Is(err, errTaskTimedOut) {
@@ -142,14 +164,27 @@ func (m DaemonManager) Run(ctx context.Context) error {
 	}
 }
 
-func (m DaemonManager) waitForStateFile() (DaemonState, error) {
+func (m DaemonManager) waitForReady(ctx context.Context) (DaemonState, error) {
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		state, err := m.ReadState()
+		client := DaemonClient{Paths: m.Paths}
+		state, err := client.Ping(ctx)
 		if err == nil {
 			return state, nil
 		}
-		if !errors.Is(err, ErrRecordNotFound) {
+
+		readState, stateErr := m.ReadState()
+		if stateErr == nil {
+			state = readState
+		} else if !errors.Is(stateErr, ErrRecordNotFound) {
+			return DaemonState{}, stateErr
+		}
+
+		if !errors.Is(stateErr, ErrRecordNotFound) && !errors.Is(err, os.ErrNotExist) {
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		if stateErr != nil && !errors.Is(stateErr, ErrRecordNotFound) {
 			return DaemonState{}, err
 		}
 		time.Sleep(50 * time.Millisecond)

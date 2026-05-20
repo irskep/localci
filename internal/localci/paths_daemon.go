@@ -1,6 +1,9 @@
 package localci
 
-import "path/filepath"
+import (
+	"os"
+	"path/filepath"
+)
 
 func (p Paths) DaemonRoot() string {
 	return filepath.Join(p.Root, "daemon")
@@ -8,6 +11,14 @@ func (p Paths) DaemonRoot() string {
 
 func (p Paths) DaemonStatePath() string {
 	return filepath.Join(p.DaemonRoot(), "state.json")
+}
+
+func (p Paths) DaemonSocketPath() string {
+	if p.DaemonSocketOverride != "" {
+		return p.DaemonSocketOverride
+	}
+
+	return filepath.Join(os.TempDir(), "localci-"+normalizeRepoDir(p.Root)+".sock")
 }
 
 func (p Paths) DaemonLogPath() string {
