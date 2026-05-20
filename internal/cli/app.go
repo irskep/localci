@@ -42,6 +42,8 @@ func (a App) Run(args []string) error {
 	case "help", "-h", "--help":
 		a.printUsage()
 		return nil
+	case "daemon":
+		return a.runDaemon(args[1:])
 	case "start":
 		return a.runStart(args[1:])
 	case "stop":
@@ -57,22 +59,6 @@ func (a App) Run(args []string) error {
 	default:
 		return fmt.Errorf("unknown command %q\n\n%s", args[0], usageText())
 	}
-}
-
-func (a App) runStart(args []string) error {
-	if len(args) != 0 {
-		return fmt.Errorf("start takes no arguments")
-	}
-
-	return errors.New("not implemented: daemon startup")
-}
-
-func (a App) runStop(args []string) error {
-	if len(args) != 0 {
-		return fmt.Errorf("stop takes no arguments")
-	}
-
-	return errors.New("not implemented: daemon shutdown")
 }
 
 func (a App) runPostcommit(args []string) error {
@@ -196,7 +182,7 @@ func (a App) newRunner() (localci.Runner, error) {
 	}, nil
 }
 
-func (a App) printInvokeSummary(result localci.InvokeResult) {
+func (a App) printInvokeSummary(result localci.RunRecord) {
 	if len(result.TaskResults) == 0 {
 		fmt.Fprintf(a.Stdout, "No localci tasks discovered for %s at %s\n", result.RepoDir, result.Commit)
 		return

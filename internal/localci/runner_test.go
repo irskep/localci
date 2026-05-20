@@ -96,15 +96,22 @@ exit 1
 		t.Fatalf("serial execution order = %q, want %q", got, want)
 	}
 
-	invokePath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "invoke.json")
-	if _, err := os.Stat(invokePath); err != nil {
-		t.Fatalf("invoke metadata missing at %s: %v", invokePath, err)
+	runPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "run.json")
+	if _, err := os.Stat(runPath); err != nil {
+		t.Fatalf("run metadata missing at %s: %v", runPath, err)
+	}
+
+	if result.Status != RunStatusSucceeded {
+		t.Fatalf("Run status = %q, want %q", result.Status, RunStatusSucceeded)
+	}
+	if result.Summary.Total != 2 || result.Summary.Succeeded != 2 {
+		t.Fatalf("unexpected run summary: %#v", result.Summary)
 	}
 
 	for _, task := range []string{"localci:first", "localci:second"} {
-		resultPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName(task), "result.json")
-		if _, err := os.Stat(resultPath); err != nil {
-			t.Fatalf("task result missing for %s at %s: %v", task, resultPath, err)
+		taskPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName(task), "task.json")
+		if _, err := os.Stat(taskPath); err != nil {
+			t.Fatalf("task record missing for %s at %s: %v", task, taskPath, err)
 		}
 	}
 }

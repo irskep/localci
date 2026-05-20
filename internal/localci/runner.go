@@ -18,15 +18,6 @@ import (
 
 const taskPrefix = "localci:"
 
-type TaskStatus string
-
-const (
-	TaskStatusSucceeded TaskStatus = "succeeded"
-	TaskStatusFailed    TaskStatus = "failed"
-	TaskStatusTimedOut  TaskStatus = "timed-out"
-	TaskStatusRunning   TaskStatus = "running"
-)
-
 type Runner struct {
 	Paths             Paths
 	MiseBin           string
@@ -39,100 +30,59 @@ type Runner struct {
 	Now               func() time.Time
 }
 
-type Task struct {
-	Name string `json:"name"`
-}
-
-type InvokeRequest struct {
-	RepoDir string
-	Commit  string
-}
-
-type InvokeResult struct {
-	RepoDir     string       `json:"repo_dir"`
-	Commit      string       `json:"commit"`
-	StartedAt   time.Time    `json:"started_at"`
-	FinishedAt  time.Time    `json:"finished_at"`
-	TaskResults []TaskResult `json:"task_results"`
-}
-
-func (r InvokeResult) Success() bool {
-	for _, result := range r.TaskResults {
-		if result.Status != TaskStatusSucceeded {
-			return false
-		}
-	}
-
-	return true
-}
-
-type TaskResult struct {
-	Name         string        `json:"name"`
-	OutputDir    string        `json:"output_dir"`
-	TaskCacheDir string        `json:"task_cache_dir"`
-	CacheDir     string        `json:"cache_dir"`
-	Status       TaskStatus    `json:"status"`
-	StartedAt    time.Time     `json:"started_at"`
-	FinishedAt   time.Time     `json:"finished_at"`
-	Duration     time.Duration `json:"duration"`
-	Error        string        `json:"error,omitempty"`
-}
-
 type miseTask struct {
 	Name string `json:"name"`
 }
 
-func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (InvokeResult, error) {
+func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error) {
 	if strings.TrimSpace(req.RepoDir) == "" {
-		return InvokeResult{}, fmt.Errorf("repo dir must not be empty")
+		return RunRecord{}, fmt.Errorf("repo dir must not be empty")
 	}
 	if strings.TrimSpace(req.Commit) == "" {
-		return InvokeResult{}, fmt.Errorf("commit must not be empty")
+		return RunRecord{}, fmt.Errorf("commit must not be empty")
 	}
 
 	if err := os.MkdirAll(r.Paths.CommitRoot(req.RepoDir, req.Commit), 0o755); err != nil {
-		return InvokeResult{}, fmt.Errorf("create commit root: %w", err)
+		return RunRecord{}, fmt.Errorf("create commit root: %w", err)
 	}
 
 	tasks, err := r.DiscoverTasks(ctx, req.RepoDir)
 	if err != nil {
-		return InvokeResult{}, err
+		return RunRecord{}, err
 	}
 
 	now := r.now()
-	result := InvokeResult{
-		RepoDir:     req.RepoDir,
-		Commit:      req.Commit,
-		StartedAt:   now,
-		TaskResults: make([]TaskResult, 0, len(tasks)),
-	}
+	record := newRunRecord(req, now)
+	record.TaskResults = make([]TaskRecord, 0, len(tasks))
 
-	if err := r.writeInvokeResult(req, result); err != nil {
-		return InvokeResult{}, err
+	if err := writeRunRecord(r.Paths, req, record); err != nil {
+		return RunRecord{}, err
 	}
 
 	for _, task := range tasks {
-		taskResult, runErr := r.runTask(ctx, req, task)
-		result.TaskResults = append(result.TaskResults, taskResult)
-		result.FinishedAt = r.now()
+		taskRecord, runErr := r.runTask(ctx, req, task)
+		record.TaskResults = append(record.TaskResults, taskRecord)
+		record.FinishedAt = r.now()
+		record.RefreshSummary()
 
-		if writeErr := r.writeInvokeResult(req, result); writeErr != nil {
-			return InvokeResult{}, writeErr
+		if writeErr := writeRunRecord(r.Paths, req, record); writeErr != nil {
+			return RunRecord{}, writeErr
 		}
 
 		if runErr != nil && !errors.Is(runErr, errTaskFailed) && !errors.Is(runErr, errTaskTimedOut) {
-			return result, runErr
+			return record, runErr
 		}
 	}
 
-	if result.FinishedAt.IsZero() {
-		result.FinishedAt = r.now()
-		if err := r.writeInvokeResult(req, result); err != nil {
-			return InvokeResult{}, err
+	if record.FinishedAt.IsZero() {
+		record.FinishedAt = r.now()
+		record.RefreshSummary()
+		if err := writeRunRecord(r.Paths, req, record); err != nil {
+			return RunRecord{}, err
 		}
 	}
 
-	return result, nil
+	return record, nil
 }
 
 func (r Runner) DiscoverTasks(ctx context.Context, repoDir string) ([]Task, error) {
@@ -170,49 +120,46 @@ var (
 	errTaskTimedOut = errors.New("task timed out")
 )
 
-func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task) (TaskResult, error) {
+func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task) (TaskRecord, error) {
 	startedAt := r.now()
-	outputDir := r.Paths.TaskOutputDir(req.RepoDir, req.Commit, task.Name)
-	taskCacheDir := r.Paths.TaskCacheDir(req.RepoDir, task.Name)
-	cacheDir := r.Paths.SharedCacheDir()
+	record := newTaskRecord(r.Paths, req, task, startedAt)
 
 	for _, dir := range []string{
 		r.Paths.CommitRoot(req.RepoDir, req.Commit),
 		r.Paths.CommitCacheDir(req.RepoDir, req.Commit),
-		outputDir,
-		taskCacheDir,
-		cacheDir,
+		record.OutputDir,
+		record.TaskCacheDir,
+		record.SharedCacheDir,
 	} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return TaskResult{}, fmt.Errorf("create directory %q: %w", dir, err)
+			return TaskRecord{}, fmt.Errorf("create directory %q: %w", dir, err)
 		}
 	}
 
-	result := TaskResult{
-		Name:         task.Name,
-		OutputDir:    outputDir,
-		TaskCacheDir: taskCacheDir,
-		CacheDir:     cacheDir,
-		Status:       TaskStatusRunning,
-		StartedAt:    startedAt,
-	}
-
-	if err := r.writeTaskResult(req, result); err != nil {
-		return TaskResult{}, err
+	if err := writeTaskRecord(record); err != nil {
+		return TaskRecord{}, err
 	}
 
 	cmd := exec.CommandContext(ctx, r.miseBin(), "run", task.Name)
 	cmd.Dir = req.RepoDir
 	cmd.Env = append(r.env(),
-		"LOCALCI_TASK_OUTPUT_DIR="+outputDir,
-		"LOCALCI_TASK_CACHE_DIR="+taskCacheDir,
-		"LOCALCI_CACHE_DIR="+cacheDir,
+		"LOCALCI_TASK_OUTPUT_DIR="+record.OutputDir,
+		"LOCALCI_TASK_CACHE_DIR="+record.TaskCacheDir,
+		"LOCALCI_CACHE_DIR="+record.SharedCacheDir,
 	)
 	cmd.Stdout = r.stdout()
 	cmd.Stderr = r.stderr()
 
 	if err := cmd.Start(); err != nil {
-		return TaskResult{}, fmt.Errorf("start task %q: %w", task.Name, err)
+		record.FinishedAt = r.now()
+		record.DurationMilliseconds = durationMilliseconds(record.StartedAt, record.FinishedAt)
+		record.Status = TaskStatusFailed
+		record.Failure = "start"
+		record.Message = err.Error()
+		if writeErr := writeTaskRecord(record); writeErr != nil {
+			return TaskRecord{}, writeErr
+		}
+		return record, errTaskFailed
 	}
 
 	waitResult := make(chan error, 1)
@@ -220,28 +167,33 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task) (Task
 		waitResult <- cmd.Wait()
 	}()
 
-	runErr := r.watchTask(ctx, cmd, outputDir, waitResult)
-	result.FinishedAt = r.now()
-	result.Duration = result.FinishedAt.Sub(startedAt)
+	runErr := r.watchTask(ctx, cmd, record.OutputDir, waitResult)
+	record.FinishedAt = r.now()
+	record.DurationMilliseconds = durationMilliseconds(record.StartedAt, record.FinishedAt)
+	var timeoutErr taskTimedOutError
+	var exitErr taskExitError
 
 	switch {
 	case runErr == nil:
-		result.Status = TaskStatusSucceeded
-	case errors.Is(runErr, errTaskTimedOut):
-		result.Status = TaskStatusTimedOut
-		result.Error = runErr.Error()
-	case errors.Is(runErr, errTaskFailed):
-		result.Status = TaskStatusFailed
-		result.Error = runErr.Error()
+		record.Status = TaskStatusSucceeded
+	case errors.As(runErr, &timeoutErr):
+		record.Status = TaskStatusTimedOut
+		record.Failure = "timed-out"
+		record.Message = timeoutErr.Error()
+	case errors.As(runErr, &exitErr):
+		record.Status = TaskStatusFailed
+		record.Failure = "exit"
+		record.ExitCode = intPtr(exitErr.ExitCode)
+		record.Message = exitErr.Error()
 	default:
-		return TaskResult{}, runErr
+		return TaskRecord{}, runErr
 	}
 
-	if err := r.writeTaskResult(req, result); err != nil {
-		return TaskResult{}, err
+	if err := writeTaskRecord(record); err != nil {
+		return TaskRecord{}, err
 	}
 
-	return result, runErr
+	return record, runErr
 }
 
 func (r Runner) watchTask(ctx context.Context, cmd *exec.Cmd, outputDir string, waitResult <-chan error) error {
@@ -260,7 +212,7 @@ func (r Runner) watchTask(ctx context.Context, cmd *exec.Cmd, outputDir string, 
 
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) {
-				return fmt.Errorf("%w: exit status %d", errTaskFailed, exitErr.ExitCode())
+				return taskExitError{ExitCode: exitErr.ExitCode()}
 			}
 
 			return err
@@ -289,7 +241,7 @@ func (r Runner) watchTask(ctx context.Context, cmd *exec.Cmd, outputDir string, 
 
 func (r Runner) stopTimedOutTask(cmd *exec.Cmd, waitResult <-chan error, timeout time.Duration) error {
 	if cmd.Process == nil {
-		return fmt.Errorf("%w: no process for task after %s", errTaskTimedOut, timeout)
+		return taskTimedOutError{After: timeout}
 	}
 
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil && !errors.Is(err, os.ErrProcessDone) {
@@ -305,9 +257,9 @@ func (r Runner) stopTimedOutTask(cmd *exec.Cmd, waitResult <-chan error, timeout
 			return fmt.Errorf("kill timed out task: %w", err)
 		}
 		<-waitResult
-		return fmt.Errorf("%w: no output for %s", errTaskTimedOut, timeout)
+		return taskTimedOutError{After: timeout}
 	case <-waitResult:
-		return fmt.Errorf("%w: no output for %s", errTaskTimedOut, timeout)
+		return taskTimedOutError{After: timeout}
 	}
 }
 
@@ -336,33 +288,6 @@ func latestOutputActivity(dir string) (time.Time, error) {
 	}
 
 	return latest, nil
-}
-
-func (r Runner) writeInvokeResult(req InvokeRequest, result InvokeResult) error {
-	path := filepath.Join(r.Paths.CommitRoot(req.RepoDir, req.Commit), "invoke.json")
-	return writeJSONFile(path, result)
-}
-
-func (r Runner) writeTaskResult(req InvokeRequest, result TaskResult) error {
-	path := filepath.Join(result.OutputDir, "result.json")
-	return writeJSONFile(path, result)
-}
-
-func writeJSONFile(path string, value any) error {
-	data, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal %s: %w", path, err)
-	}
-	data = append(data, '\n')
-
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", tmpPath, err)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("rename %s to %s: %w", tmpPath, path, err)
-	}
-	return nil
 }
 
 func commandError(action string, err error) error {
@@ -436,4 +361,36 @@ func (r Runner) pollInterval() time.Duration {
 	}
 
 	return time.Second
+}
+
+type taskExitError struct {
+	ExitCode int
+}
+
+func (e taskExitError) Error() string {
+	return fmt.Sprintf("task failed with exit status %d", e.ExitCode)
+}
+
+func (e taskExitError) Is(target error) bool {
+	return target == errTaskFailed
+}
+
+type taskTimedOutError struct {
+	After time.Duration
+}
+
+func (e taskTimedOutError) Error() string {
+	return fmt.Sprintf("task timed out after %s with no output activity", e.After)
+}
+
+func (e taskTimedOutError) Is(target error) bool {
+	return target == errTaskTimedOut
+}
+
+func durationMilliseconds(startedAt time.Time, finishedAt time.Time) int64 {
+	return finishedAt.Sub(startedAt).Milliseconds()
+}
+
+func intPtr(value int) *int {
+	return &value
 }

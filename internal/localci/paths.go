@@ -29,6 +29,10 @@ func (p Paths) CommitRoot(repoDir string, commit string) string {
 	return filepath.Join(p.RepoRoot(repoDir), commit)
 }
 
+func (p Paths) RunRecordPath(repoDir string, commit string) string {
+	return filepath.Join(p.CommitRoot(repoDir, commit), "run.json")
+}
+
 func (p Paths) CommitCacheDir(repoDir string, commit string) string {
 	return filepath.Join(p.CommitRoot(repoDir, commit), "cache")
 }
@@ -43,6 +47,10 @@ func (p Paths) TaskCacheDir(repoDir string, task string) string {
 
 func (p Paths) TaskOutputDir(repoDir string, commit string, task string) string {
 	return filepath.Join(p.CommitRoot(repoDir, commit), "out", sanitizeTaskName(task))
+}
+
+func (p Paths) TaskRecordPath(repoDir string, commit string, task string) string {
+	return filepath.Join(p.TaskOutputDir(repoDir, commit, task), "task.json")
 }
 
 func normalizeRepoDir(repoDir string) string {
