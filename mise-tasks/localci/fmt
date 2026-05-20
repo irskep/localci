@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+: "${LOCALCI_TASK_OUTPUT_DIR:?}"
+: "${LOCALCI_TASK_CACHE_DIR:?}"
+: "${LOCALCI_CACHE_DIR:?}"
+
+mkdir -p "$LOCALCI_TASK_OUTPUT_DIR" "$LOCALCI_TASK_CACHE_DIR" "$LOCALCI_CACHE_DIR"
+
+status_file="$LOCALCI_TASK_OUTPUT_DIR/status.txt"
+log_file="$LOCALCI_TASK_OUTPUT_DIR/gofmt.diff"
+
+printf 'running\n' >"$status_file"
+printf 'checking formatting\n' >"$LOCALCI_TASK_OUTPUT_DIR/summary.txt"
+
+gofmt -d ./cmd ./internal >"$log_file" 2>&1
+
+if [ -s "$log_file" ]; then
+  printf 'failed\n' >"$status_file"
+  exit 1
+fi
+
+printf 'succeeded\n' >"$status_file"

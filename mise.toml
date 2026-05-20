@@ -1,0 +1,25 @@
+[env]
+GOCACHE = "{{config_root}}/.cache/go-build"
+
+[tools]
+go = "1.26.3"
+
+[tasks.build]
+description = "Build the localci binary"
+run = "go build -o ./bin/localci ./cmd/localci"
+
+[tasks.run]
+description = "Run localci"
+run = "go run ./cmd/localci {{arg(name='args', var=true)}}"
+
+[tasks.test]
+description = "Run Go tests"
+run = "go test ./..."
+
+[tasks.fmt]
+description = "Format Go sources"
+run = "gofmt -w ./cmd ./internal"
+
+[tasks.check]
+description = "Run formatting check, tests, and build"
+depends = ["fmt", "test", "build"]

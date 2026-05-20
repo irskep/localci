@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+
+: "${LOCALCI_TASK_OUTPUT_DIR:?}"
+: "${LOCALCI_TASK_CACHE_DIR:?}"
+: "${LOCALCI_CACHE_DIR:?}"
+
+mkdir -p "$LOCALCI_TASK_OUTPUT_DIR" "$LOCALCI_TASK_CACHE_DIR" "$LOCALCI_CACHE_DIR"
+
+status_file="$LOCALCI_TASK_OUTPUT_DIR/status.txt"
+log_file="$LOCALCI_TASK_OUTPUT_DIR/build.log"
+bin_dir="$LOCALCI_TASK_OUTPUT_DIR/bin"
+
+printf 'running\n' >"$status_file"
+printf 'building localci\n' >"$LOCALCI_TASK_OUTPUT_DIR/summary.txt"
+
+mkdir -p "$bin_dir"
+
+if go build -o "$bin_dir/localci" ./cmd/localci >"$log_file" 2>&1; then
+  printf 'succeeded\n' >"$status_file"
+  exit 0
+fi
+
+printf 'failed\n' >"$status_file"
+exit 1
