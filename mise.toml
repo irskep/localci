@@ -2,6 +2,7 @@
 GOCACHE = "{{config_root}}/.cache/go-build"
 
 [tools]
+"aqua:terrastruct/d2" = "0.7.1"
 go = "1.26.3"
 
 [tasks.build]

@@ -1,0 +1,145 @@
+direction: right
+
+title: localci implementation roadmap
+
+classes: {
+  shipped: {
+    style: {
+      fill: "#e6ffef"
+      stroke: "#1f7a3d"
+      font-color: "#16351f"
+    }
+  }
+  next: {
+    style: {
+      fill: "#fff7db"
+      stroke: "#9a6700"
+      font-color: "#4a3300"
+    }
+  }
+  later: {
+    style: {
+      fill: "#eef4ff"
+      stroke: "#2f5fb3"
+      font-color: "#1d3260"
+    }
+  }
+}
+
+baseline: "Baseline: CLI scaffold + invoke + serial runner + self-hosting localci:* tasks" {
+  class: shipped
+}
+
+result-model: "Stabilize result model and persisted metadata" {
+  class: next
+}
+
+status-reader: "Filesystem-backed status reader over current metadata" {
+  class: next
+}
+
+queue-store: "Persistent queue and in-progress markers" {
+  class: next
+}
+
+scheduler: "Single-worker scheduler (serial across machine)" {
+  class: next
+}
+
+postcommit: "Implement postcommit enqueue path" {
+  class: next
+}
+
+daemon-start: "Implement start: idempotent daemon bootstrap" {
+  class: later
+}
+
+daemon-stop: "Implement stop: clean daemon shutdown" {
+  class: later
+}
+
+socket-api: "Unix socket control/status API" {
+  class: later
+}
+
+status-cli: "Implement status command via daemon API" {
+  class: later
+}
+
+task-filtering: "Add [dir] <commit> [task] filtering and summaries" {
+  class: later
+}
+
+http-server: "Localhost HTTP server" {
+  class: later
+}
+
+template-pages: "Commit and task pages with stdlib templates" {
+  class: later
+}
+
+websocket-updates: "Live status and file updates over WebSockets" {
+  class: later
+}
+
+web-command: "Implement web command for direct links" {
+  class: later
+}
+
+attempt-model: "Per-task attempt model for retries" {
+  class: later
+}
+
+retry-action: "Retry command/button for one task attempt" {
+  class: later
+}
+
+timeout-hardening: "Daemon-side timeout and output activity watcher reuse" {
+  class: later
+}
+
+crash-recovery: "Recover partial runs after daemon crash/restart" {
+  class: later
+}
+
+version-checks: "Enforce modern git and required mise presence" {
+  class: later
+}
+
+baseline -> result-model
+baseline -> queue-store
+
+result-model -> status-reader
+result-model -> status-cli
+result-model -> template-pages
+
+queue-store -> scheduler
+queue-store -> socket-api
+
+scheduler -> postcommit
+scheduler -> timeout-hardening
+
+daemon-start -> daemon-stop
+daemon-start -> socket-api
+daemon-start -> http-server
+
+socket-api -> postcommit
+socket-api -> status-cli
+socket-api -> web-command
+
+status-reader -> status-cli
+
+status-cli -> task-filtering
+
+http-server -> template-pages
+template-pages -> websocket-updates
+websocket-updates -> web-command
+
+timeout-hardening -> attempt-model
+attempt-model -> retry-action
+
+postcommit -> crash-recovery
+timeout-hardening -> crash-recovery
+daemon-stop -> crash-recovery
+
+baseline -> version-checks
