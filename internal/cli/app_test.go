@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"localci/internal/localci"
@@ -31,6 +32,38 @@ func TestParseCommitTargetDefaultsDirToCWD(t *testing.T) {
 	}
 	if got.Commit != "abc123" {
 		t.Fatalf("Commit = %q, want %q", got.Commit, "abc123")
+	}
+	if got.Task != "" {
+		t.Fatalf("Task = %q, want empty", got.Task)
+	}
+}
+
+func TestParseCommitTargetWithoutArgsUsesLatestCommitForRepo(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	app.LatestCommit = func(repo string) (string, error) {
+		if repo != repoDir {
+			t.Fatalf("repo = %q, want %q", repo, repoDir)
+		}
+		return "latest123", nil
+	}
+
+	got, err := app.parseCommitTarget(nil, "usage")
+	if err != nil {
+		t.Fatalf("parseCommitTarget returned error: %v", err)
+	}
+	if got.RepoDir != repoDir {
+		t.Fatalf("RepoDir = %q, want %q", got.RepoDir, repoDir)
+	}
+	if got.Commit != "latest123" {
+		t.Fatalf("Commit = %q, want %q", got.Commit, "latest123")
 	}
 	if got.Task != "" {
 		t.Fatalf("Task = %q, want empty", got.Task)
@@ -259,12 +292,28 @@ func TestParseCommitTargetReturnsCommandSpecificUsage(t *testing.T) {
 	}
 
 	app := testApp(root, repoDir)
-	_, err := app.parseCommitTarget([]string{}, "usage: localci web [dir] <commit> [task]")
+	app.LatestCommit = func(string) (string, error) {
+		return "", errors.New("no runs")
+	}
+	_, err := app.parseCommitTarget([]string{"a", "b", "c", "d"}, "usage: localci web [dir] <commit> [task]")
 	if err == nil {
 		t.Fatalf("parseCommitTarget returned nil error, want usage error")
 	}
 	if got, want := err.Error(), "usage: localci web [dir] <commit> [task]"; got != want {
 		t.Fatalf("error = %q, want %q", got, want)
+	}
+}
+
+func TestLatestCommitForRepoReturnsHelpfulErrorWhenMissing(t *testing.T) {
+	t.Parallel()
+
+	app := App{}
+	_, err := app.latestCommitForRepo("/definitely/missing/repo")
+	if err == nil {
+		t.Fatalf("latestCommitForRepo returned nil error, want missing-run error")
+	}
+	if got := err.Error(); !strings.Contains(got, "no localci runs found") {
+		t.Fatalf("error = %q, want no localci runs found", got)
 	}
 }
 

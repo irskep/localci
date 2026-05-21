@@ -24,6 +24,7 @@ type App struct {
 	CheckRequirements func() error
 	ConfigPath        string
 	LoadConfig        func(string) (localci.Config, error)
+	LatestCommit      func(string) (string, error)
 }
 
 func Run(args []string) int {
@@ -321,6 +322,19 @@ func defaultLocalCIRoot() (string, error) {
 
 func (a App) parseCommitTarget(args []string, usage string) (commitTarget, error) {
 	switch len(args) {
+	case 0:
+		repo, err := a.resolveRepoArg(a.Cwd)
+		if err != nil {
+			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
+		}
+		commit, err := a.latestCommitForRepo(repo)
+		if err != nil {
+			return commitTarget{}, err
+		}
+		return commitTarget{
+			RepoDir: repo,
+			Commit:  commit,
+		}, nil
 	case 1:
 		repo, err := a.resolveRepoArg(a.Cwd)
 		if err != nil {
@@ -567,4 +581,27 @@ func (a App) loadConfig() (localci.Config, error) {
 		return a.LoadConfig(path)
 	}
 	return localci.LoadConfigOrDefault(path)
+}
+
+func (a App) latestCommitForRepo(repoDir string) (string, error) {
+	if a.LatestCommit != nil {
+		return a.LatestCommit(repoDir)
+	}
+
+	root, err := defaultLocalCIRoot()
+	if err != nil {
+		return "", err
+	}
+
+	commits, err := (localci.HistoryReader{Paths: localci.Paths{Root: root}}).ListRepoCommits(repoDir)
+	if err != nil {
+		if errors.Is(err, localci.ErrRecordNotFound) {
+			return "", fmt.Errorf("no localci runs found for %s", repoDir)
+		}
+		return "", err
+	}
+	if len(commits) == 0 {
+		return "", fmt.Errorf("no localci runs found for %s", repoDir)
+	}
+	return commits[0].Commit, nil
 }
