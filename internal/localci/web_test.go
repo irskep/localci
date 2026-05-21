@@ -81,7 +81,7 @@ func TestWebServerCommitAndArtifactPages(t *testing.T) {
 	}
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if !strings.Contains(string(body), "localci:test") {
+	if !strings.Contains(string(body), ">test<") {
 		t.Fatalf("commit page missing task link: %s", string(body))
 	}
 
@@ -186,8 +186,8 @@ func TestWebServerHomeAndRepoPages(t *testing.T) {
 	if !strings.Contains(rendered, "/repo-a") || !strings.Contains(rendered, "/repo-b") {
 		t.Fatalf("home page missing repo links: %s", rendered)
 	}
-	if !strings.Contains(rendered, "bbb222") || !strings.Contains(rendered, "localci:test") {
-		t.Fatalf("home page missing task feed: %s", rendered)
+	if !strings.Contains(rendered, "bbb222") || !strings.Contains(rendered, "1 passed") {
+		t.Fatalf("home page missing run summary: %s", rendered)
 	}
 
 	resp, err = http.Get(baseURL + "/repo?repo=" + url.QueryEscape("/repo-b"))
@@ -197,7 +197,7 @@ func TestWebServerHomeAndRepoPages(t *testing.T) {
 	body, _ = io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
 	rendered = string(body)
-	if !strings.Contains(rendered, "bbb222") || !strings.Contains(rendered, "localci:test") {
+	if !strings.Contains(rendered, "bbb222") || !strings.Contains(rendered, ">test<") {
 		t.Fatalf("repo page missing commit/task info: %s", rendered)
 	}
 }

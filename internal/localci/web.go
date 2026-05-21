@@ -24,28 +24,35 @@ type WebServer struct {
 
 type HomePageView struct {
 	ReposHTML template.HTML
-	TasksHTML template.HTML
+	RunsHTML  template.HTML
 }
 
 type RepoPageView struct {
-	RepoDir     string
-	CommitsHTML template.HTML
+	RepoDir  string
+	RepoName string
+	RunsHTML template.HTML
 }
 
 type CommitPageView struct {
 	CommitStatusView
+	RepoName  string
 	TasksHTML template.HTML
 }
 
 type TaskPageView struct {
-	RepoDir string
-	Commit  string
+	RepoDir  string
+	RepoName string
+	Commit   string
 	TaskStatusView
-	FilesHTML template.HTML
+	SelectedAttempt    int
+	IsLive             bool
+	AttemptHistoryHTML template.HTML
+	FilesHTML          template.HTML
 }
 
 func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.HandleFunc("/", s.handleHome)
 	mux.HandleFunc("/repo", s.handleRepo)
 	mux.HandleFunc("/commit", s.handleCommit)
@@ -85,8 +92,12 @@ func (s WebServer) handleHome(w http.ResponseWriter, _ *http.Request) {
 
 	_ = homeTemplate.Execute(w, HomePageView{
 		ReposHTML: template.HTML(renderRepoLinksHTML(repos)),
-		TasksHTML: template.HTML(renderHomeTasksHTML(views)),
+		RunsHTML:  template.HTML(renderHomeRunsHTML(views)),
 	})
+}
+
+func (s WebServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s WebServer) handleRepo(w http.ResponseWriter, r *http.Request) {
@@ -113,8 +124,9 @@ func (s WebServer) handleRepo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = repoTemplate.Execute(w, RepoPageView{
-		RepoDir:     repoDir,
-		CommitsHTML: template.HTML(renderRepoCommitsHTML(views)),
+		RepoDir:  repoDir,
+		RepoName: repoLabel(repoDir),
+		RunsHTML: template.HTML(renderRepoRunsHTML(views)),
 	})
 }
 
@@ -129,6 +141,7 @@ func (s WebServer) handleCommit(w http.ResponseWriter, r *http.Request) {
 
 	_ = commitTemplate.Execute(w, CommitPageView{
 		CommitStatusView: view,
+		RepoName:         repoLabel(repoDir),
 		TasksHTML:        template.HTML(renderCommitTasksHTML(view)),
 	})
 }
@@ -137,6 +150,7 @@ func (s WebServer) handleTask(w http.ResponseWriter, r *http.Request) {
 	repoDir := r.URL.Query().Get("repo")
 	commit := r.URL.Query().Get("commit")
 	taskName := r.URL.Query().Get("task")
+	selectedAttempt := parseAttemptQuery(r.URL.Query().Get("attempt"))
 
 	view, err := s.buildStatusView(repoDir, commit)
 	if err != nil {
@@ -146,11 +160,16 @@ func (s WebServer) handleTask(w http.ResponseWriter, r *http.Request) {
 
 	task, ok := findTaskStatus(view.Tasks, taskName)
 	if ok {
+		task = applySelectedAttempt(s.Paths, repoDir, commit, task, selectedAttempt)
 		_ = taskTemplate.Execute(w, TaskPageView{
-			RepoDir:        repoDir,
-			Commit:         commit,
-			TaskStatusView: task,
-			FilesHTML:      template.HTML(renderTaskFilesHTML(repoDir, commit, task)),
+			RepoDir:            repoDir,
+			RepoName:           repoLabel(repoDir),
+			Commit:             commit,
+			TaskStatusView:     task,
+			SelectedAttempt:    task.Attempt,
+			IsLive:             isLatestAttempt(task),
+			AttemptHistoryHTML: template.HTML(renderAttemptHistoryHTML(repoDir, commit, task)),
+			FilesHTML:          template.HTML(renderTaskFilesHTML(repoDir, commit, task)),
 		})
 		return
 	}
@@ -305,18 +324,18 @@ var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html>
 <h1>localci</h1>
 <h2>Repos</h2>
 <ul>{{.ReposHTML}}</ul>
-<h2>Tasks</h2>
-<ul>{{.TasksHTML}}</ul>
+<h2>Recent Runs</h2>
+<ul>{{.RunsHTML}}</ul>
 </body>
 </html>`))
 
 var repoTemplate = template.Must(template.New("repo").Parse(`<!doctype html>
 <html>
-<head><meta charset="utf-8"><title>{{.RepoDir}} - localci</title></head>
+<head><meta charset="utf-8"><title>{{.RepoName}} - localci</title></head>
 <body>
 <p><a href="/">All repos</a></p>
-<h1>{{.RepoDir}}</h1>
-<ul>{{.CommitsHTML}}</ul>
+<h1>{{.RepoName}}</h1>
+<ul>{{.RunsHTML}}</ul>
 </body>
 </html>`))
 
@@ -324,9 +343,9 @@ var commitTemplate = template.Must(template.New("commit").Parse(`<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>{{.Commit}} - localci</title></head>
 <body>
-<p><a href="/">All repos</a> / <a href="/repo?repo={{urlquery .RepoDir}}">{{.RepoDir}}</a></p>
+<p><a href="/">All repos</a> / <a href="/repo?repo={{urlquery .RepoDir}}">{{.RepoName}}</a></p>
 <h1>{{.Commit}}</h1>
-<p>{{.RepoDir}}</p>
+<p>{{len .Tasks}} task{{if ne (len .Tasks) 1}}s{{end}}</p>
 <ul id="task-list">{{.TasksHTML}}</ul>
 <script>
 (() => {
@@ -349,15 +368,20 @@ var taskTemplate = template.Must(template.New("task").Parse(`<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>{{.Name}} - localci</title></head>
 <body>
-<p><a href="/">All repos</a> / <a href="/repo?repo={{urlquery .RepoDir}}">{{.RepoDir}}</a> / <a href="/commit?repo={{urlquery .RepoDir}}&commit={{urlquery .Commit}}">{{.Commit}}</a></p>
+<p><a href="/">All repos</a> / <a href="/repo?repo={{urlquery .RepoDir}}">{{.RepoName}}</a> / <a href="/commit?repo={{urlquery .RepoDir}}&commit={{urlquery .Commit}}">{{.Commit}}</a></p>
 <h1>{{.Name}}</h1>
 <p id="task-status">Status: {{.Status}}</p>
 <p id="task-attempt">Attempt: {{.Attempt}}</p>
-<p id="task-output">Output: {{.OutputDir}}</p>
+{{if .Failure}}<p id="task-failure">Failure: {{.Failure}}</p>{{end}}
+{{if .DurationMilliseconds}}<p id="task-duration">Duration: {{.DurationMilliseconds}}ms</p>{{end}}
 <form method="post" action="/retry?repo={{urlquery .RepoDir}}&commit={{urlquery .Commit}}&task={{urlquery .Name}}">
   <button type="submit">Retry task</button>
 </form>
+<h2>Attempts</h2>
+<ul>{{.AttemptHistoryHTML}}</ul>
+<h2>Artifacts</h2>
 <ul id="task-files">{{.FilesHTML}}</ul>
+{{if .IsLive}}
 <script>
 (() => {
   const url = new URL("/ws/status", window.location.origin);
@@ -372,15 +396,18 @@ var taskTemplate = template.Must(template.New("task").Parse(`<!doctype html>
     if (!task) return;
     const statusEl = document.getElementById("task-status");
     const attemptEl = document.getElementById("task-attempt");
-    const outputEl = document.getElementById("task-output");
+    const failureEl = document.getElementById("task-failure");
+    const durationEl = document.getElementById("task-duration");
     const filesEl = document.getElementById("task-files");
     if (statusEl) statusEl.textContent = "Status: " + task.status;
     if (attemptEl) attemptEl.textContent = "Attempt: " + task.attempt;
-    if (outputEl) outputEl.textContent = "Output: " + task.output_dir;
+    if (failureEl) failureEl.textContent = task.failure ? "Failure: " + task.failure : "";
+    if (durationEl) durationEl.textContent = task.duration_ms ? "Duration: " + task.duration_ms + "ms" : "";
     if (filesEl) filesEl.innerHTML = task.files_html;
   };
 })();
 </script>
+{{end}}
 </body>
 </html>`))
 
@@ -390,11 +417,12 @@ type statusPayload struct {
 }
 
 type taskPayload struct {
-	Name      string `json:"name"`
-	Attempt   int    `json:"attempt"`
-	Status    string `json:"status"`
-	OutputDir string `json:"output_dir"`
-	FilesHTML string `json:"files_html"`
+	Name       string `json:"name"`
+	Attempt    int    `json:"attempt"`
+	Status     string `json:"status"`
+	Failure    string `json:"failure"`
+	DurationMS int64  `json:"duration_ms"`
+	FilesHTML  string `json:"files_html"`
 }
 
 func renderStatusPayload(view CommitStatusView) ([]byte, error) {
@@ -405,11 +433,12 @@ func renderStatusPayload(view CommitStatusView) ([]byte, error) {
 
 	for _, task := range view.Tasks {
 		payload.Tasks = append(payload.Tasks, taskPayload{
-			Name:      task.Name,
-			Attempt:   task.Attempt,
-			Status:    string(task.Status),
-			OutputDir: task.OutputDir,
-			FilesHTML: renderTaskFilesHTML(view.RepoDir, view.Commit, task),
+			Name:       task.Name,
+			Attempt:    task.Attempt,
+			Status:     string(task.Status),
+			Failure:    task.Failure,
+			DurationMS: task.DurationMilliseconds,
+			FilesHTML:  renderTaskFilesHTML(view.RepoDir, view.Commit, task),
 		})
 	}
 
@@ -421,11 +450,21 @@ func renderCommitTasksHTML(view CommitStatusView) string {
 	for _, task := range view.Tasks {
 		fmt.Fprintf(&b, `<li><a href="%s">%s</a> — %s`,
 			template.HTMLEscapeString(taskPageURL(view.RepoDir, view.Commit, task.Name)),
-			template.HTMLEscapeString(task.Name),
+			template.HTMLEscapeString(task.ShortName),
 			template.HTMLEscapeString(string(task.Status)),
 		)
 		if task.Attempt > 0 {
-			fmt.Fprintf(&b, ` (attempt %d)`, task.Attempt)
+			fmt.Fprintf(&b, ` (attempt %d`, task.Attempt)
+			if task.AttemptCount > 1 {
+				fmt.Fprintf(&b, ` of %d`, task.AttemptCount)
+			}
+			b.WriteString(`)`)
+		}
+		if task.DurationMilliseconds > 0 {
+			fmt.Fprintf(&b, ` · %dms`, task.DurationMilliseconds)
+		}
+		if task.Failure != "" {
+			fmt.Fprintf(&b, ` · %s`, template.HTMLEscapeString(task.Failure))
 		}
 		b.WriteString(`</li>`)
 	}
@@ -437,7 +476,7 @@ func renderRepoLinksHTML(repos []RepoHistory) string {
 	for _, repo := range repos {
 		fmt.Fprintf(&b, `<li><a href="%s">%s</a> (%d commit`,
 			template.HTMLEscapeString(repoPageURL(repo.RepoDir)),
-			template.HTMLEscapeString(repo.RepoDir),
+			template.HTMLEscapeString(repoLabel(repo.RepoDir)),
 			len(repo.Commits),
 		)
 		if len(repo.Commits) != 1 {
@@ -448,12 +487,13 @@ func renderRepoLinksHTML(repos []RepoHistory) string {
 	return b.String()
 }
 
-func renderRepoCommitsHTML(views []CommitStatusView) string {
+func renderRepoRunsHTML(views []CommitStatusView) string {
 	var b strings.Builder
 	for _, view := range views {
-		fmt.Fprintf(&b, `<li><a href="%s">%s</a>`,
+		fmt.Fprintf(&b, `<li><a href="%s">%s</a> — %s`,
 			template.HTMLEscapeString(commitPageURL(view.RepoDir, view.Commit)),
 			template.HTMLEscapeString(view.Commit),
+			template.HTMLEscapeString(commitSummaryText(view)),
 		)
 		if len(view.Tasks) > 0 {
 			b.WriteString(`<ul>`)
@@ -465,36 +505,29 @@ func renderRepoCommitsHTML(views []CommitStatusView) string {
 	return b.String()
 }
 
-func renderHomeTasksHTML(views []CommitStatusView) string {
+func renderHomeRunsHTML(views []CommitStatusView) string {
 	var b strings.Builder
 	for _, view := range views {
-		for _, task := range view.Tasks {
-			fmt.Fprintf(&b, `<li><a href="%s">%s</a> <code>%s</code> <a href="%s">%s</a> — %s`,
-				template.HTMLEscapeString(repoPageURL(view.RepoDir)),
-				template.HTMLEscapeString(view.RepoDir),
-				template.HTMLEscapeString(view.Commit),
-				template.HTMLEscapeString(taskPageURL(view.RepoDir, view.Commit, task.Name)),
-				template.HTMLEscapeString(task.Name),
-				template.HTMLEscapeString(string(task.Status)),
-			)
-			if task.Attempt > 0 {
-				fmt.Fprintf(&b, ` (attempt %d)`, task.Attempt)
-			}
-			b.WriteString(`</li>`)
-		}
+		fmt.Fprintf(&b, `<li><a href="%s">%s</a> <a href="%s"><code>%s</code></a> — %s</li>`,
+			template.HTMLEscapeString(repoPageURL(view.RepoDir)),
+			template.HTMLEscapeString(repoLabel(view.RepoDir)),
+			template.HTMLEscapeString(commitPageURL(view.RepoDir, view.Commit)),
+			template.HTMLEscapeString(view.Commit),
+			template.HTMLEscapeString(commitSummaryText(view)),
+		)
 	}
 	return b.String()
 }
 
 func renderTaskFilesHTML(repoDir string, commit string, task TaskStatusView) string {
 	var b strings.Builder
-	for _, file := range task.OutputFiles {
+	for _, artifact := range task.Artifacts {
 		fmt.Fprintf(&b, `<li><a href="/artifact?repo=%s&commit=%s&task=%s&path=%s">%s</a></li>`,
 			template.URLQueryEscaper(repoDir),
 			template.URLQueryEscaper(commit),
 			template.URLQueryEscaper(task.Name),
-			template.URLQueryEscaper(file),
-			template.HTMLEscapeString(file),
+			template.URLQueryEscaper(artifact.Path),
+			template.HTMLEscapeString(artifact.DisplayName),
 		)
 	}
 	return b.String()
@@ -513,6 +546,10 @@ func taskPageURL(repoDir string, commit string, taskName string) string {
 	return "/task?repo=" + template.URLQueryEscaper(repoDir) +
 		"&commit=" + template.URLQueryEscaper(commit) +
 		"&task=" + template.URLQueryEscaper(taskName)
+}
+
+func taskAttemptPageURL(repoDir string, commit string, taskName string, attempt int) string {
+	return taskPageURL(repoDir, commit, taskName) + "&attempt=" + template.URLQueryEscaper(fmt.Sprintf("%d", attempt))
 }
 
 func commitPageURL(repoDir string, commit string) string {
@@ -546,4 +583,101 @@ func (s WebServer) buildRepoCommitViews(repoDir string, commits []RunRecord) ([]
 		views = append(views, view)
 	}
 	return views, nil
+}
+
+func commitSummaryText(view CommitStatusView) string {
+	var succeeded int
+	var failed int
+	var running int
+	for _, task := range view.Tasks {
+		switch task.Status {
+		case ExecutionStatusSucceeded:
+			succeeded++
+		case ExecutionStatusFailed, ExecutionStatusTimedOut:
+			failed++
+		case ExecutionStatusQueued, ExecutionStatusRunning:
+			running++
+		}
+	}
+
+	parts := []string{fmt.Sprintf("%d task", len(view.Tasks))}
+	if len(view.Tasks) != 1 {
+		parts[0] += "s"
+	}
+	if succeeded > 0 {
+		parts = append(parts, fmt.Sprintf("%d passed", succeeded))
+	}
+	if failed > 0 {
+		parts = append(parts, fmt.Sprintf("%d failed", failed))
+	}
+	if running > 0 {
+		parts = append(parts, fmt.Sprintf("%d live", running))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func parseAttemptQuery(raw string) int {
+	var attempt int
+	if _, err := fmt.Sscanf(strings.TrimSpace(raw), "%d", &attempt); err != nil || attempt <= 0 {
+		return 0
+	}
+	return attempt
+}
+
+func applySelectedAttempt(paths Paths, repoDir string, commit string, task TaskStatusView, selectedAttempt int) TaskStatusView {
+	if selectedAttempt <= 0 || task.AttemptCount <= 1 {
+		return task
+	}
+
+	records, err := listTaskAttemptRecords(paths, repoDir, commit, task.Name)
+	if err != nil {
+		return task
+	}
+
+	for _, record := range records {
+		if record.Attempt != selectedAttempt {
+			continue
+		}
+		task.Attempt = record.Attempt
+		task.Status = executionStatusFromTaskRecord(record)
+		task.DurationMilliseconds = record.DurationMilliseconds
+		task.Failure = record.Failure
+		task.OutputDir = record.OutputDir
+		task.OutputFiles = outputFilesOrNil(record.OutputDir)
+		task.Artifacts = buildArtifactViews(record.OutputDir, task.OutputFiles)
+		return task
+	}
+
+	return task
+}
+
+func renderAttemptHistoryHTML(repoDir string, commit string, task TaskStatusView) string {
+	var b strings.Builder
+	for _, attempt := range task.Attempts {
+		fmt.Fprintf(&b, `<li><a href="%s">attempt %d</a> — %s`,
+			template.HTMLEscapeString(taskAttemptPageURL(repoDir, commit, task.Name, attempt.Attempt)),
+			attempt.Attempt,
+			template.HTMLEscapeString(string(attempt.Status)),
+		)
+		if attempt.DurationMilliseconds > 0 {
+			fmt.Fprintf(&b, ` · %dms`, attempt.DurationMilliseconds)
+		}
+		if attempt.Failure != "" {
+			fmt.Fprintf(&b, ` · %s`, template.HTMLEscapeString(attempt.Failure))
+		}
+		b.WriteString(`</li>`)
+	}
+	return b.String()
+}
+
+func isLatestAttempt(task TaskStatusView) bool {
+	return task.Attempt == 0 || len(task.Attempts) == 0 || task.Attempt == task.Attempts[0].Attempt
+}
+
+func repoLabel(repoDir string) string {
+	label := filepath.Base(filepath.Clean(repoDir))
+	if label == "." || label == string(filepath.Separator) || label == "" {
+		return repoDir
+	}
+	return label
 }

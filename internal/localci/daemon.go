@@ -232,7 +232,7 @@ func waitForHTTPReady(ctx context.Context, baseURL string) error {
 		return fmt.Errorf("daemon did not publish an HTTP base URL")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/healthz", nil)
 	if err != nil {
 		return err
 	}

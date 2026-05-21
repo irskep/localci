@@ -25,12 +25,30 @@ type CommitStatusView struct {
 }
 
 type TaskStatusView struct {
-	Name        string          `json:"name"`
-	ShortName   string          `json:"short_name"`
-	Attempt     int             `json:"attempt"`
-	Status      ExecutionStatus `json:"status"`
-	OutputDir   string          `json:"output_dir"`
-	OutputFiles []string        `json:"output_files"`
+	Name                 string            `json:"name"`
+	ShortName            string            `json:"short_name"`
+	Attempt              int               `json:"attempt"`
+	AttemptCount         int               `json:"attempt_count"`
+	Status               ExecutionStatus   `json:"status"`
+	OutputDir            string            `json:"output_dir"`
+	OutputFiles          []string          `json:"output_files"`
+	Artifacts            []ArtifactView    `json:"artifacts"`
+	DurationMilliseconds int64             `json:"duration_ms"`
+	Failure              string            `json:"failure"`
+	Attempts             []TaskAttemptView `json:"attempts"`
+}
+
+type ArtifactView struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Path        string `json:"path"`
+}
+
+type TaskAttemptView struct {
+	Attempt              int             `json:"attempt"`
+	Status               ExecutionStatus `json:"status"`
+	DurationMilliseconds int64           `json:"duration_ms"`
+	Failure              string          `json:"failure"`
 }
 
 func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovered []Task, queued []QueueEntry, active *ActiveTask) (CommitStatusView, error) {
@@ -64,10 +82,21 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 		status := ExecutionStatusNotRun
 		outputDir := paths.TaskOutputDir(repoDir, commit, task.Name)
 		attempt := 0
+		attempts, err := listTaskAttemptViews(paths, repoDir, commit, task.Name)
+		if err != nil {
+			return CommitStatusView{}, err
+		}
+
+		var artifacts []ArtifactView
+		var durationMilliseconds int64
+		var failure string
 		if record, ok := taskRecords[task.Name]; ok {
 			outputDir = record.OutputDir
 			attempt = record.Attempt
 			status = executionStatusFromTaskRecord(record)
+			artifacts = buildArtifactViews(record.OutputDir, outputFilesOrNil(record.OutputDir))
+			durationMilliseconds = record.DurationMilliseconds
+			failure = record.Failure
 		}
 		if active != nil && active.RepoDir == repoDir && active.Commit == commit && active.TaskName == task.Name {
 			status = ExecutionStatusRunning
@@ -79,14 +108,22 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 		if err != nil {
 			return CommitStatusView{}, err
 		}
+		if len(artifacts) == 0 {
+			artifacts = buildArtifactViews(outputDir, outputFiles)
+		}
 
 		view.Tasks = append(view.Tasks, TaskStatusView{
-			Name:        task.Name,
-			ShortName:   trimTaskPrefix(task.Name),
-			Attempt:     attempt,
-			Status:      status,
-			OutputDir:   outputDir,
-			OutputFiles: outputFiles,
+			Name:                 task.Name,
+			ShortName:            trimTaskPrefix(task.Name),
+			Attempt:              attempt,
+			AttemptCount:         len(attempts),
+			Status:               status,
+			OutputDir:            outputDir,
+			OutputFiles:          outputFiles,
+			Artifacts:            artifacts,
+			DurationMilliseconds: durationMilliseconds,
+			Failure:              failure,
+			Attempts:             attempts,
 		})
 	}
 
@@ -134,4 +171,83 @@ func listOutputFiles(outputDir string) ([]string, error) {
 
 	sort.Strings(files)
 	return files, nil
+}
+
+func listTaskAttemptViews(paths Paths, repoDir string, commit string, taskName string) ([]TaskAttemptView, error) {
+	records, err := listTaskAttemptRecords(paths, repoDir, commit, taskName)
+	if err != nil {
+		return nil, err
+	}
+
+	views := make([]TaskAttemptView, 0, len(records))
+	for _, record := range records {
+		views = append(views, TaskAttemptView{
+			Attempt:              record.Attempt,
+			Status:               executionStatusFromTaskRecord(record),
+			DurationMilliseconds: record.DurationMilliseconds,
+			Failure:              record.Failure,
+		})
+	}
+
+	return views, nil
+}
+
+func listTaskAttemptRecords(paths Paths, repoDir string, commit string, taskName string) ([]TaskRecord, error) {
+	root := paths.TaskOutputDir(repoDir, commit, taskName)
+	records := []TaskRecord{}
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() || d.Name() != "task.json" {
+			return nil
+		}
+
+		record, err := readTaskRecord(path)
+		if err != nil {
+			return err
+		}
+		records = append(records, record)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Slice(records, func(i int, j int) bool {
+		return records[i].Attempt > records[j].Attempt
+	})
+	return records, nil
+}
+
+func buildArtifactViews(outputDir string, files []string) []ArtifactView {
+	artifacts := make([]ArtifactView, 0, len(files))
+	for _, file := range files {
+		artifacts = append(artifacts, ArtifactView{
+			Name:        filepath.Base(file),
+			DisplayName: relativeArtifactName(outputDir, file),
+			Path:        file,
+		})
+	}
+	return artifacts
+}
+
+func relativeArtifactName(outputDir string, file string) string {
+	relative, err := filepath.Rel(outputDir, file)
+	if err != nil {
+		return filepath.Base(file)
+	}
+	return relative
+}
+
+func outputFilesOrNil(outputDir string) []string {
+	files, err := listOutputFiles(outputDir)
+	if err != nil {
+		return nil
+	}
+	return files
 }

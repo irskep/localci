@@ -37,6 +37,7 @@ func TestTaskTemplateEmbedsWebSocketParamsWithoutExtraQuotes(t *testing.T) {
 	err := taskTemplate.Execute(&out, TaskPageView{
 		RepoDir: "/repo",
 		Commit:  "abc123",
+		IsLive:  true,
 		TaskStatusView: TaskStatusView{
 			Name: "localci:test",
 		},
