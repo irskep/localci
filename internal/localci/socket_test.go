@@ -172,6 +172,80 @@ func TestDaemonServerPostcommitEnqueuesNonActiveTasks(t *testing.T) {
 	}
 }
 
+func TestDaemonServerStatusView(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := Paths{Root: root}
+	queue := QueueStore{Paths: paths}
+	req := InvokeRequest{RepoDir: "/repo", Commit: "abc123"}
+
+	taskRecord := newTaskRecord(paths, req, Task{Name: "localci:build"}, time.Now().UTC())
+	taskRecord.Status = TaskStatusSucceeded
+	taskRecord.FinishedAt = taskRecord.StartedAt.Add(time.Second)
+	if err := os.MkdirAll(taskRecord.OutputDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := writeTaskRecord(taskRecord); err != nil {
+		t.Fatalf("writeTaskRecord returned error: %v", err)
+	}
+
+	run := newRunRecord(req, taskRecord.StartedAt)
+	run.FinishedAt = taskRecord.FinishedAt
+	run.TaskResults = []TaskRecord{taskRecord}
+	run.RefreshSummary()
+	if err := writeRunRecord(paths, req, run); err != nil {
+		t.Fatalf("writeRunRecord returned error: %v", err)
+	}
+
+	if _, err := queue.Enqueue("/repo", "abc123", "localci:fmt"); err != nil {
+		t.Fatalf("Enqueue returned error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if !canBindUnixSocket(t, paths.DaemonSocketPath()) {
+		t.Skip("unix sockets are not permitted in this environment")
+	}
+
+	server := &DaemonServer{
+		Paths: paths,
+		Queue: queue,
+		ReadState: func() (DaemonState, error) {
+			return DaemonState{PID: 123, StartedAt: time.Now().UTC()}, nil
+		},
+		DiscoverTasks: func(context.Context, string) ([]Task, error) {
+			return []Task{
+				{Name: "localci:build"},
+				{Name: "localci:fmt"},
+				{Name: "localci:test"},
+			}, nil
+		},
+		Shutdown: cancel,
+	}
+
+	errs := make(chan error, 1)
+	go func() {
+		errs <- server.Serve(ctx)
+	}()
+	waitForSocket(t, paths.DaemonSocketPath())
+
+	client := DaemonClient{Paths: paths}
+	view, err := client.Status(context.Background(), "/repo", "abc123")
+	if err != nil {
+		t.Fatalf("Status returned error: %v", err)
+	}
+	if len(view.Tasks) != 3 {
+		t.Fatalf("len(view.Tasks) = %d, want 3", len(view.Tasks))
+	}
+
+	cancel()
+	if err := <-errs; err != nil {
+		t.Fatalf("Serve returned error: %v", err)
+	}
+}
+
 func waitForSocket(t *testing.T, path string) {
 	t.Helper()
 

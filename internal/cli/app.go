@@ -100,7 +100,39 @@ func (a App) runStatus(args []string) error {
 		return err
 	}
 
-	return errors.New("not implemented: status for repo " + spec.RepoDir + ", commit " + spec.Commit + maybeTaskSuffix(spec.Task))
+	runner, err := a.newRunner()
+	if err != nil {
+		return err
+	}
+
+	client := localci.DaemonClient{Paths: runner.Paths}
+	statusView, err := client.Status(context.Background(), spec.RepoDir, spec.Commit)
+	if err != nil {
+		return err
+	}
+
+	filtered := statusView.Tasks
+	if spec.Task != "" {
+		filtered = nil
+		for _, task := range statusView.Tasks {
+			if task.Name == spec.Task {
+				filtered = append(filtered, task)
+				break
+			}
+		}
+		if len(filtered) == 0 {
+			return fmt.Errorf("task %q not found", spec.Task)
+		}
+	}
+
+	fmt.Fprintf(a.Stdout, "Status for %s at %s\n", statusView.RepoDir, statusView.Commit)
+	for _, task := range filtered {
+		fmt.Fprintf(a.Stdout, "%s\t%s\t%s\n", task.Status, task.Name, task.OutputDir)
+		for _, file := range task.OutputFiles {
+			fmt.Fprintf(a.Stdout, "  %s\n", file)
+		}
+	}
+	return nil
 }
 
 func (a App) runWeb(args []string) error {
