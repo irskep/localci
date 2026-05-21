@@ -56,6 +56,8 @@ func (a App) Run(args []string) error {
 		return a.runDaemon(args[1:])
 	case "start":
 		return a.runStart(args[1:])
+	case "restart":
+		return a.runRestart(args[1:])
 	case "stop":
 		return a.runStop(args[1:])
 	case "postcommit":
@@ -192,6 +194,7 @@ func usageText() string {
 
 Usage:
   localci start
+  localci restart
   localci stop
 	localci postcommit <repo> <commit>
   localci invoke <repo> <commit>

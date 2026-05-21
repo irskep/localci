@@ -73,6 +73,28 @@ func TestAppRunRecognizesInvoke(t *testing.T) {
 	}
 }
 
+func TestAppRunRecognizesRestart(t *testing.T) {
+	t.Parallel()
+
+	app := App{
+		Stdout: io.Discard,
+		Stderr: io.Discard,
+		Cwd:    "/repo",
+		CheckRequirements: func() error {
+			return nil
+		},
+	}
+
+	err := app.Run([]string{"restart", "extra"})
+	if err == nil {
+		t.Fatalf("Run returned nil error, want usage error")
+	}
+
+	if got, want := err.Error(), "restart takes no arguments"; got != want {
+		t.Fatalf("error = %q, want %q", got, want)
+	}
+}
+
 func TestAppRunSkipsRequirementsForHelp(t *testing.T) {
 	t.Parallel()
 

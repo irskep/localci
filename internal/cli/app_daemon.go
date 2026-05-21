@@ -32,6 +32,25 @@ func (a App) runStart(args []string) error {
 	return nil
 }
 
+func (a App) runRestart(args []string) error {
+	if len(args) != 0 {
+		return fmt.Errorf("restart takes no arguments")
+	}
+
+	manager, err := a.newDaemonManager()
+	if err != nil {
+		return err
+	}
+
+	result, err := manager.Restart(context.Background())
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(a.Stdout, "Restarted daemon pid %d\nLog: %s\n", result.State.PID, manager.Paths.DaemonLogPath())
+	return nil
+}
+
 func (a App) runStop(args []string) error {
 	if len(args) != 0 {
 		return fmt.Errorf("stop takes no arguments")

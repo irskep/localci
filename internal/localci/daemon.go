@@ -76,6 +76,14 @@ func (m DaemonManager) Start(ctx context.Context) (StartResult, error) {
 	}, nil
 }
 
+func (m DaemonManager) Restart(ctx context.Context) (StartResult, error) {
+	if err := m.Stop(); err != nil {
+		return StartResult{}, err
+	}
+
+	return m.Start(ctx)
+}
+
 func (m DaemonManager) Stop() error {
 	state, alive, err := m.readAliveState()
 	if err != nil {
