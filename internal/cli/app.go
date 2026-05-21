@@ -99,7 +99,7 @@ func (a App) runPostcommit(args []string) error {
 }
 
 func (a App) runStatus(args []string) error {
-	spec, err := parseCommitTarget(args, a.Cwd)
+	spec, err := parseCommitTarget(args, a.Cwd, "usage: localci status [dir] <commit> [task]")
 	if err != nil {
 		return err
 	}
@@ -140,7 +140,7 @@ func (a App) runStatus(args []string) error {
 }
 
 func (a App) runWeb(args []string) error {
-	spec, err := parseCommitTarget(args, a.Cwd)
+	spec, err := parseCommitTarget(args, a.Cwd, "usage: localci web [dir] <commit> [task]")
 	if err != nil {
 		return err
 	}
@@ -265,7 +265,7 @@ func defaultLocalCIRoot() (string, error) {
 	return filepath.Join(home, ".localci"), nil
 }
 
-func parseCommitTarget(args []string, cwd string) (commitTarget, error) {
+func parseCommitTarget(args []string, cwd string, usage string) (commitTarget, error) {
 	switch len(args) {
 	case 1:
 		return commitTarget{
@@ -294,7 +294,7 @@ func parseCommitTarget(args []string, cwd string) (commitTarget, error) {
 			Task:    strings.TrimSpace(args[2]),
 		}, nil
 	default:
-		return commitTarget{}, fmt.Errorf("usage: localci status [dir] <commit> [task]")
+		return commitTarget{}, fmt.Errorf("%s", usage)
 	}
 }
 

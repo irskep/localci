@@ -22,10 +22,16 @@ type WebServer struct {
 	DiscoverTasks func(context.Context, string) ([]Task, error)
 }
 
+type CommitPageView struct {
+	CommitStatusView
+	TasksHTML template.HTML
+}
+
 type TaskPageView struct {
 	RepoDir string
 	Commit  string
 	TaskStatusView
+	FilesHTML template.HTML
 }
 
 func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
@@ -65,7 +71,10 @@ func (s WebServer) handleCommit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = commitTemplate.Execute(w, view)
+	_ = commitTemplate.Execute(w, CommitPageView{
+		CommitStatusView: view,
+		TasksHTML:        template.HTML(renderCommitTasksHTML(view)),
+	})
 }
 
 func (s WebServer) handleTask(w http.ResponseWriter, r *http.Request) {
@@ -79,15 +88,15 @@ func (s WebServer) handleTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, task := range view.Tasks {
-		if task.Name == taskName {
-			_ = taskTemplate.Execute(w, TaskPageView{
-				RepoDir:        repoDir,
-				Commit:         commit,
-				TaskStatusView: task,
-			})
-			return
-		}
+	task, ok := findTaskStatus(view.Tasks, taskName)
+	if ok {
+		_ = taskTemplate.Execute(w, TaskPageView{
+			RepoDir:        repoDir,
+			Commit:         commit,
+			TaskStatusView: task,
+			FilesHTML:      template.HTML(renderTaskFilesHTML(repoDir, commit, task)),
+		})
+		return
 	}
 
 	http.Error(w, "task not found", http.StatusNotFound)
@@ -209,11 +218,7 @@ var commitTemplate = template.Must(template.New("commit").Parse(`<!doctype html>
 <body>
 <h1>{{.Commit}}</h1>
 <p>{{.RepoDir}}</p>
-<ul id="task-list">
-{{range .Tasks}}
-  <li><a href="/task?repo={{urlquery $.RepoDir}}&commit={{urlquery $.Commit}}&task={{urlquery .Name}}">{{.Name}}</a> — {{.Status}}</li>
-{{end}}
-</ul>
+<ul id="task-list">{{.TasksHTML}}</ul>
 <script>
 (() => {
   const url = new URL("/ws/status", window.location.origin);
@@ -238,11 +243,7 @@ var taskTemplate = template.Must(template.New("task").Parse(`<!doctype html>
 <h1>{{.Name}}</h1>
 <p id="task-status">Status: {{.Status}}</p>
 <p id="task-output">Output: {{.OutputDir}}</p>
-<ul id="task-files">
-{{range .OutputFiles}}
-  <li><a href="/artifact?repo={{urlquery $.RepoDir}}&commit={{urlquery $.Commit}}&task={{urlquery $.Name}}&path={{urlquery .}}">{{.}}</a></li>
-{{end}}
-</ul>
+<ul id="task-files">{{.FilesHTML}}</ul>
 <script>
 (() => {
   const url = new URL("/ws/status", window.location.origin);
@@ -323,4 +324,13 @@ func renderTaskFilesHTML(repoDir string, commit string, task TaskStatusView) str
 		)
 	}
 	return b.String()
+}
+
+func findTaskStatus(tasks []TaskStatusView, name string) (TaskStatusView, bool) {
+	for _, task := range tasks {
+		if task.Name == name {
+			return task, true
+		}
+	}
+	return TaskStatusView{}, false
 }

@@ -11,7 +11,7 @@ import (
 func TestParseCommitTargetDefaultsDirToCWD(t *testing.T) {
 	t.Parallel()
 
-	got, err := parseCommitTarget([]string{"abc123"}, "/repo")
+	got, err := parseCommitTarget([]string{"abc123"}, "/repo", "usage")
 	if err != nil {
 		t.Fatalf("parseCommitTarget returned error: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestParseCommitTargetDefaultsDirToCWD(t *testing.T) {
 func TestParseCommitTargetWithRepoAndTask(t *testing.T) {
 	t.Parallel()
 
-	got, err := parseCommitTarget([]string{"./worktree", "abc123", "localci:test"}, "/repo")
+	got, err := parseCommitTarget([]string{"./worktree", "abc123", "localci:test"}, "/repo", "usage")
 	if err != nil {
 		t.Fatalf("parseCommitTarget returned error: %v", err)
 	}
@@ -65,6 +65,18 @@ func TestAppRunRecognizesInvoke(t *testing.T) {
 	}
 
 	if got, want := err.Error(), "usage: localci invoke <repo> <commit>"; got != want {
+		t.Fatalf("error = %q, want %q", got, want)
+	}
+}
+
+func TestParseCommitTargetReturnsCommandSpecificUsage(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseCommitTarget([]string{}, "/repo", "usage: localci web [dir] <commit> [task]")
+	if err == nil {
+		t.Fatalf("parseCommitTarget returned nil error, want usage error")
+	}
+	if got, want := err.Error(), "usage: localci web [dir] <commit> [task]"; got != want {
 		t.Fatalf("error = %q, want %q", got, want)
 	}
 }
