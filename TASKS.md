@@ -40,6 +40,8 @@ Current order:
 - `LC-016` daemon timeout watcher reuse
 - `LC-017` crash recovery
 - `LC-018` modern git and mise checks
+- `LC-023` repo-local daemon mise tasks
+- `LC-024` git hook install and self-hosting loop
 - `LC-022` checkpoint before final hardening
 
 ## LC-001
@@ -201,7 +203,7 @@ Current order:
 - `deps`: `[LC-007, LC-013, LC-021]`
 - `name`: Per-task attempts and retry flow
 - `description`: Add attempt-aware task output layout and single-task retry behavior.
-- `status`: `unstarted`
+- `status`: `inprogress`
 - `validation`: `lint`, `typecheck`, `test`, `commit`
 
 ## LC-016
@@ -234,8 +236,26 @@ Current order:
 ## LC-022
 
 - `id`: `LC-022`
-- `deps`: `[LC-015, LC-016, LC-017, LC-018]`
+- `deps`: `[LC-015, LC-016, LC-017, LC-018, LC-023, LC-024]`
 - `name`: Checkpoint before final hardening
 - `description`: Audit the near-finished design for exemplary Go quality, simplification opportunities, and anything that should be cut before users exist.
+- `status`: `unstarted`
+- `validation`: `lint`, `typecheck`, `test`, `commit`
+
+## LC-023
+
+- `id`: `LC-023`
+- `deps`: `[LC-008]`
+- `name`: Repo-local daemon mise tasks
+- `description`: Add `mise` tasks in this repo to start and stop the localci daemon for local development.
+- `status`: `unstarted`
+- `validation`: `lint`, `typecheck`, `test`, `commit`
+
+## LC-024
+
+- `id`: `LC-024`
+- `deps`: `[LC-010, LC-023]`
+- `name`: Git hook install and self-hosting loop
+- `description`: Wire post-commit hook installation so localci can run on itself end to end in this repo.
 - `status`: `unstarted`
 - `validation`: `lint`, `typecheck`, `test`, `commit`
