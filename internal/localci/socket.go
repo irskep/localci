@@ -12,7 +12,9 @@ import (
 )
 
 type DaemonRequest struct {
-	Method string `json:"method"`
+	Method  string `json:"method"`
+	RepoDir string `json:"repo_dir,omitempty"`
+	Commit  string `json:"commit,omitempty"`
 }
 
 type DaemonResponse struct {
@@ -20,6 +22,7 @@ type DaemonResponse struct {
 	Error      string       `json:"error,omitempty"`
 	State      *DaemonState `json:"state,omitempty"`
 	Queue      []QueueEntry `json:"queue,omitempty"`
+	Enqueued   []QueueEntry `json:"enqueued,omitempty"`
 	ActiveTask *ActiveTask  `json:"active_task,omitempty"`
 }
 
@@ -59,6 +62,18 @@ func (c DaemonClient) ActiveTask(ctx context.Context) (*ActiveTask, error) {
 	return resp.ActiveTask, nil
 }
 
+func (c DaemonClient) Postcommit(ctx context.Context, repoDir string, commit string) ([]QueueEntry, error) {
+	resp, err := c.call(ctx, DaemonRequest{
+		Method:  "postcommit",
+		RepoDir: repoDir,
+		Commit:  commit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Enqueued, nil
+}
+
 func (c DaemonClient) call(ctx context.Context, req DaemonRequest) (DaemonResponse, error) {
 	dialer := net.Dialer{}
 	conn, err := dialer.DialContext(ctx, "unix", c.Paths.DaemonSocketPath())
@@ -85,11 +100,12 @@ func (c DaemonClient) call(ctx context.Context, req DaemonRequest) (DaemonRespon
 }
 
 type DaemonServer struct {
-	Paths     Paths
-	Queue     QueueStore
-	ReadState func() (DaemonState, error)
-	Shutdown  func()
-	mu        sync.Mutex
+	Paths         Paths
+	Queue         QueueStore
+	ReadState     func() (DaemonState, error)
+	DiscoverTasks func(context.Context, string) ([]Task, error)
+	Shutdown      func()
+	mu            sync.Mutex
 }
 
 func (s *DaemonServer) Serve(ctx context.Context) error {
@@ -180,12 +196,54 @@ func (s *DaemonServer) dispatch(req DaemonRequest) DaemonResponse {
 			s.Shutdown()
 		}
 		return DaemonResponse{OK: true}
+	case "postcommit":
+		entries, err := s.enqueuePostcommit(req.RepoDir, req.Commit)
+		if err != nil {
+			return errorResponse(err)
+		}
+		return DaemonResponse{OK: true, Enqueued: entries}
 	default:
 		return DaemonResponse{
 			OK:    false,
 			Error: fmt.Sprintf("unknown daemon method %q", req.Method),
 		}
 	}
+}
+
+func (s *DaemonServer) enqueuePostcommit(repoDir string, commit string) ([]QueueEntry, error) {
+	if repoDir == "" {
+		return nil, fmt.Errorf("repo_dir is required")
+	}
+	if commit == "" {
+		return nil, fmt.Errorf("commit is required")
+	}
+	if s.DiscoverTasks == nil {
+		return nil, fmt.Errorf("daemon task discovery is not configured")
+	}
+
+	tasks, err := s.DiscoverTasks(context.Background(), repoDir)
+	if err != nil {
+		return nil, err
+	}
+
+	enqueued := make([]QueueEntry, 0, len(tasks))
+	for _, task := range tasks {
+		active, err := s.Queue.IsTaskActive(repoDir, commit, task.Name)
+		if err != nil {
+			return nil, err
+		}
+		if active {
+			continue
+		}
+
+		entry, err := s.Queue.Enqueue(repoDir, commit, task.Name)
+		if err != nil {
+			return nil, err
+		}
+		enqueued = append(enqueued, entry)
+	}
+
+	return enqueued, nil
 }
 
 func errorResponse(err error) DaemonResponse {

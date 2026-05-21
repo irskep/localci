@@ -135,10 +135,11 @@ func (m DaemonManager) Run(ctx context.Context) error {
 	}()
 
 	server := &DaemonServer{
-		Paths:     m.Paths,
-		Queue:     m.Scheduler.Queue,
-		ReadState: m.ReadState,
-		Shutdown:  cancel,
+		Paths:         m.Paths,
+		Queue:         m.Scheduler.Queue,
+		ReadState:     m.ReadState,
+		DiscoverTasks: m.Scheduler.Runner.DiscoverTasks,
+		Shutdown:      cancel,
 	}
 
 	serverErrs := make(chan error, 1)

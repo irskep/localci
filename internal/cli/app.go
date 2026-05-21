@@ -76,7 +76,22 @@ func (a App) runPostcommit(args []string) error {
 		return fmt.Errorf("commit must not be empty")
 	}
 
-	return errors.New("not implemented: postcommit enqueue for repo " + repo + " and commit " + commit)
+	runner, err := a.newRunner()
+	if err != nil {
+		return err
+	}
+
+	client := localci.DaemonClient{Paths: runner.Paths}
+	enqueued, err := client.Postcommit(context.Background(), repo, commit)
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(a.Stdout, "Enqueued %d task(s) for %s at %s\n", len(enqueued), repo, commit)
+	for _, entry := range enqueued {
+		fmt.Fprintf(a.Stdout, "%s\n", entry.TaskName)
+	}
+	return nil
 }
 
 func (a App) runStatus(args []string) error {

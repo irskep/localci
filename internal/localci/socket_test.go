@@ -43,6 +43,11 @@ func TestDaemonServerPingQueueActiveAndShutdown(t *testing.T) {
 				StartedAt: time.Date(2026, 5, 21, 1, 0, 0, 0, time.UTC),
 			}, nil
 		},
+		DiscoverTasks: func(context.Context, string) ([]Task, error) {
+			return []Task{
+				{Name: "localci:build"},
+			}, nil
+		},
 		Shutdown: func() {
 			shutdownCalled = true
 			cancel()
@@ -87,6 +92,81 @@ func TestDaemonServerPingQueueActiveAndShutdown(t *testing.T) {
 	if !shutdownCalled {
 		t.Fatalf("shutdown callback was not called")
 	}
+	if err := <-errs; err != nil {
+		t.Fatalf("Serve returned error: %v", err)
+	}
+}
+
+func TestDaemonServerPostcommitEnqueuesNonActiveTasks(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := Paths{Root: root}
+	queue := QueueStore{
+		Paths: paths,
+		Now: func() time.Time {
+			return time.Date(2026, 5, 21, 1, 30, 0, 0, time.UTC)
+		},
+	}
+
+	activeEntry := QueueEntry{
+		RepoDir:    "/repo",
+		RepoID:     normalizeRepoDir("/repo"),
+		Commit:     "abc123",
+		TaskName:   "localci:test",
+		TaskKey:    sanitizeTaskName("localci:test"),
+		EnqueuedAt: time.Date(2026, 5, 21, 1, 0, 0, 0, time.UTC),
+	}
+	if _, err := queue.MarkActive(activeEntry); err != nil {
+		t.Fatalf("MarkActive returned error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if !canBindUnixSocket(t, paths.DaemonSocketPath()) {
+		t.Skip("unix sockets are not permitted in this environment")
+	}
+
+	server := &DaemonServer{
+		Paths: paths,
+		Queue: queue,
+		ReadState: func() (DaemonState, error) {
+			return DaemonState{PID: 123, StartedAt: time.Now().UTC()}, nil
+		},
+		DiscoverTasks: func(context.Context, string) ([]Task, error) {
+			return []Task{
+				{Name: "localci:test"},
+				{Name: "localci:build"},
+			}, nil
+		},
+		Shutdown: cancel,
+	}
+
+	errs := make(chan error, 1)
+	go func() {
+		errs <- server.Serve(ctx)
+	}()
+	waitForSocket(t, paths.DaemonSocketPath())
+
+	client := DaemonClient{Paths: paths}
+	enqueued, err := client.Postcommit(context.Background(), "/repo", "abc123")
+	if err != nil {
+		t.Fatalf("Postcommit returned error: %v", err)
+	}
+	if len(enqueued) != 1 || enqueued[0].TaskName != "localci:build" {
+		t.Fatalf("unexpected enqueued tasks: %#v", enqueued)
+	}
+
+	queueEntries, err := queue.List()
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(queueEntries) != 1 || queueEntries[0].TaskName != "localci:build" {
+		t.Fatalf("unexpected queue contents: %#v", queueEntries)
+	}
+
+	cancel()
 	if err := <-errs; err != nil {
 		t.Fatalf("Serve returned error: %v", err)
 	}
