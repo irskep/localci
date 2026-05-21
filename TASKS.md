@@ -248,7 +248,7 @@ Current order:
 - `deps`: `[LC-008]`
 - `name`: Repo-local daemon mise tasks
 - `description`: Add `mise` tasks in this repo to start and stop the localci daemon for local development.
-- `status`: `unstarted`
+- `status`: `done`
 - `validation`: `lint`, `typecheck`, `test`, `commit`
 
 ## LC-024
