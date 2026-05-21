@@ -2,6 +2,7 @@ package localci
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -10,6 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/coder/websocket"
 )
 
 type WebServer struct {
@@ -30,6 +34,7 @@ func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
 	mux.HandleFunc("/commit", s.handleCommit)
 	mux.HandleFunc("/task", s.handleTask)
 	mux.HandleFunc("/artifact", s.handleArtifact)
+	mux.HandleFunc("/ws/status", s.handleStatusWebSocket)
 
 	server := &http.Server{
 		Handler: mux,
@@ -117,6 +122,47 @@ func (s WebServer) handleArtifact(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
+func (s WebServer) handleStatusWebSocket(w http.ResponseWriter, r *http.Request) {
+	repoDir := r.URL.Query().Get("repo")
+	commit := r.URL.Query().Get("commit")
+	if repoDir == "" || commit == "" {
+		http.Error(w, "repo and commit are required", http.StatusBadRequest)
+		return
+	}
+
+	conn, err := websocket.Accept(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	ctx := r.Context()
+	for {
+		view, err := s.buildStatusView(repoDir, commit)
+		if err != nil {
+			_ = conn.Close(websocket.StatusInternalError, err.Error())
+			return
+		}
+		data, err := renderStatusPayload(view)
+		if err != nil {
+			_ = conn.Close(websocket.StatusInternalError, err.Error())
+			return
+		}
+		if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
 func (s WebServer) buildStatusView(repoDir string, commit string) (CommitStatusView, error) {
 	if repoDir == "" || commit == "" {
 		return CommitStatusView{}, fmt.Errorf("repo and commit are required")
@@ -163,11 +209,25 @@ var commitTemplate = template.Must(template.New("commit").Parse(`<!doctype html>
 <body>
 <h1>{{.Commit}}</h1>
 <p>{{.RepoDir}}</p>
-<ul>
+<ul id="task-list">
 {{range .Tasks}}
   <li><a href="/task?repo={{urlquery $.RepoDir}}&commit={{urlquery $.Commit}}&task={{urlquery .Name}}">{{.Name}}</a> — {{.Status}}</li>
 {{end}}
 </ul>
+<script>
+(() => {
+  const url = new URL("/ws/status", window.location.origin);
+  url.searchParams.set("repo", {{printf "%q" .RepoDir}});
+  url.searchParams.set("commit", {{printf "%q" .Commit}});
+  const ws = new WebSocket(url);
+  ws.onmessage = (event) => {
+    const payload = JSON.parse(event.data);
+    const taskList = document.getElementById("task-list");
+    if (!taskList) return;
+    taskList.innerHTML = payload.commit_html;
+  };
+})();
+</script>
 </body>
 </html>`))
 
@@ -176,12 +236,91 @@ var taskTemplate = template.Must(template.New("task").Parse(`<!doctype html>
 <head><meta charset="utf-8"><title>{{.Name}} - localci</title></head>
 <body>
 <h1>{{.Name}}</h1>
-<p>Status: {{.Status}}</p>
-<p>Output: {{.OutputDir}}</p>
-<ul>
+<p id="task-status">Status: {{.Status}}</p>
+<p id="task-output">Output: {{.OutputDir}}</p>
+<ul id="task-files">
 {{range .OutputFiles}}
   <li><a href="/artifact?repo={{urlquery $.RepoDir}}&commit={{urlquery $.Commit}}&task={{urlquery $.Name}}&path={{urlquery .}}">{{.}}</a></li>
 {{end}}
 </ul>
+<script>
+(() => {
+  const url = new URL("/ws/status", window.location.origin);
+  url.searchParams.set("repo", {{printf "%q" .RepoDir}});
+  url.searchParams.set("commit", {{printf "%q" .Commit}});
+  const taskName = {{printf "%q" .Name}};
+  url.searchParams.set("task", taskName);
+  const ws = new WebSocket(url);
+  ws.onmessage = (event) => {
+    const payload = JSON.parse(event.data);
+    const task = payload.tasks.find((item) => item.name === taskName);
+    if (!task) return;
+    const statusEl = document.getElementById("task-status");
+    const outputEl = document.getElementById("task-output");
+    const filesEl = document.getElementById("task-files");
+    if (statusEl) statusEl.textContent = "Status: " + task.status;
+    if (outputEl) outputEl.textContent = "Output: " + task.output_dir;
+    if (filesEl) filesEl.innerHTML = task.files_html;
+  };
+})();
+</script>
 </body>
 </html>`))
+
+type statusPayload struct {
+	Tasks      []taskPayload `json:"tasks"`
+	CommitHTML string        `json:"commit_html"`
+}
+
+type taskPayload struct {
+	Name      string `json:"name"`
+	Status    string `json:"status"`
+	OutputDir string `json:"output_dir"`
+	FilesHTML string `json:"files_html"`
+}
+
+func renderStatusPayload(view CommitStatusView) ([]byte, error) {
+	payload := statusPayload{
+		Tasks:      make([]taskPayload, 0, len(view.Tasks)),
+		CommitHTML: renderCommitTasksHTML(view),
+	}
+
+	for _, task := range view.Tasks {
+		payload.Tasks = append(payload.Tasks, taskPayload{
+			Name:      task.Name,
+			Status:    string(task.Status),
+			OutputDir: task.OutputDir,
+			FilesHTML: renderTaskFilesHTML(view.RepoDir, view.Commit, task),
+		})
+	}
+
+	return json.Marshal(payload)
+}
+
+func renderCommitTasksHTML(view CommitStatusView) string {
+	var b strings.Builder
+	for _, task := range view.Tasks {
+		fmt.Fprintf(&b, `<li><a href="/task?repo=%s&commit=%s&task=%s">%s</a> — %s</li>`,
+			template.URLQueryEscaper(view.RepoDir),
+			template.URLQueryEscaper(view.Commit),
+			template.URLQueryEscaper(task.Name),
+			template.HTMLEscapeString(task.Name),
+			template.HTMLEscapeString(string(task.Status)),
+		)
+	}
+	return b.String()
+}
+
+func renderTaskFilesHTML(repoDir string, commit string, task TaskStatusView) string {
+	var b strings.Builder
+	for _, file := range task.OutputFiles {
+		fmt.Fprintf(&b, `<li><a href="/artifact?repo=%s&commit=%s&task=%s&path=%s">%s</a></li>`,
+			template.URLQueryEscaper(repoDir),
+			template.URLQueryEscaper(commit),
+			template.URLQueryEscaper(task.Name),
+			template.URLQueryEscaper(file),
+			template.HTMLEscapeString(file),
+		)
+	}
+	return b.String()
+}
