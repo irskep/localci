@@ -271,7 +271,8 @@ func TestParseCommitTargetReturnsCommandSpecificUsage(t *testing.T) {
 func TestBuildWebURLCommit(t *testing.T) {
 	t.Parallel()
 
-	got, err := buildWebURL("http://127.0.0.1:4312", commitTarget{
+	app := testApp("/", "/repo")
+	got, err := app.buildWebURL("http://127.0.0.1:4312", commitTarget{
 		RepoDir: "/repo",
 		Commit:  "abc123",
 	})
@@ -279,7 +280,7 @@ func TestBuildWebURLCommit(t *testing.T) {
 		t.Fatalf("buildWebURL returned error: %v", err)
 	}
 
-	want := "http://127.0.0.1:4312/commit?commit=abc123&repo=%2Frepo"
+	want := "http://127.0.0.1:4312/repo/repo/commit/abc123"
 	if got != want {
 		t.Fatalf("buildWebURL = %q, want %q", got, want)
 	}
@@ -288,14 +289,15 @@ func TestBuildWebURLCommit(t *testing.T) {
 func TestBuildWebURLRepo(t *testing.T) {
 	t.Parallel()
 
-	got, err := buildWebURL("http://127.0.0.1:4312", commitTarget{
+	app := testApp("/", "/repo")
+	got, err := app.buildWebURL("http://127.0.0.1:4312", commitTarget{
 		RepoDir: "/repo",
 	})
 	if err != nil {
 		t.Fatalf("buildWebURL returned error: %v", err)
 	}
 
-	want := "http://127.0.0.1:4312/repo?repo=%2Frepo"
+	want := "http://127.0.0.1:4312/repo/repo"
 	if got != want {
 		t.Fatalf("buildWebURL = %q, want %q", got, want)
 	}
@@ -304,7 +306,8 @@ func TestBuildWebURLRepo(t *testing.T) {
 func TestBuildWebURLHome(t *testing.T) {
 	t.Parallel()
 
-	got, err := buildWebURL("http://127.0.0.1:4312", commitTarget{})
+	app := testApp("/", "/repo")
+	got, err := app.buildWebURL("http://127.0.0.1:4312", commitTarget{})
 	if err != nil {
 		t.Fatalf("buildWebURL returned error: %v", err)
 	}
@@ -318,7 +321,8 @@ func TestBuildWebURLHome(t *testing.T) {
 func TestBuildWebURLTask(t *testing.T) {
 	t.Parallel()
 
-	got, err := buildWebURL("http://127.0.0.1:4312", commitTarget{
+	app := testApp("/", "/repo")
+	got, err := app.buildWebURL("http://127.0.0.1:4312", commitTarget{
 		RepoDir: "/repo",
 		Commit:  "abc123",
 		Task:    "localci:test",
@@ -327,7 +331,7 @@ func TestBuildWebURLTask(t *testing.T) {
 		t.Fatalf("buildWebURL returned error: %v", err)
 	}
 
-	want := "http://127.0.0.1:4312/task?commit=abc123&repo=%2Frepo&task=localci%3Atest"
+	want := "http://127.0.0.1:4312/repo/repo/commit/abc123/task/localci:test"
 	if got != want {
 		t.Fatalf("buildWebURL = %q, want %q", got, want)
 	}
@@ -346,6 +350,9 @@ func TestOpenWebOpensURLAndPrintsIt(t *testing.T) {
 			opened = target
 			return nil
 		},
+		LoadConfig: func(string) (localci.Config, error) {
+			return localci.Config{Root: "/"}, nil
+		},
 	}
 
 	err := app.openWeb(commitTarget{
@@ -359,7 +366,7 @@ func TestOpenWebOpensURLAndPrintsIt(t *testing.T) {
 		t.Fatalf("openWeb returned error: %v", err)
 	}
 
-	want := "http://127.0.0.1:4312/task?commit=abc123&repo=%2Frepo&task=localci%3Atest"
+	want := "http://127.0.0.1:4312/repo/repo/commit/abc123/task/localci:test"
 	if opened != want {
 		t.Fatalf("opened url = %q, want %q", opened, want)
 	}

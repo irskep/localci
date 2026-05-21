@@ -571,26 +571,11 @@ func (s WebServer) selectedTaskStatus(repoDir string, commit string, taskName st
 }
 
 func (s WebServer) routeRepoPath(repoDir string) string {
-	root := s.configuredRepoRoot()
-	rel, err := filepath.Rel(root, filepath.Clean(repoDir))
+	repoPath, err := RouteRepoPath(s.configuredRepoRoot(), repoDir)
 	if err != nil {
 		return ""
 	}
-	if err := validateRelativeRepoPath(rel); err != nil {
-		return ""
-	}
-	if rel == "." {
-		return ""
-	}
-	segments := strings.Split(filepath.ToSlash(rel), "/")
-	escaped := make([]string, 0, len(segments))
-	for _, segment := range segments {
-		if segment == "" || segment == "." {
-			continue
-		}
-		escaped = append(escaped, url.PathEscape(segment))
-	}
-	return strings.Join(escaped, "/")
+	return repoPath
 }
 
 func (s WebServer) repoDirFromRoute(repoSegments []string) (string, error) {

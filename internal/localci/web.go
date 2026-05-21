@@ -66,16 +66,22 @@ func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealth)
-	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServerFS(assetFS)))
 	mux.HandleFunc("/api", s.handleAPI)
 	mux.HandleFunc("/api/", s.handleAPI)
-	mux.HandleFunc("/", s.handleHome)
-	mux.HandleFunc("/repo", s.handleRepo)
-	mux.HandleFunc("/commit", s.handleCommit)
-	mux.HandleFunc("/task", s.handleTask)
-	mux.HandleFunc("/retry", s.handleRetry)
-	mux.HandleFunc("/artifact", s.handleArtifact)
 	mux.HandleFunc("/ws/status", s.handleStatusWebSocket)
+	if s.servesFrontendApp() {
+		mux.HandleFunc("/", serveFrontendApp(assetFS))
+	} else {
+		mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServerFS(assetFS)))
+		mux.HandleFunc("/queue", s.handleQueuePage)
+		mux.HandleFunc("/repo/", s.handleRoutePage)
+		mux.HandleFunc("/", s.handleHome)
+		mux.HandleFunc("/repo", s.handleRepo)
+		mux.HandleFunc("/commit", s.handleCommit)
+		mux.HandleFunc("/task", s.handleTask)
+		mux.HandleFunc("/retry", s.handleRetry)
+		mux.HandleFunc("/artifact", s.handleArtifact)
+	}
 
 	server := &http.Server{
 		Handler: mux,
@@ -99,6 +105,10 @@ func (s WebServer) assetFS() (fs.FS, error) {
 	}
 
 	return webassets.EmbeddedFS()
+}
+
+func (s WebServer) servesFrontendApp() bool {
+	return strings.TrimSpace(s.AssetDir) != ""
 }
 
 func (s WebServer) handleHome(w http.ResponseWriter, _ *http.Request) {

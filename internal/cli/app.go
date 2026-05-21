@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -388,7 +389,7 @@ func (a App) openWeb(spec commitTarget, state localci.DaemonState) error {
 		return fmt.Errorf("daemon did not publish an HTTP base URL")
 	}
 
-	targetURL, err := buildWebURL(state.HTTPBaseURL, spec)
+	targetURL, err := a.buildWebURL(state.HTTPBaseURL, spec)
 	if err != nil {
 		return err
 	}
@@ -409,40 +410,50 @@ func (a App) postcommitResultURL(client localci.DaemonClient, repo string, commi
 	if strings.TrimSpace(state.HTTPBaseURL) == "" {
 		return "", nil
 	}
-	return buildWebURL(state.HTTPBaseURL, commitTarget{
+	return a.buildWebURL(state.HTTPBaseURL, commitTarget{
 		RepoDir: repo,
 		Commit:  commit,
 	})
 }
 
-func buildWebURL(baseURL string, spec commitTarget) (string, error) {
+func (a App) buildWebURL(baseURL string, spec commitTarget) (string, error) {
 	root, err := url.Parse(baseURL)
 	if err != nil {
 		return "", fmt.Errorf("parse daemon url: %w", err)
 	}
 
-	switch {
-	case spec.RepoDir == "" && spec.Commit == "" && spec.Task == "":
+	if spec.RepoDir == "" && spec.Commit == "" && spec.Task == "" {
 		root.Path = "/"
-	case spec.Commit == "":
-		root.Path = "/repo"
-	case spec.Task == "":
-		root.Path = "/commit"
-	default:
-		root.Path = "/task"
+		root.RawQuery = ""
+		return root.String(), nil
 	}
 
-	query := root.Query()
-	if spec.RepoDir != "" {
-		query.Set("repo", spec.RepoDir)
+	cfg, err := a.loadConfig()
+	if err != nil {
+		return "", err
 	}
-	if spec.Commit != "" {
-		query.Set("commit", spec.Commit)
+
+	switch {
+	case spec.Commit == "":
+		repoPath, err := localci.RouteRepoPath(cfg.Root, spec.RepoDir)
+		if err != nil {
+			return "", err
+		}
+		root.Path = path.Join("/repo", repoPath)
+	case spec.Task == "":
+		commitPath, err := localci.CommitRoutePath(cfg.Root, spec.RepoDir, spec.Commit)
+		if err != nil {
+			return "", err
+		}
+		root.Path = commitPath
+	default:
+		taskPath, err := localci.TaskRoutePath(cfg.Root, spec.RepoDir, spec.Commit, spec.Task)
+		if err != nil {
+			return "", err
+		}
+		root.Path = taskPath
 	}
-	if spec.Task != "" {
-		query.Set("task", spec.Task)
-	}
-	root.RawQuery = query.Encode()
+	root.RawQuery = ""
 	return root.String(), nil
 }
 

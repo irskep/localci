@@ -89,6 +89,16 @@ func TestWebServerCommitAndArtifactPages(t *testing.T) {
 		t.Fatalf("commit page missing app.js: %s", string(body))
 	}
 
+	resp, err = http.Get(baseURL + "/repo/repo/commit/" + commit)
+	if err != nil {
+		t.Fatalf("GET commit route returned error: %v", err)
+	}
+	body, _ = io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !strings.Contains(string(body), ">test<") {
+		t.Fatalf("commit route page missing task link: %s", string(body))
+	}
+
 	resp, err = http.Get(baseURL + "/task?repo=" + url.QueryEscape(repoDir) + "&commit=" + url.QueryEscape(commit) + "&task=" + url.QueryEscape("localci:test"))
 	if err != nil {
 		t.Fatalf("GET task returned error: %v", err)
@@ -152,7 +162,13 @@ func TestWebServerServesEmbeddedAssetsAndOverride(t *testing.T) {
 
 	t.Run("override", func(t *testing.T) {
 		assetDir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(assetDir, "app.js"), []byte(`console.info("override asset");`), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(assetDir, "index.html"), []byte(`<!doctype html><html><body>override app</body></html>`), 0o644); err != nil {
+			t.Fatalf("WriteFile returned error: %v", err)
+		}
+		if err := os.Mkdir(filepath.Join(assetDir, "assets"), 0o755); err != nil {
+			t.Fatalf("Mkdir returned error: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(assetDir, "assets", "app.js"), []byte(`console.info("override asset");`), 0o644); err != nil {
 			t.Fatalf("WriteFile returned error: %v", err)
 		}
 
@@ -189,6 +205,16 @@ func TestWebServerServesEmbeddedAssetsAndOverride(t *testing.T) {
 		_ = resp.Body.Close()
 		if got := string(body); !strings.Contains(got, "override asset") {
 			t.Fatalf("override asset missing expected content: %s", got)
+		}
+
+		resp, err = http.Get("http://" + listener.Addr().String() + "/repo/cli/localci/commit/abc123")
+		if err != nil {
+			t.Fatalf("GET override app route returned error: %v", err)
+		}
+		body, _ = io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if got := string(body); !strings.Contains(got, "override app") {
+			t.Fatalf("override app route missing index content: %s", got)
 		}
 	})
 }
