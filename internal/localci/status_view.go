@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 type ExecutionStatus string
@@ -233,6 +234,14 @@ func buildArtifactViews(outputDir string, files []string) []ArtifactView {
 			Path:        file,
 		})
 	}
+	sort.Slice(artifacts, func(i int, j int) bool {
+		left := artifactSortKey(artifacts[i].DisplayName)
+		right := artifactSortKey(artifacts[j].DisplayName)
+		if left == right {
+			return artifacts[i].DisplayName < artifacts[j].DisplayName
+		}
+		return left < right
+	})
 	return artifacts
 }
 
@@ -250,4 +259,26 @@ func outputFilesOrNil(outputDir string) []string {
 		return nil
 	}
 	return files
+}
+
+func artifactSortKey(name string) int {
+	switch strings.ToLower(name) {
+	case "combined.log":
+		return 0
+	case "stdout.log":
+		return 1
+	case "stderr.log":
+		return 2
+	case "summary.txt":
+		return 3
+	case "status.txt":
+		return 4
+	case "task.json":
+		return 100
+	default:
+		if strings.HasPrefix(name, "bin/") {
+			return 50
+		}
+		return 10
+	}
 }

@@ -46,6 +46,8 @@ type TaskPageView struct {
 	TaskStatusView
 	SelectedAttempt    int
 	IsLive             bool
+	PrimaryArtifact    string
+	PrimaryLog         string
 	AttemptHistoryHTML template.HTML
 	FilesHTML          template.HTML
 }
@@ -161,6 +163,7 @@ func (s WebServer) handleTask(w http.ResponseWriter, r *http.Request) {
 	task, ok := findTaskStatus(view.Tasks, taskName)
 	if ok {
 		task = applySelectedAttempt(s.Paths, repoDir, commit, task, selectedAttempt)
+		primaryArtifact, primaryLog := loadPrimaryLog(task)
 		_ = taskTemplate.Execute(w, TaskPageView{
 			RepoDir:            repoDir,
 			RepoName:           repoLabel(repoDir),
@@ -168,6 +171,8 @@ func (s WebServer) handleTask(w http.ResponseWriter, r *http.Request) {
 			TaskStatusView:     task,
 			SelectedAttempt:    task.Attempt,
 			IsLive:             isLatestAttempt(task),
+			PrimaryArtifact:    primaryArtifact,
+			PrimaryLog:         primaryLog,
 			AttemptHistoryHTML: template.HTML(renderAttemptHistoryHTML(repoDir, commit, task)),
 			FilesHTML:          template.HTML(renderTaskFilesHTML(repoDir, commit, task)),
 		})
@@ -379,6 +384,11 @@ var taskTemplate = template.Must(template.New("task").Parse(`<!doctype html>
 </form>
 <h2>Attempts</h2>
 <ul>{{.AttemptHistoryHTML}}</ul>
+{{if .PrimaryArtifact}}
+<h2>Log</h2>
+<p id="task-log-label">{{.PrimaryArtifact}}</p>
+<pre id="task-log">{{.PrimaryLog}}</pre>
+{{end}}
 <h2>Artifacts</h2>
 <ul id="task-files">{{.FilesHTML}}</ul>
 {{if .IsLive}}
@@ -398,11 +408,15 @@ var taskTemplate = template.Must(template.New("task").Parse(`<!doctype html>
     const attemptEl = document.getElementById("task-attempt");
     const failureEl = document.getElementById("task-failure");
     const durationEl = document.getElementById("task-duration");
+    const logLabelEl = document.getElementById("task-log-label");
+    const logEl = document.getElementById("task-log");
     const filesEl = document.getElementById("task-files");
     if (statusEl) statusEl.textContent = "Status: " + task.status;
     if (attemptEl) attemptEl.textContent = "Attempt: " + task.attempt;
     if (failureEl) failureEl.textContent = task.failure ? "Failure: " + task.failure : "";
     if (durationEl) durationEl.textContent = task.duration_ms ? "Duration: " + task.duration_ms + "ms" : "";
+    if (logLabelEl) logLabelEl.textContent = task.primary_artifact;
+    if (logEl) logEl.textContent = task.primary_log;
     if (filesEl) filesEl.innerHTML = task.files_html;
   };
 })();
@@ -417,12 +431,14 @@ type statusPayload struct {
 }
 
 type taskPayload struct {
-	Name       string `json:"name"`
-	Attempt    int    `json:"attempt"`
-	Status     string `json:"status"`
-	Failure    string `json:"failure"`
-	DurationMS int64  `json:"duration_ms"`
-	FilesHTML  string `json:"files_html"`
+	Name            string `json:"name"`
+	Attempt         int    `json:"attempt"`
+	Status          string `json:"status"`
+	Failure         string `json:"failure"`
+	DurationMS      int64  `json:"duration_ms"`
+	FilesHTML       string `json:"files_html"`
+	PrimaryArtifact string `json:"primary_artifact"`
+	PrimaryLog      string `json:"primary_log"`
 }
 
 func renderStatusPayload(view CommitStatusView) ([]byte, error) {
@@ -432,13 +448,16 @@ func renderStatusPayload(view CommitStatusView) ([]byte, error) {
 	}
 
 	for _, task := range view.Tasks {
+		primaryArtifact, primaryLog := loadPrimaryLog(task)
 		payload.Tasks = append(payload.Tasks, taskPayload{
-			Name:       task.Name,
-			Attempt:    task.Attempt,
-			Status:     string(task.Status),
-			Failure:    task.Failure,
-			DurationMS: task.DurationMilliseconds,
-			FilesHTML:  renderTaskFilesHTML(view.RepoDir, view.Commit, task),
+			Name:            task.Name,
+			Attempt:         task.Attempt,
+			Status:          string(task.Status),
+			Failure:         task.Failure,
+			DurationMS:      task.DurationMilliseconds,
+			FilesHTML:       renderTaskFilesHTML(view.RepoDir, view.Commit, task),
+			PrimaryArtifact: primaryArtifact,
+			PrimaryLog:      primaryLog,
 		})
 	}
 
@@ -680,4 +699,27 @@ func repoLabel(repoDir string) string {
 		return repoDir
 	}
 	return label
+}
+
+func loadPrimaryLog(task TaskStatusView) (string, string) {
+	artifact, ok := primaryArtifact(task)
+	if !ok {
+		return "", ""
+	}
+	data, err := os.ReadFile(artifact.Path)
+	if err != nil {
+		return artifact.DisplayName, ""
+	}
+	return artifact.DisplayName, string(data)
+}
+
+func primaryArtifact(task TaskStatusView) (ArtifactView, bool) {
+	for _, preferred := range []string{"combined.log", "stdout.log", "stderr.log", "summary.txt", "status.txt"} {
+		for _, artifact := range task.Artifacts {
+			if artifact.DisplayName == preferred {
+				return artifact, true
+			}
+		}
+	}
+	return ArtifactView{}, false
 }

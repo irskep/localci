@@ -59,11 +59,15 @@ if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--local" ]; then
 fi
 if [ "$1" = "run" ] && [ "$2" = "localci:first" ]; then
   printf 'first\n' >>"`+markerFile+`"
+  printf 'first stdout\n'
+  printf 'first stderr\n' >&2
   printf 'first output\n' >"$LOCALCI_TASK_OUTPUT_DIR/first.log"
   exit 0
 fi
 if [ "$1" = "run" ] && [ "$2" = "localci:second" ]; then
   printf 'second\n' >>"`+markerFile+`"
+  printf 'second stdout\n'
+  printf 'second stderr\n' >&2
   printf 'second output\n' >"$LOCALCI_TASK_OUTPUT_DIR/second.log"
   exit 0
 fi
@@ -109,9 +113,16 @@ exit 1
 	}
 
 	for _, task := range []string{"localci:first", "localci:second"} {
-		taskPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName(task), "attempt-001", "task.json")
+		taskDir := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName(task), "attempt-001")
+		taskPath := filepath.Join(taskDir, "task.json")
 		if _, err := os.Stat(taskPath); err != nil {
 			t.Fatalf("task record missing for %s at %s: %v", task, taskPath, err)
+		}
+		for _, logName := range []string{"combined.log", "stdout.log", "stderr.log"} {
+			logPath := filepath.Join(taskDir, logName)
+			if _, err := os.Stat(logPath); err != nil {
+				t.Fatalf("log %s missing for %s: %v", logName, task, err)
+			}
 		}
 	}
 }
@@ -165,5 +176,67 @@ func writeExecutable(t *testing.T, path string, contents string) {
 
 	if err := os.WriteFile(path, []byte(contents), 0o755); err != nil {
 		t.Fatalf("WriteFile(%s) returned error: %v", path, err)
+	}
+}
+
+func TestInvokeCapturesStdoutAndStderrLogs(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	rootDir := t.TempDir()
+	binDir := t.TempDir()
+
+	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
+set -eu
+if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--local" ]; then
+  printf '%s\n' '[{"name":"localci:test"}]'
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "localci:test" ]; then
+  printf 'hello stdout\n'
+  printf 'hello stderr\n' >&2
+  exit 0
+fi
+exit 1
+`)
+
+	runner := Runner{
+		Paths:        Paths{Root: rootDir},
+		MiseBin:      filepath.Join(binDir, "mise"),
+		Env:          append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH")),
+		PollInterval: 10 * time.Millisecond,
+	}
+
+	if _, err := runner.Invoke(context.Background(), InvokeRequest{
+		RepoDir: repoDir,
+		Commit:  "abc123",
+	}); err != nil {
+		t.Fatalf("Invoke returned error: %v", err)
+	}
+
+	taskDir := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName("localci:test"), "attempt-001")
+	stdoutBytes, err := os.ReadFile(filepath.Join(taskDir, "stdout.log"))
+	if err != nil {
+		t.Fatalf("ReadFile(stdout.log) returned error: %v", err)
+	}
+	if got := string(stdoutBytes); got != "hello stdout\n" {
+		t.Fatalf("stdout.log = %q, want %q", got, "hello stdout\n")
+	}
+
+	stderrBytes, err := os.ReadFile(filepath.Join(taskDir, "stderr.log"))
+	if err != nil {
+		t.Fatalf("ReadFile(stderr.log) returned error: %v", err)
+	}
+	if got := string(stderrBytes); got != "hello stderr\n" {
+		t.Fatalf("stderr.log = %q, want %q", got, "hello stderr\n")
+	}
+
+	combinedBytes, err := os.ReadFile(filepath.Join(taskDir, "combined.log"))
+	if err != nil {
+		t.Fatalf("ReadFile(combined.log) returned error: %v", err)
+	}
+	combined := string(combinedBytes)
+	if !strings.Contains(combined, "hello stdout\n") || !strings.Contains(combined, "hello stderr\n") {
+		t.Fatalf("combined.log missing expected output: %q", combined)
 	}
 }

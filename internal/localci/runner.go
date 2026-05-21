@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -151,8 +152,14 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task) (Task
 		"LOCALCI_TASK_CACHE_DIR="+record.TaskCacheDir,
 		"LOCALCI_CACHE_DIR="+record.SharedCacheDir,
 	)
-	cmd.Stdout = r.stdout()
-	cmd.Stderr = r.stderr()
+
+	logWriters, err := newTaskLogWriters(record.OutputDir, r.stdout(), r.stderr())
+	if err != nil {
+		return TaskRecord{}, err
+	}
+	defer logWriters.Close()
+	cmd.Stdout = logWriters.stdoutWriter
+	cmd.Stderr = logWriters.stderrWriter
 
 	if err := cmd.Start(); err != nil {
 		record.FinishedAt = r.now()
@@ -423,4 +430,56 @@ func durationMilliseconds(startedAt time.Time, finishedAt time.Time) int64 {
 
 func intPtr(value int) *int {
 	return &value
+}
+
+type taskLogWriters struct {
+	stdoutFile   *os.File
+	stderrFile   *os.File
+	combinedFile *os.File
+	stdoutWriter io.Writer
+	stderrWriter io.Writer
+}
+
+func newTaskLogWriters(outputDir string, stdout io.Writer, stderr io.Writer) (*taskLogWriters, error) {
+	stdoutFile, err := os.Create(filepath.Join(outputDir, "stdout.log"))
+	if err != nil {
+		return nil, fmt.Errorf("create stdout log: %w", err)
+	}
+	stderrFile, err := os.Create(filepath.Join(outputDir, "stderr.log"))
+	if err != nil {
+		_ = stdoutFile.Close()
+		return nil, fmt.Errorf("create stderr log: %w", err)
+	}
+	combinedFile, err := os.Create(filepath.Join(outputDir, "combined.log"))
+	if err != nil {
+		_ = stdoutFile.Close()
+		_ = stderrFile.Close()
+		return nil, fmt.Errorf("create combined log: %w", err)
+	}
+
+	combinedWriter := &synchronizedWriter{target: combinedFile}
+	return &taskLogWriters{
+		stdoutFile:   stdoutFile,
+		stderrFile:   stderrFile,
+		combinedFile: combinedFile,
+		stdoutWriter: io.MultiWriter(stdoutFile, combinedWriter, stdout),
+		stderrWriter: io.MultiWriter(stderrFile, combinedWriter, stderr),
+	}, nil
+}
+
+func (w *taskLogWriters) Close() {
+	_ = w.stdoutFile.Close()
+	_ = w.stderrFile.Close()
+	_ = w.combinedFile.Close()
+}
+
+type synchronizedWriter struct {
+	mu     sync.Mutex
+	target io.Writer
+}
+
+func (w *synchronizedWriter) Write(data []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.target.Write(data)
 }
