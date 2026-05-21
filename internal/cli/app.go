@@ -165,29 +165,11 @@ func (a App) runStatus(args []string) error {
 
 	fmt.Fprintf(a.Stdout, "Status for %s at %s\n", statusView.RepoDir, statusView.Commit)
 	for _, task := range filtered {
-		fmt.Fprintf(a.Stdout, "%s\t%s\t%s", task.Status, task.Name, task.OutputDir)
-		if task.Attempt > 0 {
-			fmt.Fprintf(a.Stdout, "\tattempt %d", task.Attempt)
-		}
-		if task.Failure != "" {
-			fmt.Fprintf(a.Stdout, "\tfailure=%s", task.Failure)
-		}
-		if task.DurationMilliseconds > 0 {
-			fmt.Fprintf(a.Stdout, "\t%dms", task.DurationMilliseconds)
-		}
-		fmt.Fprintln(a.Stdout)
 		if spec.Task != "" {
-			primaryArtifact, primaryLog := localci.LoadPrimaryLog(task)
-			if primaryArtifact != "" {
-				fmt.Fprintf(a.Stdout, "Primary log: %s\n", primaryArtifact)
-				if primaryLog != "" {
-					fmt.Fprintln(a.Stdout, primaryLog)
-				}
-			}
+			a.printTaskDetail(task)
+			continue
 		}
-		for _, file := range task.OutputFiles {
-			fmt.Fprintf(a.Stdout, "  %s\n", file)
-		}
+		fmt.Fprintln(a.Stdout, formatTaskSummary(task))
 	}
 	return nil
 }
@@ -515,6 +497,47 @@ func shellQuote(value string) string {
 		return value
 	}
 	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
+}
+
+func formatTaskSummary(task localci.TaskStatusView) string {
+	parts := []string{
+		string(task.Status),
+		task.ShortName,
+	}
+	if task.Attempt > 0 {
+		attempt := fmt.Sprintf("attempt %d", task.Attempt)
+		if task.AttemptCount > 1 {
+			attempt += fmt.Sprintf(" of %d", task.AttemptCount)
+		}
+		parts = append(parts, attempt)
+	}
+	if task.DurationMilliseconds > 0 {
+		parts = append(parts, fmt.Sprintf("%dms", task.DurationMilliseconds))
+	}
+	if task.Failure != "" {
+		parts = append(parts, "failure="+task.Failure)
+	}
+	return strings.Join(parts, "  ")
+}
+
+func (a App) printTaskDetail(task localci.TaskStatusView) {
+	fmt.Fprintln(a.Stdout, formatTaskSummary(task))
+	if task.OutputDir != "" {
+		fmt.Fprintf(a.Stdout, "Output: %s\n", task.OutputDir)
+	}
+	if len(task.Artifacts) > 0 {
+		fmt.Fprintln(a.Stdout, "Artifacts:")
+		for _, artifact := range task.Artifacts {
+			fmt.Fprintf(a.Stdout, "  %s\n", artifact.DisplayName)
+		}
+	}
+	primaryArtifact, primaryLog := localci.LoadPrimaryLog(task)
+	if primaryArtifact != "" {
+		fmt.Fprintf(a.Stdout, "Primary log: %s\n", primaryArtifact)
+		if primaryLog != "" {
+			fmt.Fprintln(a.Stdout, primaryLog)
+		}
+	}
 }
 
 func (a App) runInstallHooks(args []string) error {

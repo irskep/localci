@@ -449,6 +449,51 @@ func TestShellQuote(t *testing.T) {
 	}
 }
 
+func TestFormatTaskSummary(t *testing.T) {
+	t.Parallel()
+
+	got := formatTaskSummary(localci.TaskStatusView{
+		ShortName:            "build",
+		Status:               localci.ExecutionStatusSucceeded,
+		Attempt:              2,
+		AttemptCount:         3,
+		DurationMilliseconds: 483,
+	})
+	want := "succeeded  build  attempt 2 of 3  483ms"
+	if got != want {
+		t.Fatalf("formatTaskSummary = %q, want %q", got, want)
+	}
+}
+
+func TestPrintTaskDetailUsesArtifactDisplayNames(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	app := App{Stdout: &stdout, Stderr: io.Discard}
+	app.printTaskDetail(localci.TaskStatusView{
+		ShortName: "test",
+		Status:    localci.ExecutionStatusFailed,
+		Attempt:   1,
+		OutputDir: "/tmp/out",
+		Failure:   "exit-code",
+		Artifacts: []localci.ArtifactView{
+			{DisplayName: "combined.log", Path: "/tmp/out/combined.log"},
+			{DisplayName: "dist/index.html", Path: "/tmp/out/dist/index.html"},
+		},
+	})
+
+	rendered := stdout.String()
+	if !strings.Contains(rendered, "failed  test  attempt 1  failure=exit-code") {
+		t.Fatalf("detail missing summary: %s", rendered)
+	}
+	if !strings.Contains(rendered, "Artifacts:\n  combined.log\n  dist/index.html\n") {
+		t.Fatalf("detail missing artifact display names: %s", rendered)
+	}
+	if strings.Contains(rendered, "/tmp/out/dist/index.html") {
+		t.Fatalf("detail should not print artifact absolute paths: %s", rendered)
+	}
+}
+
 func testApp(root string, cwd string) App {
 	return App{
 		Stdout: io.Discard,
