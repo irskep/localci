@@ -1,8 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import ArtifactView from '@/views/ArtifactView.vue'
+import CommitView from '@/views/CommitView.vue'
 import HomeView from '@/views/HomeView.vue'
 import QueueView from '@/views/QueueView.vue'
+import RepoIndexView from '@/views/RepoIndexView.vue'
 import RepoRouteView from '@/views/RepoRouteView.vue'
+import TaskView from '@/views/TaskView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -16,6 +20,31 @@ const router = createRouter({
       path: '/queue',
       name: 'queue',
       component: QueueView,
+    },
+    {
+      path: '/repo',
+      name: 'repo-index',
+      component: RepoIndexView,
+    },
+    {
+      path: '/repo/:repoPath(.*)/commit/:commit/task/:taskName/attempt/:attempt/artifact/:artifactPath(.*)',
+      name: 'artifact',
+      component: ArtifactView,
+    },
+    {
+      path: '/repo/:repoPath(.*)/commit/:commit/task/:taskName/attempt/:attempt',
+      name: 'attempt',
+      component: TaskView,
+    },
+    {
+      path: '/repo/:repoPath(.*)/commit/:commit/task/:taskName',
+      name: 'task',
+      component: TaskView,
+    },
+    {
+      path: '/repo/:repoPath(.*)/commit/:commit',
+      name: 'commit',
+      component: CommitView,
     },
     {
       path: '/repo/:pathMatch(.*)*',

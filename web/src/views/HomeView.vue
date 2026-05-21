@@ -1,97 +1,124 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 
+import { shortCommit } from '@/lib/api'
+import type { CommitSummary, QueueEntry } from '@/lib/api'
 import { commitURL, taskURL } from '@/lib/routes'
+import { useLocalciStore } from '@/stores/localci'
 
-type RepoSummary = {
-  repo_path: string
-  repo_name: string
+const store = useLocalciStore()
+
+const recentRows = computed(() => store.home?.recent_commits ?? [])
+const repoRows = computed(() => store.home?.repos ?? [])
+const queueRows = computed(() => store.home?.queue.pending ?? [])
+const active = computed(() => store.home?.queue.active)
+
+function queueLabel(entry: QueueEntry): string {
+  return `${entry.repo.repo_name} / ${shortCommit(entry.commit)} / ${entry.task}`
 }
 
-type QueueEntry = {
-  repo: RepoSummary
-  commit: string
-  task: string
+function activityTime(entry: CommitSummary): string {
+  if (!entry.activity_at) return ''
+  return new Date(entry.activity_at).toLocaleString()
 }
 
-type HomeResponse = {
-  repos: RepoSummary[]
-  recent_commits: Array<{
-    repo: RepoSummary
-    commit: string
-    summary: string
-  }>
-  queue: {
-    active?: QueueEntry
-    pending: QueueEntry[]
-  }
-}
-
-const data = ref<HomeResponse | null>(null)
-const error = ref('')
-
-onMounted(async () => {
-  try {
-    const response = await fetch('/api')
-    if (!response.ok) {
-      throw new Error(`request failed with ${response.status}`)
-    }
-    data.value = (await response.json()) as HomeResponse
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err)
-  }
+onMounted(() => {
+  void store.loadHome()
 })
 </script>
 
 <template>
-  <main>
-    <h1>localci</h1>
-    <p v-if="error">{{ error }}</p>
-    <template v-else-if="data">
-      <section>
-        <h2>Repo</h2>
-        <ul>
-          <li v-for="repo in data.repos" :key="repo.repo_path">
-            <a :href="`/repo/${repo.repo_path}`">{{ repo.repo_name }}</a>
-          </li>
-        </ul>
-      </section>
-      <section>
-        <h2>Recent Commit Activity</h2>
-        <ul>
-          <li v-for="entry in data.recent_commits" :key="`${entry.repo.repo_path}:${entry.commit}`">
-            <a :href="commitURL(entry.repo.repo_path, entry.commit)">{{ entry.commit }}</a>
-            —
-            {{ entry.summary }}
-          </li>
-        </ul>
-      </section>
-      <section>
-        <h2>Queue</h2>
-        <ul>
-          <li v-if="data.queue.active">
-            active —
-            <a
-              :href="
-                taskURL(
-                  data.queue.active.repo.repo_path,
-                  data.queue.active.commit,
-                  data.queue.active.task,
-                )
-              "
-            >
-              {{ data.queue.active.task }}
-            </a>
-          </li>
-          <li
-            v-for="entry in data.queue.pending"
-            :key="`${entry.repo.repo_path}:${entry.commit}:${entry.task}`"
-          >
-            pending —
-            <a :href="taskURL(entry.repo.repo_path, entry.commit, entry.task)">{{ entry.task }}</a>
-          </li>
-          <li v-if="!data.queue.active && data.queue.pending.length === 0">idle</li>
-        </ul>
+  <main class="page">
+    <section class="page-header">
+      <span class="eyebrow">Overview</span>
+      <h1 class="page-title">Runs across every repo</h1>
+      <p class="page-subtitle">
+        Current daemon activity, recent commits, and the literal task queue.
+      </p>
+    </section>
+
+    <PMessage v-if="store.error" severity="error" :closable="false">{{ store.error }}</PMessage>
+    <div v-if="store.loading && !store.home" class="loading-state">
+      <PProgressSpinner style="width: 1.5rem; height: 1.5rem" />
+      <span>Loading localci state</span>
+    </div>
+
+    <template v-if="store.home">
+      <section class="section-grid">
+        <div class="stack">
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Recent Commit Activity</h2>
+            </div>
+            <PDataTable :value="recentRows" data-key="commit" size="small">
+              <PColumn header="Repo">
+                <template #body="{ data }">
+                  <RouterLink :to="`/repo/${data.repo.repo_path}`">{{
+                    data.repo.repo_name
+                  }}</RouterLink>
+                </template>
+              </PColumn>
+              <PColumn header="Commit">
+                <template #body="{ data }">
+                  <RouterLink :to="commitURL(data.repo.repo_path, data.commit)" class="mono">
+                    {{ shortCommit(data.commit) }}
+                  </RouterLink>
+                </template>
+              </PColumn>
+              <PColumn field="summary" header="Result" />
+              <PColumn header="Updated">
+                <template #body="{ data }">{{ activityTime(data) }}</template>
+              </PColumn>
+            </PDataTable>
+          </div>
+        </div>
+
+        <aside class="stack">
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Active Now</h2>
+            </div>
+            <div v-if="active" class="empty-state">
+              <RouterLink :to="taskURL(active.repo.repo_path, active.commit, active.task)">
+                {{ queueLabel(active) }}
+              </RouterLink>
+            </div>
+            <div v-else class="empty-state">No task is running.</div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Queue</h2>
+              <RouterLink to="/queue">
+                <PButton label="Open" text size="small" icon="pi pi-arrow-right" icon-pos="right" />
+              </RouterLink>
+            </div>
+            <ul v-if="queueRows.length > 0" class="artifact-list">
+              <li
+                v-for="entry in queueRows.slice(0, 6)"
+                :key="`${entry.repo.repo_path}:${entry.commit}:${entry.task}`"
+              >
+                <PTag severity="warn" value="pending" />
+                <RouterLink :to="taskURL(entry.repo.repo_path, entry.commit, entry.task)">
+                  {{ queueLabel(entry) }}
+                </RouterLink>
+              </li>
+            </ul>
+            <div v-else class="empty-state">Queue is idle.</div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Repo</h2>
+            </div>
+            <ul class="artifact-list">
+              <li v-for="repo in repoRows" :key="repo.repo_path">
+                <i class="pi pi-folder" aria-hidden="true"></i>
+                <RouterLink :to="`/repo/${repo.repo_path}`">{{ repo.repo_name }}</RouterLink>
+              </li>
+            </ul>
+          </div>
+        </aside>
       </section>
     </template>
   </main>

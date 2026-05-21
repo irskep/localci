@@ -1,3 +1,5 @@
 .cache/
 .tmp/
 bin/
+.pnpm-store/
+.rodney/

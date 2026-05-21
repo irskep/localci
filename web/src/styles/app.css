@@ -1,0 +1,231 @@
+:root {
+  color: #1f2523;
+  background: #f5f3ed;
+  font-family: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0)), #f5f3ed;
+}
+
+a {
+  color: #225c63;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code,
+pre {
+  font-family: 'SFMono-Regular', 'Cascadia Code', 'Liberation Mono', monospace;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid #ded9cd;
+  background: rgba(245, 243, 237, 0.92);
+  backdrop-filter: blur(16px);
+}
+
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0.85rem 1rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #1f2523;
+  font-size: 1.18rem;
+  font-weight: 750;
+}
+
+.brand-mark {
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  place-items: center;
+  border: 1px solid #1f2523;
+  border-radius: 6px;
+  background: #e9ddbf;
+  font-size: 0.9rem;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 1.6rem 1rem 3rem;
+}
+
+.page-header {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1.2rem;
+}
+
+.eyebrow {
+  color: #65706c;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.page-title {
+  margin: 0;
+  color: #141918;
+  font-size: clamp(1.9rem, 3vw, 3rem);
+  line-height: 1.05;
+}
+
+.page-subtitle {
+  margin: 0;
+  color: #66706d;
+}
+
+.section-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.panel {
+  border: 1px solid #ded9cd;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem 0;
+}
+
+.panel-title {
+  margin: 0;
+  color: #27302d;
+  font-size: 1rem;
+}
+
+.mono {
+  font-family: 'SFMono-Regular', 'Cascadia Code', 'Liberation Mono', monospace;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muted {
+  color: #66706d;
+}
+
+.log-view {
+  max-height: 58vh;
+  overflow: auto;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid #d8d1c1;
+  border-radius: 8px;
+  background: #141918;
+  color: #dce8df;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.empty-state {
+  padding: 1.5rem;
+  color: #66706d;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem 0;
+  color: #66706d;
+}
+
+.attempt-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 1rem;
+  list-style: none;
+}
+
+.attempt-list a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #ded9cd;
+  border-radius: 6px;
+  background: #fffdf8;
+}
+
+.artifact-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 1rem;
+  list-style: none;
+}
+
+.artifact-list a {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+@media (max-width: 860px) {
+  .section-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-inner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

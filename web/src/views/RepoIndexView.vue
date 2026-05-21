@@ -1,0 +1,32 @@
+<script setup lang="ts">
+import { computed, onMounted } from 'vue'
+
+import { useLocalciStore } from '@/stores/localci'
+
+const store = useLocalciStore()
+const repos = computed(() => store.home?.repos ?? [])
+
+onMounted(async () => {
+  if (!store.home) await store.loadHome()
+})
+</script>
+
+<template>
+  <main class="page">
+    <section class="page-header">
+      <span class="eyebrow">Repo</span>
+      <h1 class="page-title">Tracked repositories</h1>
+    </section>
+
+    <PMessage v-if="store.error" severity="error" :closable="false">{{ store.error }}</PMessage>
+    <PDataTable v-if="repos.length > 0" :value="repos" size="small" class="panel">
+      <PColumn header="Name">
+        <template #body="{ data }">
+          <RouterLink :to="`/repo/${data.repo_path}`">{{ data.repo_name }}</RouterLink>
+        </template>
+      </PColumn>
+      <PColumn field="repo_path" header="Path" />
+    </PDataTable>
+    <div v-else class="panel empty-state">No repos have localci history yet.</div>
+  </main>
+</template>

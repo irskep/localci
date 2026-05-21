@@ -1,62 +1,86 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 
+import { shortCommit } from '@/lib/api'
+import type { QueueEntry } from '@/lib/api'
 import { taskURL } from '@/lib/routes'
+import { useLocalciStore } from '@/stores/localci'
 
-type RepoSummary = {
-  repo_path: string
-  repo_name: string
+const store = useLocalciStore()
+const pending = computed(() => store.queue?.pending ?? [])
+const active = computed(() => store.queue?.active)
+
+function taskLabel(entry: QueueEntry): string {
+  return `${entry.repo.repo_name} / ${shortCommit(entry.commit)}`
 }
 
-type QueueEntry = {
-  repo: RepoSummary
-  commit: string
-  task: string
-}
-
-type QueueResponse = {
-  active?: QueueEntry
-  pending: QueueEntry[]
-}
-
-const data = ref<QueueResponse | null>(null)
-const error = ref('')
-
-onMounted(async () => {
-  try {
-    const response = await fetch('/api/queue')
-    if (!response.ok) {
-      throw new Error(`request failed with ${response.status}`)
-    }
-    data.value = (await response.json()) as QueueResponse
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err)
-  }
+onMounted(() => {
+  void store.loadQueue()
 })
 </script>
 
 <template>
-  <main>
-    <p><a href="/">Home</a></p>
-    <h1>Queue</h1>
-    <p v-if="error">{{ error }}</p>
-    <template v-else-if="data">
-      <ul>
-        <li v-if="data.active">
-          active —
-          <a :href="taskURL(data.active.repo.repo_path, data.active.commit, data.active.task)">{{
-            data.active.task
-          }}</a>
-        </li>
-        <li
-          v-for="entry in data.pending"
-          :key="`${entry.repo.repo_path}:${entry.commit}:${entry.task}`"
-        >
-          pending —
-          <a :href="taskURL(entry.repo.repo_path, entry.commit, entry.task)">{{ entry.task }}</a>
-        </li>
-        <li v-if="!data.active && data.pending.length === 0">idle</li>
-      </ul>
-    </template>
+  <main class="page">
+    <section class="page-header">
+      <span class="eyebrow">Queue</span>
+      <h1 class="page-title">Scheduler state</h1>
+      <p class="page-subtitle">
+        The queue is task-level: one active task and ordered pending entries.
+      </p>
+    </section>
+
+    <PMessage v-if="store.error" severity="error" :closable="false">{{ store.error }}</PMessage>
+    <div v-if="store.loading && !store.queue" class="loading-state">
+      <PProgressSpinner style="width: 1.5rem; height: 1.5rem" />
+      <span>Loading queue</span>
+    </div>
+
+    <section v-if="store.queue" class="stack">
+      <div class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Active</h2>
+        </div>
+        <div v-if="active" class="empty-state">
+          <PTag severity="info" value="running" />
+          <RouterLink :to="taskURL(active.repo.repo_path, active.commit, active.task)">
+            {{ taskLabel(active) }} / {{ active.task }}
+          </RouterLink>
+        </div>
+        <div v-else class="empty-state">No active task.</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Pending</h2>
+        </div>
+        <PDataTable v-if="pending.length > 0" :value="pending" size="small">
+          <PColumn header="#" style="width: 5rem">
+            <template #body="{ index }">{{ index + 1 }}</template>
+          </PColumn>
+          <PColumn header="Repo">
+            <template #body="{ data }">
+              <RouterLink :to="`/repo/${data.repo.repo_path}`">{{
+                data.repo.repo_name
+              }}</RouterLink>
+            </template>
+          </PColumn>
+          <PColumn header="Commit">
+            <template #body="{ data }">
+              <RouterLink :to="`/repo/${data.repo.repo_path}/commit/${data.commit}`" class="mono">
+                {{ shortCommit(data.commit) }}
+              </RouterLink>
+            </template>
+          </PColumn>
+          <PColumn header="Task">
+            <template #body="{ data }">
+              <RouterLink :to="taskURL(data.repo.repo_path, data.commit, data.task)">
+                {{ data.task }}
+              </RouterLink>
+            </template>
+          </PColumn>
+        </PDataTable>
+        <div v-else class="empty-state">Queue is idle.</div>
+      </div>
+    </section>
   </main>
 </template>
