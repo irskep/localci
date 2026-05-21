@@ -212,7 +212,7 @@ Current order:
 - `deps`: `[LC-007]`
 - `name`: Daemon timeout watcher reuse
 - `description`: Reuse the invoke timeout and output-activity semantics in daemon execution.
-- `status`: `unstarted`
+- `status`: `done`
 - `validation`: `lint`, `typecheck`, `test`, `commit`
 
 ## LC-017
