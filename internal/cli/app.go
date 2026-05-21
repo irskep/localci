@@ -119,7 +119,11 @@ func (a App) runPostcommit(args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(a.Stdout, "Enqueued %d task(s) for %s at %s\n", len(enqueued), repo, commit)
+	fmt.Fprintf(a.Stdout, "Enqueued %d %s for %s at %s\n", len(enqueued), pluralizeTask(len(enqueued)), repo, commit)
+	fmt.Fprintf(a.Stdout, "Status: localci status %s %s\n", shellQuote(repo), shellQuote(commit))
+	if resultURL, err := a.postcommitResultURL(client, repo, commit); err == nil && resultURL != "" {
+		fmt.Fprintf(a.Stdout, "Results: %s\n", resultURL)
+	}
 	for _, entry := range enqueued {
 		fmt.Fprintf(a.Stdout, "%s\n", entry.TaskName)
 	}
@@ -397,6 +401,20 @@ func (a App) openWeb(spec commitTarget, state localci.DaemonState) error {
 	return nil
 }
 
+func (a App) postcommitResultURL(client localci.DaemonClient, repo string, commit string) (string, error) {
+	state, err := client.Ping(context.Background())
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(state.HTTPBaseURL) == "" {
+		return "", nil
+	}
+	return buildWebURL(state.HTTPBaseURL, commitTarget{
+		RepoDir: repo,
+		Commit:  commit,
+	})
+}
+
 func buildWebURL(baseURL string, spec commitTarget) (string, error) {
 	root, err := url.Parse(baseURL)
 	if err != nil {
@@ -455,6 +473,23 @@ func defaultOpenURL(targetURL string) error {
 		_ = cmd.Process.Release()
 	}
 	return nil
+}
+
+func pluralizeTask(count int) string {
+	if count == 1 {
+		return "task"
+	}
+	return "tasks"
+}
+
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	if !strings.ContainsAny(value, " \t\n'\"\\$`!#&*()[]{}|;<>?~") {
+		return value
+	}
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
 }
 
 func (a App) runInstallHooks(args []string) error {

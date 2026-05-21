@@ -368,6 +368,31 @@ func TestOpenWebOpensURLAndPrintsIt(t *testing.T) {
 	}
 }
 
+func TestPluralizeTask(t *testing.T) {
+	t.Parallel()
+
+	if got := pluralizeTask(1); got != "task" {
+		t.Fatalf("pluralizeTask(1) = %q, want %q", got, "task")
+	}
+	if got := pluralizeTask(2); got != "tasks" {
+		t.Fatalf("pluralizeTask(2) = %q, want %q", got, "tasks")
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	t.Parallel()
+
+	if got := shellQuote("/repo/path"); got != "/repo/path" {
+		t.Fatalf("shellQuote simple = %q, want %q", got, "/repo/path")
+	}
+	if got := shellQuote("/repo with spaces"); got != "'/repo with spaces'" {
+		t.Fatalf("shellQuote spaces = %q, want %q", got, "'/repo with spaces'")
+	}
+	if got := shellQuote("O'Brien"); got != `'O'"'"'Brien'` {
+		t.Fatalf("shellQuote apostrophe = %q, want %q", got, `'O'"'"'Brien'`)
+	}
+}
+
 func testApp(root string, cwd string) App {
 	return App{
 		Stdout: io.Discard,
