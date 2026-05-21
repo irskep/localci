@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"bytes"
 	"io"
 	"testing"
+
+	"localci/internal/localci"
 )
 
 func TestParseCommitTargetDefaultsDirToCWD(t *testing.T) {
@@ -63,5 +66,75 @@ func TestAppRunRecognizesInvoke(t *testing.T) {
 
 	if got, want := err.Error(), "usage: localci invoke <repo> <commit>"; got != want {
 		t.Fatalf("error = %q, want %q", got, want)
+	}
+}
+
+func TestBuildWebURLCommit(t *testing.T) {
+	t.Parallel()
+
+	got, err := buildWebURL("http://127.0.0.1:4312", commitTarget{
+		RepoDir: "/repo",
+		Commit:  "abc123",
+	})
+	if err != nil {
+		t.Fatalf("buildWebURL returned error: %v", err)
+	}
+
+	want := "http://127.0.0.1:4312/commit?commit=abc123&repo=%2Frepo"
+	if got != want {
+		t.Fatalf("buildWebURL = %q, want %q", got, want)
+	}
+}
+
+func TestBuildWebURLTask(t *testing.T) {
+	t.Parallel()
+
+	got, err := buildWebURL("http://127.0.0.1:4312", commitTarget{
+		RepoDir: "/repo",
+		Commit:  "abc123",
+		Task:    "localci:test",
+	})
+	if err != nil {
+		t.Fatalf("buildWebURL returned error: %v", err)
+	}
+
+	want := "http://127.0.0.1:4312/task?commit=abc123&repo=%2Frepo&task=localci%3Atest"
+	if got != want {
+		t.Fatalf("buildWebURL = %q, want %q", got, want)
+	}
+}
+
+func TestOpenWebOpensURLAndPrintsIt(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var opened string
+	app := App{
+		Stdout: &stdout,
+		Stderr: io.Discard,
+		Cwd:    "/repo",
+		OpenURL: func(target string) error {
+			opened = target
+			return nil
+		},
+	}
+
+	err := app.openWeb(commitTarget{
+		RepoDir: "/repo",
+		Commit:  "abc123",
+		Task:    "localci:test",
+	}, localci.DaemonState{
+		HTTPBaseURL: "http://127.0.0.1:4312",
+	})
+	if err != nil {
+		t.Fatalf("openWeb returned error: %v", err)
+	}
+
+	want := "http://127.0.0.1:4312/task?commit=abc123&repo=%2Frepo&task=localci%3Atest"
+	if opened != want {
+		t.Fatalf("opened url = %q, want %q", opened, want)
+	}
+	if got := stdout.String(); got != want+"\n" {
+		t.Fatalf("stdout = %q, want %q", got, want+"\n")
 	}
 }

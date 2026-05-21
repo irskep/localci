@@ -5,17 +5,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"localci/internal/localci"
 )
 
 type App struct {
-	Stdout io.Writer
-	Stderr io.Writer
-	Cwd    string
+	Stdout  io.Writer
+	Stderr  io.Writer
+	Cwd     string
+	OpenURL func(string) error
 }
 
 func Run(args []string) int {
@@ -141,7 +145,18 @@ func (a App) runWeb(args []string) error {
 		return err
 	}
 
-	return errors.New("not implemented: web for repo " + spec.RepoDir + ", commit " + spec.Commit + maybeTaskSuffix(spec.Task))
+	runner, err := a.newRunner()
+	if err != nil {
+		return err
+	}
+
+	client := localci.DaemonClient{Paths: runner.Paths}
+	state, err := client.Ping(context.Background())
+	if err != nil {
+		return err
+	}
+
+	return a.openWeb(spec, state)
 }
 
 func (a App) printUsage() {
@@ -283,12 +298,73 @@ func parseCommitTarget(args []string, cwd string) (commitTarget, error) {
 	}
 }
 
-func maybeTaskSuffix(task string) string {
-	if task == "" {
-		return ""
+func (a App) openWeb(spec commitTarget, state localci.DaemonState) error {
+	if strings.TrimSpace(state.HTTPBaseURL) == "" {
+		return fmt.Errorf("daemon did not publish an HTTP base URL")
 	}
 
-	return ", task " + task
+	targetURL, err := buildWebURL(state.HTTPBaseURL, spec)
+	if err != nil {
+		return err
+	}
+
+	if err := a.openURL(targetURL); err != nil {
+		return err
+	}
+
+	fmt.Fprintln(a.Stdout, targetURL)
+	return nil
+}
+
+func buildWebURL(baseURL string, spec commitTarget) (string, error) {
+	root, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("parse daemon url: %w", err)
+	}
+
+	if spec.Task == "" {
+		root.Path = "/commit"
+	} else {
+		root.Path = "/task"
+	}
+
+	query := root.Query()
+	query.Set("repo", spec.RepoDir)
+	query.Set("commit", spec.Commit)
+	if spec.Task != "" {
+		query.Set("task", spec.Task)
+	}
+	root.RawQuery = query.Encode()
+	return root.String(), nil
+}
+
+func (a App) openURL(targetURL string) error {
+	if a.OpenURL != nil {
+		return a.OpenURL(targetURL)
+	}
+	return defaultOpenURL(targetURL)
+}
+
+func defaultOpenURL(targetURL string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", targetURL)
+	case "linux":
+		cmd = exec.Command("xdg-open", targetURL)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", targetURL)
+	default:
+		return fmt.Errorf("unsupported platform %q for browser launching", runtime.GOOS)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	if cmd.Process != nil {
+		_ = cmd.Process.Release()
+	}
+	return nil
 }
 
 func resolveDir(path string, cwd string) (string, error) {
