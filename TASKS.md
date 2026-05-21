@@ -257,5 +257,5 @@ Current order:
 - `deps`: `[LC-010, LC-023]`
 - `name`: Git hook install and self-hosting loop
 - `description`: Wire post-commit hook installation so localci can run on itself end to end in this repo.
-- `status`: `unstarted`
+- `status`: `done`
 - `validation`: `lint`, `typecheck`, `test`, `commit`

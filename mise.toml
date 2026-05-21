@@ -21,6 +21,10 @@ run = "go run ./cmd/localci start"
 description = "Stop the localci daemon"
 run = "go run ./cmd/localci stop"
 
+[tasks.hooks-install]
+description = "Install the localci post-commit hook for this repo"
+run = "go run ./cmd/localci install-hooks"
+
 [tasks.test]
 description = "Run Go tests"
 run = "go test ./..."

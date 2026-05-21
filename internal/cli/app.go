@@ -66,6 +66,8 @@ func (a App) Run(args []string) error {
 		return a.runStatus(args[1:])
 	case "web":
 		return a.runWeb(args[1:])
+	case "install-hooks":
+		return a.runInstallHooks(args[1:])
 	default:
 		return fmt.Errorf("unknown command %q\n\n%s", args[0], usageText())
 	}
@@ -195,6 +197,7 @@ Usage:
   localci invoke <repo> <commit>
   localci status [dir] <commit> [task]
   localci web [dir] <commit> [task]
+  localci install-hooks [dir]
 `
 }
 
@@ -386,6 +389,28 @@ func defaultOpenURL(targetURL string) error {
 	if cmd.Process != nil {
 		_ = cmd.Process.Release()
 	}
+	return nil
+}
+
+func (a App) runInstallHooks(args []string) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: localci install-hooks [dir]")
+	}
+
+	repoDir := a.Cwd
+	if len(args) == 1 {
+		var err error
+		repoDir, err = resolveDir(args[0], a.Cwd)
+		if err != nil {
+			return fmt.Errorf("resolve dir: %w", err)
+		}
+	}
+
+	if err := (localci.HookInstaller{RepoDir: repoDir}).Install(); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(a.Stdout, "Installed localci post-commit hook in %s\n", repoDir)
 	return nil
 }
 

@@ -28,7 +28,7 @@ func TestRequirementsCheckerCheck(t *testing.T) {
 		},
 		RunVersion: func(name string, args ...string) (string, error) {
 			if name == "git" {
-				return "git version 2.51.0\n", nil
+				return "git version 2.54.0\n", nil
 			}
 			return "2025.11.3\n", nil
 		},
@@ -71,7 +71,7 @@ func TestRequirementsCheckerFailsWhenMiseMissing(t *testing.T) {
 			return "/bin/tool", nil
 		},
 		RunVersion: func(name string, args ...string) (string, error) {
-			return "git version 2.51.0\n", nil
+			return "git version 2.54.0\n", nil
 		},
 	}
 

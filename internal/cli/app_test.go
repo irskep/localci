@@ -115,6 +115,28 @@ func TestAppRunChecksRequirementsForCommands(t *testing.T) {
 	}
 }
 
+func TestAppRunRecognizesInstallHooks(t *testing.T) {
+	t.Parallel()
+
+	app := App{
+		Stdout: io.Discard,
+		Stderr: io.Discard,
+		Cwd:    "/repo",
+		CheckRequirements: func() error {
+			return nil
+		},
+	}
+
+	err := app.Run([]string{"install-hooks", "a", "b"})
+	if err == nil {
+		t.Fatalf("Run returned nil error, want usage error")
+	}
+
+	if got, want := err.Error(), "usage: localci install-hooks [dir]"; got != want {
+		t.Fatalf("error = %q, want %q", got, want)
+	}
+}
+
 func TestParseCommitTargetReturnsCommandSpecificUsage(t *testing.T) {
 	t.Parallel()
 

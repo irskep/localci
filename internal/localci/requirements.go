@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-var minimumGitVersion = version{Major: 2, Minor: 40, Patch: 0}
+var minimumGitVersion = version{Major: 2, Minor: 54, Patch: 0}
 
 type RequirementsChecker struct {
 	LookPath      func(string) (string, error)
