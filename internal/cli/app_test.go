@@ -157,8 +157,9 @@ func TestParseWebTargetDefaultsToHome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseWebTarget returned error: %v", err)
 	}
-	if got != (commitTarget{}) {
-		t.Fatalf("got = %#v, want zero target", got)
+	want := commitTarget{RepoDir: "/repo"}
+	if got != want {
+		t.Fatalf("got = %#v, want %#v", got, want)
 	}
 }
 
@@ -197,20 +198,6 @@ func TestBuildWebURLCommit(t *testing.T) {
 	}
 }
 
-func TestBuildWebURLHome(t *testing.T) {
-	t.Parallel()
-
-	got, err := buildWebURL("http://127.0.0.1:4312", commitTarget{})
-	if err != nil {
-		t.Fatalf("buildWebURL returned error: %v", err)
-	}
-
-	want := "http://127.0.0.1:4312/"
-	if got != want {
-		t.Fatalf("buildWebURL = %q, want %q", got, want)
-	}
-}
-
 func TestBuildWebURLRepo(t *testing.T) {
 	t.Parallel()
 
@@ -222,6 +209,20 @@ func TestBuildWebURLRepo(t *testing.T) {
 	}
 
 	want := "http://127.0.0.1:4312/repo?repo=%2Frepo"
+	if got != want {
+		t.Fatalf("buildWebURL = %q, want %q", got, want)
+	}
+}
+
+func TestBuildWebURLHome(t *testing.T) {
+	t.Parallel()
+
+	got, err := buildWebURL("http://127.0.0.1:4312", commitTarget{})
+	if err != nil {
+		t.Fatalf("buildWebURL returned error: %v", err)
+	}
+
+	want := "http://127.0.0.1:4312/"
 	if got != want {
 		t.Fatalf("buildWebURL = %q, want %q", got, want)
 	}

@@ -326,7 +326,7 @@ func parseCommitTarget(args []string, cwd string, usage string) (commitTarget, e
 func parseWebTarget(args []string, cwd string) (commitTarget, error) {
 	switch len(args) {
 	case 0:
-		return commitTarget{}, nil
+		return commitTarget{RepoDir: cwd}, nil
 	case 1:
 		repo, err := tryResolveExistingDir(args[0], cwd)
 		if err == nil {
