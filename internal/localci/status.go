@@ -43,7 +43,7 @@ func (r StatusReader) ReadCommit(repoDir string, commit string) (CommitStatus, e
 
 func (r StatusReader) readTaskRecords(repoDir string, commit string) ([]TaskRecord, error) {
 	root := filepath.Join(r.Paths.CommitRoot(repoDir, commit), "out")
-	records := []TaskRecord{}
+	taskRecords := map[string]TaskRecord{}
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -60,11 +60,19 @@ func (r StatusReader) readTaskRecords(repoDir string, commit string) ([]TaskReco
 		if err != nil {
 			return err
 		}
-		records = append(records, record)
+		existing, ok := taskRecords[record.Name]
+		if !ok || record.Attempt > existing.Attempt {
+			taskRecords[record.Name] = record
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	records := make([]TaskRecord, 0, len(taskRecords))
+	for _, record := range taskRecords {
+		records = append(records, record)
 	}
 
 	sort.Slice(records, func(i int, j int) bool {

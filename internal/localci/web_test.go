@@ -25,7 +25,7 @@ func TestWebServerCommitAndArtifactPages(t *testing.T) {
 	commit := "abc123"
 	req := InvokeRequest{RepoDir: repoDir, Commit: commit}
 
-	record := newTaskRecord(paths, req, Task{Name: "localci:test"}, time.Now().UTC())
+	record := newTaskRecord(paths, req, Task{Name: "localci:test"}, 1, time.Now().UTC())
 	record.Status = TaskStatusSucceeded
 	if err := os.MkdirAll(record.OutputDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll returned error: %v", err)
@@ -83,6 +83,19 @@ func TestWebServerCommitAndArtifactPages(t *testing.T) {
 	_ = resp.Body.Close()
 	if !strings.Contains(string(body), "localci:test") {
 		t.Fatalf("commit page missing task link: %s", string(body))
+	}
+
+	resp, err = http.Get(baseURL + "/task?repo=" + url.QueryEscape(repoDir) + "&commit=" + url.QueryEscape(commit) + "&task=" + url.QueryEscape("localci:test"))
+	if err != nil {
+		t.Fatalf("GET task returned error: %v", err)
+	}
+	body, _ = io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !strings.Contains(string(body), "Retry task") {
+		t.Fatalf("task page missing retry form: %s", string(body))
+	}
+	if !strings.Contains(string(body), "Attempt: 1") {
+		t.Fatalf("task page missing attempt info: %s", string(body))
 	}
 
 	resp, err = http.Get(baseURL + "/artifact?repo=" + url.QueryEscape(repoDir) + "&commit=" + url.QueryEscape(commit) + "&task=" + url.QueryEscape("localci:test") + "&path=" + url.QueryEscape(artifactPath))

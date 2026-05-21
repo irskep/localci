@@ -24,7 +24,7 @@ func TestStatusWebSocketSendsPayload(t *testing.T) {
 	commit := "abc123"
 	req := InvokeRequest{RepoDir: repoDir, Commit: commit}
 
-	task := newTaskRecord(paths, req, Task{Name: "localci:test"}, time.Now().UTC())
+	task := newTaskRecord(paths, req, Task{Name: "localci:test"}, 1, time.Now().UTC())
 	task.Status = TaskStatusSucceeded
 	if err := os.MkdirAll(task.OutputDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll returned error: %v", err)

@@ -12,9 +12,10 @@ import (
 )
 
 type DaemonRequest struct {
-	Method  string `json:"method"`
-	RepoDir string `json:"repo_dir,omitempty"`
-	Commit  string `json:"commit,omitempty"`
+	Method   string `json:"method"`
+	RepoDir  string `json:"repo_dir,omitempty"`
+	Commit   string `json:"commit,omitempty"`
+	TaskName string `json:"task_name,omitempty"`
 }
 
 type DaemonResponse struct {
@@ -88,6 +89,19 @@ func (c DaemonClient) Status(ctx context.Context, repoDir string, commit string)
 		return CommitStatusView{}, fmt.Errorf("daemon status returned no status view")
 	}
 	return *resp.StatusView, nil
+}
+
+func (c DaemonClient) Retry(ctx context.Context, repoDir string, commit string, taskName string) ([]QueueEntry, error) {
+	resp, err := c.call(ctx, DaemonRequest{
+		Method:   "retry",
+		RepoDir:  repoDir,
+		Commit:   commit,
+		TaskName: taskName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Enqueued, nil
 }
 
 func (c DaemonClient) call(ctx context.Context, req DaemonRequest) (DaemonResponse, error) {
@@ -224,12 +238,62 @@ func (s *DaemonServer) dispatch(req DaemonRequest) DaemonResponse {
 			return errorResponse(err)
 		}
 		return DaemonResponse{OK: true, StatusView: &statusView}
+	case "retry":
+		entries, err := s.enqueueRetry(req.RepoDir, req.Commit, req.TaskName)
+		if err != nil {
+			return errorResponse(err)
+		}
+		return DaemonResponse{OK: true, Enqueued: entries}
 	default:
 		return DaemonResponse{
 			OK:    false,
 			Error: fmt.Sprintf("unknown daemon method %q", req.Method),
 		}
 	}
+}
+
+func (s *DaemonServer) enqueueRetry(repoDir string, commit string, taskName string) ([]QueueEntry, error) {
+	if repoDir == "" {
+		return nil, fmt.Errorf("repo_dir is required")
+	}
+	if commit == "" {
+		return nil, fmt.Errorf("commit is required")
+	}
+	if taskName == "" {
+		return nil, fmt.Errorf("task_name is required")
+	}
+	if s.DiscoverTasks == nil {
+		return nil, fmt.Errorf("daemon task discovery is not configured")
+	}
+
+	tasks, err := s.DiscoverTasks(context.Background(), repoDir)
+	if err != nil {
+		return nil, err
+	}
+	found := false
+	for _, task := range tasks {
+		if task.Name == taskName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("task %q not found", taskName)
+	}
+
+	active, err := s.Queue.IsTaskActive(repoDir, commit, taskName)
+	if err != nil {
+		return nil, err
+	}
+	if active {
+		return nil, nil
+	}
+
+	entry, err := s.Queue.Enqueue(repoDir, commit, taskName)
+	if err != nil {
+		return nil, err
+	}
+	return []QueueEntry{entry}, nil
 }
 
 func (s *DaemonServer) buildStatusView(repoDir string, commit string) (CommitStatusView, error) {

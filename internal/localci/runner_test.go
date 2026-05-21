@@ -109,9 +109,53 @@ exit 1
 	}
 
 	for _, task := range []string{"localci:first", "localci:second"} {
-		taskPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName(task), "task.json")
+		taskPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName(task), "attempt-001", "task.json")
 		if _, err := os.Stat(taskPath); err != nil {
 			t.Fatalf("task record missing for %s at %s: %v", task, taskPath, err)
+		}
+	}
+}
+
+func TestInvokeIncrementsTaskAttemptDirectories(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	rootDir := t.TempDir()
+	binDir := t.TempDir()
+
+	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
+set -eu
+if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--local" ]; then
+  printf '%s\n' '[{"name":"localci:test"}]'
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "localci:test" ]; then
+  printf 'ok\n' >"$LOCALCI_TASK_OUTPUT_DIR/test.log"
+  exit 0
+fi
+exit 1
+`)
+
+	runner := Runner{
+		Paths:        Paths{Root: rootDir},
+		MiseBin:      filepath.Join(binDir, "mise"),
+		Env:          append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH")),
+		PollInterval: 10 * time.Millisecond,
+	}
+
+	for range 2 {
+		if _, err := runner.Invoke(context.Background(), InvokeRequest{
+			RepoDir: repoDir,
+			Commit:  "abc123",
+		}); err != nil {
+			t.Fatalf("Invoke returned error: %v", err)
+		}
+	}
+
+	for _, attempt := range []string{"attempt-001", "attempt-002"} {
+		taskPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName("localci:test"), attempt, "task.json")
+		if _, err := os.Stat(taskPath); err != nil {
+			t.Fatalf("task record missing for %s at %s: %v", attempt, taskPath, err)
 		}
 	}
 }

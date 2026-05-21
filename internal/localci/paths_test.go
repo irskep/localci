@@ -26,4 +26,9 @@ func TestPaths(t *testing.T) {
 	if want := repoRoot + "/abc123/out/localci_test_unit"; taskDir != want {
 		t.Fatalf("TaskOutputDir = %q, want %q", taskDir, want)
 	}
+
+	attemptDir := paths.TaskAttemptDir("/Users/steve/src/project", "abc123", "localci:test/unit", 2)
+	if want := repoRoot + "/abc123/out/localci_test_unit/attempt-002"; attemptDir != want {
+		t.Fatalf("TaskAttemptDir = %q, want %q", attemptDir, want)
+	}
 }

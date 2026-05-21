@@ -86,6 +86,7 @@ type RunSummary struct {
 type TaskRecord struct {
 	Name                 string     `json:"name"`
 	ShortName            string     `json:"short_name"`
+	Attempt              int        `json:"attempt"`
 	OutputDir            string     `json:"output_dir"`
 	TaskCacheDir         string     `json:"task_cache_dir"`
 	SharedCacheDir       string     `json:"shared_cache_dir"`
@@ -111,11 +112,12 @@ func newRunRecord(req InvokeRequest, startedAt time.Time) RunRecord {
 	return record
 }
 
-func newTaskRecord(paths Paths, req InvokeRequest, task Task, startedAt time.Time) TaskRecord {
+func newTaskRecord(paths Paths, req InvokeRequest, task Task, attempt int, startedAt time.Time) TaskRecord {
 	return TaskRecord{
 		Name:           task.Name,
 		ShortName:      trimTaskPrefix(task.Name),
-		OutputDir:      paths.TaskOutputDir(req.RepoDir, req.Commit, task.Name),
+		Attempt:        attempt,
+		OutputDir:      paths.TaskAttemptDir(req.RepoDir, req.Commit, task.Name, attempt),
 		TaskCacheDir:   paths.TaskCacheDir(req.RepoDir, task.Name),
 		SharedCacheDir: paths.SharedCacheDir(),
 		Status:         TaskStatusRunning,

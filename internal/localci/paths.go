@@ -3,6 +3,7 @@ package localci
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"path/filepath"
 	"strings"
 )
@@ -50,8 +51,12 @@ func (p Paths) TaskOutputDir(repoDir string, commit string, task string) string 
 	return filepath.Join(p.CommitRoot(repoDir, commit), "out", sanitizeTaskName(task))
 }
 
-func (p Paths) TaskRecordPath(repoDir string, commit string, task string) string {
-	return filepath.Join(p.TaskOutputDir(repoDir, commit, task), "task.json")
+func (p Paths) TaskAttemptDir(repoDir string, commit string, task string, attempt int) string {
+	return filepath.Join(p.TaskOutputDir(repoDir, commit, task), formatTaskAttempt(attempt))
+}
+
+func (p Paths) TaskRecordPath(repoDir string, commit string, task string, attempt int) string {
+	return filepath.Join(p.TaskAttemptDir(repoDir, commit, task, attempt), "task.json")
 }
 
 func normalizeRepoDir(repoDir string) string {
@@ -62,4 +67,8 @@ func normalizeRepoDir(repoDir string) string {
 func sanitizeTaskName(task string) string {
 	replacer := strings.NewReplacer("/", "_", ":", "_", " ", "_")
 	return replacer.Replace(task)
+}
+
+func formatTaskAttempt(attempt int) string {
+	return fmt.Sprintf("attempt-%03d", attempt)
 }

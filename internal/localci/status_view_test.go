@@ -14,7 +14,7 @@ func TestBuildCommitStatusView(t *testing.T) {
 	paths := Paths{Root: root}
 	req := InvokeRequest{RepoDir: "/repo", Commit: "abc123"}
 
-	taskSucceeded := newTaskRecord(paths, req, Task{Name: "localci:build"}, time.Now().UTC())
+	taskSucceeded := newTaskRecord(paths, req, Task{Name: "localci:build"}, 1, time.Now().UTC())
 	taskSucceeded.Status = TaskStatusSucceeded
 	taskSucceeded.FinishedAt = taskSucceeded.StartedAt.Add(time.Second)
 	if err := os.MkdirAll(taskSucceeded.OutputDir, 0o755); err != nil {
@@ -72,5 +72,15 @@ func TestBuildCommitStatusView(t *testing.T) {
 	}
 	if statuses["localci:lint"] != ExecutionStatusNotRun {
 		t.Fatalf("lint status = %q, want %q", statuses["localci:lint"], ExecutionStatusNotRun)
+	}
+	for _, task := range view.Tasks {
+		if task.Name == "localci:build" {
+			if task.Attempt != 1 {
+				t.Fatalf("build attempt = %d, want 1", task.Attempt)
+			}
+			if got, want := task.OutputDir, taskSucceeded.OutputDir; got != want {
+				t.Fatalf("build output dir = %q, want %q", got, want)
+			}
+		}
 	}
 }

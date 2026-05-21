@@ -27,6 +27,7 @@ type CommitStatusView struct {
 type TaskStatusView struct {
 	Name        string          `json:"name"`
 	ShortName   string          `json:"short_name"`
+	Attempt     int             `json:"attempt"`
 	Status      ExecutionStatus `json:"status"`
 	OutputDir   string          `json:"output_dir"`
 	OutputFiles []string        `json:"output_files"`
@@ -60,24 +61,29 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 	}
 
 	for _, task := range discovered {
+		status := ExecutionStatusNotRun
 		outputDir := paths.TaskOutputDir(repoDir, commit, task.Name)
+		attempt := 0
+		if record, ok := taskRecords[task.Name]; ok {
+			outputDir = record.OutputDir
+			attempt = record.Attempt
+			status = executionStatusFromTaskRecord(record)
+		}
+		if active != nil && active.RepoDir == repoDir && active.Commit == commit && active.TaskName == task.Name {
+			status = ExecutionStatusRunning
+		} else if queuedSet[task.Name] {
+			status = ExecutionStatusQueued
+		}
+
 		outputFiles, err := listOutputFiles(outputDir)
 		if err != nil {
 			return CommitStatusView{}, err
 		}
 
-		status := ExecutionStatusNotRun
-		if active != nil && active.RepoDir == repoDir && active.Commit == commit && active.TaskName == task.Name {
-			status = ExecutionStatusRunning
-		} else if queuedSet[task.Name] {
-			status = ExecutionStatusQueued
-		} else if record, ok := taskRecords[task.Name]; ok {
-			status = executionStatusFromTaskRecord(record)
-		}
-
 		view.Tasks = append(view.Tasks, TaskStatusView{
 			Name:        task.Name,
 			ShortName:   trimTaskPrefix(task.Name),
+			Attempt:     attempt,
 			Status:      status,
 			OutputDir:   outputDir,
 			OutputFiles: outputFiles,

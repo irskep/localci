@@ -122,7 +122,11 @@ var (
 
 func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task) (TaskRecord, error) {
 	startedAt := r.now()
-	record := newTaskRecord(r.Paths, req, task, startedAt)
+	attempt, err := nextTaskAttempt(r.Paths, req.RepoDir, req.Commit, task.Name)
+	if err != nil {
+		return TaskRecord{}, err
+	}
+	record := newTaskRecord(r.Paths, req, task, attempt, startedAt)
 
 	for _, dir := range []string{
 		r.Paths.CommitRoot(req.RepoDir, req.Commit),
@@ -194,6 +198,32 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task) (Task
 	}
 
 	return record, runErr
+}
+
+func nextTaskAttempt(paths Paths, repoDir string, commit string, task string) (int, error) {
+	dirEntries, err := os.ReadDir(paths.TaskOutputDir(repoDir, commit, task))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 1, nil
+		}
+		return 0, err
+	}
+
+	maxAttempt := 0
+	for _, entry := range dirEntries {
+		if !entry.IsDir() {
+			continue
+		}
+		var attempt int
+		if _, scanErr := fmt.Sscanf(entry.Name(), "attempt-%03d", &attempt); scanErr != nil {
+			continue
+		}
+		if attempt > maxAttempt {
+			maxAttempt = attempt
+		}
+	}
+
+	return maxAttempt + 1, nil
 }
 
 func (r Runner) watchTask(ctx context.Context, cmd *exec.Cmd, outputDir string, waitResult <-chan error) error {

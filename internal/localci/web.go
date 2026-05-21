@@ -39,6 +39,7 @@ func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
 	mux.HandleFunc("/", s.handleHome)
 	mux.HandleFunc("/commit", s.handleCommit)
 	mux.HandleFunc("/task", s.handleTask)
+	mux.HandleFunc("/retry", s.handleRetry)
 	mux.HandleFunc("/artifact", s.handleArtifact)
 	mux.HandleFunc("/ws/status", s.handleStatusWebSocket)
 
@@ -129,6 +130,45 @@ func (s WebServer) handleArtifact(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write(data)
+}
+
+func (s WebServer) handleRetry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	repoDir := r.URL.Query().Get("repo")
+	commit := r.URL.Query().Get("commit")
+	taskName := r.URL.Query().Get("task")
+	if repoDir == "" || commit == "" || taskName == "" {
+		http.Error(w, "repo, commit, and task are required", http.StatusBadRequest)
+		return
+	}
+
+	view, err := s.buildStatusView(repoDir, commit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, ok := findTaskStatus(view.Tasks, taskName); !ok {
+		http.Error(w, "task not found", http.StatusNotFound)
+		return
+	}
+
+	active, err := s.Queue.IsTaskActive(repoDir, commit, taskName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !active {
+		if _, err := s.Queue.Enqueue(repoDir, commit, taskName); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	http.Redirect(w, r, taskPageURL(repoDir, commit, taskName), http.StatusSeeOther)
 }
 
 func (s WebServer) handleStatusWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -242,7 +282,11 @@ var taskTemplate = template.Must(template.New("task").Parse(`<!doctype html>
 <body>
 <h1>{{.Name}}</h1>
 <p id="task-status">Status: {{.Status}}</p>
+<p id="task-attempt">Attempt: {{.Attempt}}</p>
 <p id="task-output">Output: {{.OutputDir}}</p>
+<form method="post" action="/retry?repo={{urlquery .RepoDir}}&commit={{urlquery .Commit}}&task={{urlquery .Name}}">
+  <button type="submit">Retry task</button>
+</form>
 <ul id="task-files">{{.FilesHTML}}</ul>
 <script>
 (() => {
@@ -257,9 +301,11 @@ var taskTemplate = template.Must(template.New("task").Parse(`<!doctype html>
     const task = payload.tasks.find((item) => item.name === taskName);
     if (!task) return;
     const statusEl = document.getElementById("task-status");
+    const attemptEl = document.getElementById("task-attempt");
     const outputEl = document.getElementById("task-output");
     const filesEl = document.getElementById("task-files");
     if (statusEl) statusEl.textContent = "Status: " + task.status;
+    if (attemptEl) attemptEl.textContent = "Attempt: " + task.attempt;
     if (outputEl) outputEl.textContent = "Output: " + task.output_dir;
     if (filesEl) filesEl.innerHTML = task.files_html;
   };
@@ -275,6 +321,7 @@ type statusPayload struct {
 
 type taskPayload struct {
 	Name      string `json:"name"`
+	Attempt   int    `json:"attempt"`
 	Status    string `json:"status"`
 	OutputDir string `json:"output_dir"`
 	FilesHTML string `json:"files_html"`
@@ -289,6 +336,7 @@ func renderStatusPayload(view CommitStatusView) ([]byte, error) {
 	for _, task := range view.Tasks {
 		payload.Tasks = append(payload.Tasks, taskPayload{
 			Name:      task.Name,
+			Attempt:   task.Attempt,
 			Status:    string(task.Status),
 			OutputDir: task.OutputDir,
 			FilesHTML: renderTaskFilesHTML(view.RepoDir, view.Commit, task),
@@ -301,13 +349,15 @@ func renderStatusPayload(view CommitStatusView) ([]byte, error) {
 func renderCommitTasksHTML(view CommitStatusView) string {
 	var b strings.Builder
 	for _, task := range view.Tasks {
-		fmt.Fprintf(&b, `<li><a href="/task?repo=%s&commit=%s&task=%s">%s</a> — %s</li>`,
-			template.URLQueryEscaper(view.RepoDir),
-			template.URLQueryEscaper(view.Commit),
-			template.URLQueryEscaper(task.Name),
+		fmt.Fprintf(&b, `<li><a href="%s">%s</a> — %s`,
+			template.HTMLEscapeString(taskPageURL(view.RepoDir, view.Commit, task.Name)),
 			template.HTMLEscapeString(task.Name),
 			template.HTMLEscapeString(string(task.Status)),
 		)
+		if task.Attempt > 0 {
+			fmt.Fprintf(&b, ` (attempt %d)`, task.Attempt)
+		}
+		b.WriteString(`</li>`)
 	}
 	return b.String()
 }
@@ -333,4 +383,10 @@ func findTaskStatus(tasks []TaskStatusView, name string) (TaskStatusView, bool) 
 		}
 	}
 	return TaskStatusView{}, false
+}
+
+func taskPageURL(repoDir string, commit string, taskName string) string {
+	return "/task?repo=" + template.URLQueryEscaper(repoDir) +
+		"&commit=" + template.URLQueryEscaper(commit) +
+		"&task=" + template.URLQueryEscaper(taskName)
 }

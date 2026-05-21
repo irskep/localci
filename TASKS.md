@@ -203,7 +203,7 @@ Current order:
 - `deps`: `[LC-007, LC-013, LC-021]`
 - `name`: Per-task attempts and retry flow
 - `description`: Add attempt-aware task output layout and single-task retry behavior.
-- `status`: `inprogress`
+- `status`: `done`
 - `validation`: `lint`, `typecheck`, `test`, `commit`
 
 ## LC-016

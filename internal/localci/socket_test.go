@@ -180,7 +180,7 @@ func TestDaemonServerStatusView(t *testing.T) {
 	queue := QueueStore{Paths: paths}
 	req := InvokeRequest{RepoDir: "/repo", Commit: "abc123"}
 
-	taskRecord := newTaskRecord(paths, req, Task{Name: "localci:build"}, time.Now().UTC())
+	taskRecord := newTaskRecord(paths, req, Task{Name: "localci:build"}, 1, time.Now().UTC())
 	taskRecord.Status = TaskStatusSucceeded
 	taskRecord.FinishedAt = taskRecord.StartedAt.Add(time.Second)
 	if err := os.MkdirAll(taskRecord.OutputDir, 0o755); err != nil {
@@ -238,6 +238,64 @@ func TestDaemonServerStatusView(t *testing.T) {
 	}
 	if len(view.Tasks) != 3 {
 		t.Fatalf("len(view.Tasks) = %d, want 3", len(view.Tasks))
+	}
+
+	cancel()
+	if err := <-errs; err != nil {
+		t.Fatalf("Serve returned error: %v", err)
+	}
+}
+
+func TestDaemonServerRetryEnqueuesSingleTask(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := Paths{Root: root}
+	queue := QueueStore{Paths: paths}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if !canBindUnixSocket(t, paths.DaemonSocketPath()) {
+		t.Skip("unix sockets are not permitted in this environment")
+	}
+
+	server := &DaemonServer{
+		Paths: paths,
+		Queue: queue,
+		ReadState: func() (DaemonState, error) {
+			return DaemonState{PID: 123, StartedAt: time.Now().UTC()}, nil
+		},
+		DiscoverTasks: func(context.Context, string) ([]Task, error) {
+			return []Task{
+				{Name: "localci:build"},
+				{Name: "localci:test"},
+			}, nil
+		},
+		Shutdown: cancel,
+	}
+
+	errs := make(chan error, 1)
+	go func() {
+		errs <- server.Serve(ctx)
+	}()
+	waitForSocket(t, paths.DaemonSocketPath())
+
+	client := DaemonClient{Paths: paths}
+	enqueued, err := client.Retry(context.Background(), "/repo", "abc123", "localci:test")
+	if err != nil {
+		t.Fatalf("Retry returned error: %v", err)
+	}
+	if len(enqueued) != 1 || enqueued[0].TaskName != "localci:test" {
+		t.Fatalf("unexpected retry queue response: %#v", enqueued)
+	}
+
+	queueEntries, err := queue.List()
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(queueEntries) != 1 || queueEntries[0].TaskName != "localci:test" {
+		t.Fatalf("unexpected queue contents: %#v", queueEntries)
 	}
 
 	cancel()
