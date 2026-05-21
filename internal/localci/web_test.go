@@ -84,6 +84,9 @@ func TestWebServerCommitAndArtifactPages(t *testing.T) {
 	if !strings.Contains(string(body), ">test<") {
 		t.Fatalf("commit page missing task link: %s", string(body))
 	}
+	if !strings.Contains(string(body), `/assets/app.js`) {
+		t.Fatalf("commit page missing app.js: %s", string(body))
+	}
 
 	resp, err = http.Get(baseURL + "/task?repo=" + url.QueryEscape(repoDir) + "&commit=" + url.QueryEscape(commit) + "&task=" + url.QueryEscape("localci:test"))
 	if err != nil {
@@ -107,6 +110,86 @@ func TestWebServerCommitAndArtifactPages(t *testing.T) {
 	if got := string(body); got != "hello" {
 		t.Fatalf("artifact body = %q, want %q", got, "hello")
 	}
+}
+
+func TestWebServerServesEmbeddedAssetsAndOverride(t *testing.T) {
+	root := t.TempDir()
+	paths := Paths{Root: root}
+
+	t.Run("embedded", func(t *testing.T) {
+		server := WebServer{Paths: paths, Queue: QueueStore{Paths: paths}}
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			if isTCPPermissionError(err) {
+				t.Skip("tcp listeners are not permitted in this environment")
+			}
+			t.Fatalf("Listen returned error: %v", err)
+		}
+		defer listener.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		errs := make(chan error, 1)
+		go func() {
+			errs <- server.Serve(ctx, listener)
+		}()
+		defer func() {
+			cancel()
+			<-errs
+		}()
+
+		resp, err := http.Get("http://" + listener.Addr().String() + "/assets/app.js")
+		if err != nil {
+			t.Fatalf("GET embedded asset returned error: %v", err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if !strings.Contains(string(body), "[localci ui] loaded") {
+			t.Fatalf("embedded asset missing expected content: %s", string(body))
+		}
+	})
+
+	t.Run("override", func(t *testing.T) {
+		assetDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(assetDir, "app.js"), []byte(`console.info("override asset");`), 0o644); err != nil {
+			t.Fatalf("WriteFile returned error: %v", err)
+		}
+
+		server := WebServer{
+			Paths:    paths,
+			Queue:    QueueStore{Paths: paths},
+			AssetDir: assetDir,
+		}
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			if isTCPPermissionError(err) {
+				t.Skip("tcp listeners are not permitted in this environment")
+			}
+			t.Fatalf("Listen returned error: %v", err)
+		}
+		defer listener.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		errs := make(chan error, 1)
+		go func() {
+			errs <- server.Serve(ctx, listener)
+		}()
+		defer func() {
+			cancel()
+			<-errs
+		}()
+
+		resp, err := http.Get("http://" + listener.Addr().String() + "/assets/app.js")
+		if err != nil {
+			t.Fatalf("GET override asset returned error: %v", err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if got := string(body); !strings.Contains(got, "override asset") {
+			t.Fatalf("override asset missing expected content: %s", got)
+		}
+	})
 }
 
 func TestWebServerHomeAndRepoPages(t *testing.T) {

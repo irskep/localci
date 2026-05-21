@@ -176,6 +176,7 @@ func (m DaemonManager) Run(ctx context.Context) error {
 		Paths:         m.Paths,
 		Queue:         m.Scheduler.Queue,
 		DiscoverTasks: m.Scheduler.Runner.DiscoverTasks,
+		AssetDir:      os.Getenv("LOCALCI_WEB_DIR"),
 	}
 	webErrs := make(chan error, 1)
 	go func() {

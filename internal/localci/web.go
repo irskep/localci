@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -14,12 +15,15 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"localci/webassets"
 )
 
 type WebServer struct {
 	Paths         Paths
 	Queue         QueueStore
 	DiscoverTasks func(context.Context, string) ([]Task, error)
+	AssetDir      string
 }
 
 type HomePageView struct {
@@ -54,8 +58,14 @@ type TaskPageView struct {
 }
 
 func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
+	assetFS, err := s.assetFS()
+	if err != nil {
+		return err
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealth)
+	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServerFS(assetFS)))
 	mux.HandleFunc("/", s.handleHome)
 	mux.HandleFunc("/repo", s.handleRepo)
 	mux.HandleFunc("/commit", s.handleCommit)
@@ -73,11 +83,19 @@ func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
 		_ = server.Close()
 	}()
 
-	err := server.Serve(listener)
+	err = server.Serve(listener)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
+}
+
+func (s WebServer) assetFS() (fs.FS, error) {
+	if strings.TrimSpace(s.AssetDir) != "" {
+		return os.DirFS(s.AssetDir), nil
+	}
+
+	return webassets.EmbeddedFS()
 }
 
 func (s WebServer) handleHome(w http.ResponseWriter, _ *http.Request) {
@@ -344,7 +362,7 @@ func (s WebServer) buildStatusView(repoDir string, commit string) (CommitStatusV
 var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>localci</title></head>
-<body>
+<body data-page="home">
 <h1>localci</h1>
 <h2>Repos</h2>
 <ul>{{.ReposHTML}}</ul>
@@ -352,27 +370,30 @@ var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html>
 <ul>{{.RecentCommitsHTML}}</ul>
 <h2>Queue</h2>
 <ul>{{.QueueHTML}}</ul>
+<script type="module" src="/assets/app.js"></script>
 </body>
 </html>`))
 
 var repoTemplate = template.Must(template.New("repo").Parse(`<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>{{.RepoName}} - localci</title></head>
-<body>
+<body data-page="repo">
 <p><a href="/">All repos</a></p>
 <h1>{{.RepoName}}</h1>
 <ul>{{.RunsHTML}}</ul>
+<script type="module" src="/assets/app.js"></script>
 </body>
 </html>`))
 
 var commitTemplate = template.Must(template.New("commit").Parse(`<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>{{.Commit}} - localci</title></head>
-<body>
+<body data-page="commit">
 <p><a href="/">All repos</a> / <a href="/repo?repo={{urlquery .RepoDir}}">{{.RepoName}}</a></p>
 <h1>{{.Commit}}</h1>
 <p>{{len .Tasks}} task{{if ne (len .Tasks) 1}}s{{end}}</p>
 <ul id="task-list">{{.TasksHTML}}</ul>
+<script type="module" src="/assets/app.js"></script>
 <script>
 (() => {
   const url = new URL("/ws/status", window.location.origin);
@@ -393,7 +414,7 @@ var commitTemplate = template.Must(template.New("commit").Parse(`<!doctype html>
 var taskTemplate = template.Must(template.New("task").Parse(`<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>{{.Name}} - localci</title></head>
-<body>
+<body data-page="task">
 <p><a href="/">All repos</a> / <a href="/repo?repo={{urlquery .RepoDir}}">{{.RepoName}}</a> / <a href="/commit?repo={{urlquery .RepoDir}}&commit={{urlquery .Commit}}">{{.Commit}}</a></p>
 <h1>{{.Name}}</h1>
 <p id="task-status">Status: {{.Status}}</p>
@@ -412,6 +433,7 @@ var taskTemplate = template.Must(template.New("task").Parse(`<!doctype html>
 {{end}}
 <h2>Artifacts</h2>
 <ul id="task-files">{{.FilesHTML}}</ul>
+<script type="module" src="/assets/app.js"></script>
 {{if .IsLive}}
 <script>
 (() => {
