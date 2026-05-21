@@ -13,6 +13,10 @@ run = "go build -o ./bin/localci ./cmd/localci"
 description = "Run localci"
 run = "go run ./cmd/localci {{arg(name='args', var=true)}}"
 
+[tasks.postcommit]
+description = "Run localci postcommit"
+run = "go run ./cmd/localci postcommit {{arg(name='args', var=true)}}"
+
 [tasks.daemon-start]
 description = "Start the localci daemon"
 run = "go run ./cmd/localci start"

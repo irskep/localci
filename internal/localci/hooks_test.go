@@ -23,7 +23,7 @@ func TestHookInstallerInstall(t *testing.T) {
 	}
 
 	command := strings.TrimSpace(runGit(t, repoDir, "config", "--local", "--get", "hook."+localCIHookName+".command"))
-	if !strings.Contains(command, `mise run run -- postcommit "$repo" "$commit"`) {
+	if !strings.Contains(command, `mise run postcommit "$repo" "$commit"`) {
 		t.Fatalf("unexpected hook command: %q", command)
 	}
 }

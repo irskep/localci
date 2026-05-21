@@ -239,7 +239,7 @@ Current order:
 - `deps`: `[LC-015, LC-016, LC-017, LC-018, LC-023, LC-024]`
 - `name`: Checkpoint before final hardening
 - `description`: Audit the near-finished design for exemplary Go quality, simplification opportunities, and anything that should be cut before users exist.
-- `status`: `unstarted`
+- `status`: `done`
 - `validation`: `lint`, `typecheck`, `test`, `commit`
 
 ## LC-023
