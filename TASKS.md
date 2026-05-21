@@ -221,7 +221,7 @@ Current order:
 - `deps`: `[LC-008, LC-010, LC-016]`
 - `name`: Crash recovery
 - `description`: Recover partially executed runs after daemon restart.
-- `status`: `unstarted`
+- `status`: `done`
 - `validation`: `lint`, `typecheck`, `test`, `commit`
 
 ## LC-018

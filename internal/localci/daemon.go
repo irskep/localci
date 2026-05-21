@@ -121,6 +121,9 @@ func (m DaemonManager) Run(ctx context.Context) error {
 	if err := os.MkdirAll(m.Paths.DaemonRoot(), 0o755); err != nil {
 		return err
 	}
+	if err := m.recoverInterruptedWork(); err != nil {
+		return err
+	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -282,6 +285,68 @@ func (m DaemonManager) pollInterval() time.Duration {
 	return 250 * time.Millisecond
 }
 
+func (m DaemonManager) recoverInterruptedWork() error {
+	active, err := m.Scheduler.Queue.ReadActive()
+	if err != nil {
+		if errors.Is(err, ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	defer func() {
+		_ = m.Scheduler.Queue.ClearActive()
+	}()
+
+	shouldRetry, err := recoverActiveTaskRecord(m.Paths, active, m.now())
+	if err != nil {
+		return err
+	}
+	if !shouldRetry {
+		return nil
+	}
+
+	_, err = m.Scheduler.Queue.Enqueue(active.RepoDir, active.Commit, active.TaskName)
+	return err
+}
+
+func recoverActiveTaskRecord(paths Paths, active ActiveTask, now time.Time) (bool, error) {
+	reader := StatusReader{Paths: paths}
+	status, err := reader.ReadCommit(active.RepoDir, active.Commit)
+	if err != nil {
+		if errors.Is(err, ErrRecordNotFound) {
+			return true, nil
+		}
+		return false, err
+	}
+
+	record, ok := findTaskRecord(status.Tasks, active.TaskName)
+	if !ok {
+		return true, nil
+	}
+	if record.Status != TaskStatusRunning {
+		return false, nil
+	}
+
+	record.Status = TaskStatusFailed
+	record.Failure = "daemon-restart"
+	record.Message = "task interrupted by daemon restart"
+	record.FinishedAt = now
+	record.DurationMilliseconds = durationMilliseconds(record.StartedAt, record.FinishedAt)
+	if err := writeTaskRecord(record); err != nil {
+		return false, err
+	}
+
+	_, err = upsertTaskRecord(paths, InvokeRequest{
+		RepoDir: active.RepoDir,
+		Commit:  active.Commit,
+	}, record, now)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 func processAlive(pid int) (bool, error) {
 	if pid <= 0 {
 		return false, nil
@@ -306,6 +371,15 @@ func processAlive(pid int) (bool, error) {
 	}
 
 	return false, err
+}
+
+func findTaskRecord(tasks []TaskRecord, name string) (TaskRecord, bool) {
+	for _, task := range tasks {
+		if task.Name == name {
+			return task, true
+		}
+	}
+	return TaskRecord{}, false
 }
 
 func DaemonContext() (context.Context, context.CancelFunc) {
