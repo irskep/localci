@@ -16,10 +16,11 @@ import (
 )
 
 type App struct {
-	Stdout  io.Writer
-	Stderr  io.Writer
-	Cwd     string
-	OpenURL func(string) error
+	Stdout            io.Writer
+	Stderr            io.Writer
+	Cwd               string
+	OpenURL           func(string) error
+	CheckRequirements func() error
 }
 
 func Run(args []string) int {
@@ -42,10 +43,15 @@ func (a App) Run(args []string) error {
 		return usageError()
 	}
 
-	switch args[0] {
-	case "help", "-h", "--help":
+	if isHelpCommand(args[0]) {
 		a.printUsage()
 		return nil
+	}
+	if err := a.checkRequirements(); err != nil {
+		return err
+	}
+
+	switch args[0] {
 	case "daemon":
 		return a.runDaemon(args[1:])
 	case "start":
@@ -63,6 +69,22 @@ func (a App) Run(args []string) error {
 	default:
 		return fmt.Errorf("unknown command %q\n\n%s", args[0], usageText())
 	}
+}
+
+func isHelpCommand(arg string) bool {
+	switch arg {
+	case "help", "-h", "--help":
+		return true
+	default:
+		return false
+	}
+}
+
+func (a App) checkRequirements() error {
+	if a.CheckRequirements != nil {
+		return a.CheckRequirements()
+	}
+	return localci.RequirementsChecker{}.Check()
 }
 
 func (a App) runPostcommit(args []string) error {

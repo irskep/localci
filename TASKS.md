@@ -230,7 +230,7 @@ Current order:
 - `deps`: `[LC-001]`
 - `name`: Modern git and mise checks
 - `description`: Fail fast when required git or mise capabilities are missing.
-- `status`: `unstarted`
+- `status`: `done`
 - `validation`: `lint`, `typecheck`, `test`, `commit`
 
 ## LC-022

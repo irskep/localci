@@ -57,6 +57,9 @@ func TestAppRunRecognizesInvoke(t *testing.T) {
 		Stdout: io.Discard,
 		Stderr: io.Discard,
 		Cwd:    "/repo",
+		CheckRequirements: func() error {
+			return nil
+		},
 	}
 
 	err := app.Run([]string{"invoke"})
@@ -66,6 +69,49 @@ func TestAppRunRecognizesInvoke(t *testing.T) {
 
 	if got, want := err.Error(), "usage: localci invoke <repo> <commit>"; got != want {
 		t.Fatalf("error = %q, want %q", got, want)
+	}
+}
+
+func TestAppRunSkipsRequirementsForHelp(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	app := App{
+		Stdout: io.Discard,
+		Stderr: io.Discard,
+		Cwd:    "/repo",
+		CheckRequirements: func() error {
+			called = true
+			return nil
+		},
+	}
+
+	if err := app.Run([]string{"help"}); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if called {
+		t.Fatalf("requirements checker should not run for help")
+	}
+}
+
+func TestAppRunChecksRequirementsForCommands(t *testing.T) {
+	t.Parallel()
+
+	app := App{
+		Stdout: io.Discard,
+		Stderr: io.Discard,
+		Cwd:    "/repo",
+		CheckRequirements: func() error {
+			return io.EOF
+		},
+	}
+
+	err := app.Run([]string{"status", "abc123"})
+	if err == nil {
+		t.Fatalf("Run returned nil error, want requirements error")
+	}
+	if err != io.EOF {
+		t.Fatalf("error = %v, want %v", err, io.EOF)
 	}
 }
 
