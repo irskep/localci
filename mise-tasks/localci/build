@@ -12,8 +12,6 @@ printf 'go build -o %s ./cmd/localci\n' "$bin_dir/localci"
 
 mkdir -p "$bin_dir"
 
-if go build -o "$bin_dir/localci" ./cmd/localci; then
-  exit 0
-fi
+go build -o "$bin_dir/localci" ./cmd/localci
 
-exit 1
+exit 0

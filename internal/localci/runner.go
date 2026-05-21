@@ -87,7 +87,7 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 
 func (r Runner) DiscoverTasks(ctx context.Context, repoDir string) ([]Task, error) {
 	miseBin := r.miseBin()
-	cmd := exec.CommandContext(ctx, miseBin, "tasks", "--json", "--local")
+	cmd := exec.CommandContext(ctx, miseBin, "tasks", "--json", "--all")
 	cmd.Dir = repoDir
 	cmd.Env = r.env()
 
@@ -103,7 +103,7 @@ func (r Runner) DiscoverTasks(ctx context.Context, repoDir string) ([]Task, erro
 
 	tasks := make([]Task, 0, len(allTasks))
 	for _, task := range allTasks {
-		if strings.HasPrefix(task.Name, taskPrefix) {
+		if isLocalCITask(task.Name) {
 			tasks = append(tasks, Task{Name: task.Name})
 		}
 	}
@@ -344,11 +344,13 @@ func (r Runner) now() time.Time {
 }
 
 func (r Runner) env() []string {
+	var env []string
 	if len(r.Env) > 0 {
-		return append([]string{}, r.Env...)
+		env = append([]string{}, r.Env...)
+	} else {
+		env = os.Environ()
 	}
-
-	return os.Environ()
+	return withEnvVar(env, "MISE_EXPERIMENTAL", "1")
 }
 
 func (r Runner) miseBin() string {
@@ -429,6 +431,34 @@ func durationMilliseconds(startedAt time.Time, finishedAt time.Time) int64 {
 
 func intPtr(value int) *int {
 	return &value
+}
+
+func isLocalCITask(name string) bool {
+	_, taskName := splitTaskName(name)
+	return strings.HasPrefix(taskName, taskPrefix)
+}
+
+func splitTaskName(name string) (string, string) {
+	if strings.HasPrefix(name, "//") {
+		index := strings.Index(name[2:], ":")
+		if index >= 0 {
+			index += 2
+			return name[:index+1], name[index+1:]
+		}
+	}
+	return "", name
+}
+
+func withEnvVar(env []string, key string, value string) []string {
+	prefix := key + "="
+	result := append([]string{}, env...)
+	for index, entry := range result {
+		if strings.HasPrefix(entry, prefix) {
+			result[index] = prefix + value
+			return result
+		}
+	}
+	return append(result, prefix+value)
 }
 
 type taskLogWriters struct {

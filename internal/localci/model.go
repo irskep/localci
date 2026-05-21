@@ -1,6 +1,9 @@
 package localci
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type RunStatus string
 
@@ -126,8 +129,12 @@ func newTaskRecord(paths Paths, req InvokeRequest, task Task, attempt int, start
 }
 
 func trimTaskPrefix(name string) string {
-	if len(name) > len(taskPrefix) && name[:len(taskPrefix)] == taskPrefix {
-		return name[len(taskPrefix):]
+	prefix, taskName := splitTaskName(name)
+	if prefix == "//:" {
+		prefix = ""
+	}
+	if strings.HasPrefix(taskName, taskPrefix) {
+		return prefix + strings.TrimPrefix(taskName, taskPrefix)
 	}
 
 	return name

@@ -9,8 +9,6 @@ mkdir -p "$LOCALCI_TASK_OUTPUT_DIR" "$LOCALCI_TASK_CACHE_DIR" "$LOCALCI_CACHE_DI
 
 printf 'go test ./...\n'
 
-if go test ./...; then
-  exit 0
-fi
+go test ./...
 
-exit 1
+exit 0

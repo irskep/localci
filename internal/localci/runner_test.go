@@ -17,8 +17,11 @@ func TestDiscoverTasksFiltersAndSortsLocalCITasks(t *testing.T) {
 
 	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
 set -eu
-if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--local" ]; then
-  printf '%s\n' '[{"name":"zeta"},{"name":"localci:test"},{"name":"localci:build"}]'
+if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--all" ]; then
+  if [ "${MISE_EXPERIMENTAL:-}" != "1" ]; then
+    exit 2
+  fi
+  printf '%s\n' '[{"name":"zeta"},{"name":"localci:test"},{"name":"//web:localci:lint"},{"name":"localci:build"}]'
   exit 0
 fi
 exit 1
@@ -35,10 +38,10 @@ exit 1
 		t.Fatalf("DiscoverTasks returned error: %v", err)
 	}
 
-	if len(tasks) != 2 {
-		t.Fatalf("len(tasks) = %d, want 2", len(tasks))
+	if len(tasks) != 3 {
+		t.Fatalf("len(tasks) = %d, want 3", len(tasks))
 	}
-	if tasks[0].Name != "localci:build" || tasks[1].Name != "localci:test" {
+	if tasks[0].Name != "//web:localci:lint" || tasks[1].Name != "localci:build" || tasks[2].Name != "localci:test" {
 		t.Fatalf("unexpected task order: %#v", tasks)
 	}
 }
@@ -53,7 +56,7 @@ func TestInvokeRunsTasksSeriallyAndWritesResults(t *testing.T) {
 
 	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
 set -eu
-if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--local" ]; then
+if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--all" ]; then
   printf '%s\n' '[{"name":"localci:first"},{"name":"localci:second"}]'
   exit 0
 fi
@@ -136,7 +139,7 @@ func TestInvokeIncrementsTaskAttemptDirectories(t *testing.T) {
 
 	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
 set -eu
-if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--local" ]; then
+if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--all" ]; then
   printf '%s\n' '[{"name":"localci:test"}]'
   exit 0
 fi
@@ -188,7 +191,7 @@ func TestInvokeCapturesCombinedLog(t *testing.T) {
 
 	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
 set -eu
-if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--local" ]; then
+if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--all" ]; then
   printf '%s\n' '[{"name":"localci:test"}]'
   exit 0
 fi
