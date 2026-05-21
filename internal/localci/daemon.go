@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -13,8 +14,10 @@ import (
 )
 
 type DaemonState struct {
-	PID       int       `json:"pid"`
-	StartedAt time.Time `json:"started_at"`
+	PID         int       `json:"pid"`
+	StartedAt   time.Time `json:"started_at"`
+	HTTPAddress string    `json:"http_address,omitempty"`
+	HTTPBaseURL string    `json:"http_base_url,omitempty"`
 }
 
 type DaemonManager struct {
@@ -126,6 +129,15 @@ func (m DaemonManager) Run(ctx context.Context) error {
 		PID:       os.Getpid(),
 		StartedAt: m.now(),
 	}
+
+	httpListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	defer httpListener.Close()
+
+	state.HTTPAddress = httpListener.Addr().String()
+	state.HTTPBaseURL = "http://" + state.HTTPAddress
 	if err := writeJSONFile(m.Paths.DaemonStatePath(), state); err != nil {
 		return err
 	}
@@ -147,14 +159,29 @@ func (m DaemonManager) Run(ctx context.Context) error {
 		serverErrs <- server.Serve(ctx)
 	}()
 
+	webServer := WebServer{
+		Paths:         m.Paths,
+		Queue:         m.Scheduler.Queue,
+		DiscoverTasks: m.Scheduler.Runner.DiscoverTasks,
+	}
+	webErrs := make(chan error, 1)
+	go func() {
+		webErrs <- webServer.Serve(ctx, httpListener)
+	}()
+
 	ticker := time.NewTicker(m.pollInterval())
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return <-serverErrs
+			if err := <-serverErrs; err != nil {
+				return err
+			}
+			return <-webErrs
 		case err := <-serverErrs:
+			return err
+		case err := <-webErrs:
 			return err
 		case <-ticker.C:
 			_, err := m.Scheduler.RunNext(ctx)
