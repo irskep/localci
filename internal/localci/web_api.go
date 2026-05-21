@@ -21,11 +21,12 @@ type apiRepoSummary struct {
 }
 
 type apiCommitSummary struct {
-	Repo       apiRepoSummary `json:"repo"`
-	Commit     string         `json:"commit"`
-	Summary    string         `json:"summary"`
-	TaskCount  int            `json:"task_count"`
-	ActivityAt time.Time      `json:"activity_at"`
+	Repo        apiRepoSummary    `json:"repo"`
+	Commit      string            `json:"commit"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	Summary     string            `json:"summary"`
+	TaskCount   int               `json:"task_count"`
+	ActivityAt  time.Time         `json:"activity_at"`
 }
 
 type apiQueueEntry struct {
@@ -147,11 +148,12 @@ func (s WebServer) handleAPIHome(w http.ResponseWriter, _ *http.Request) {
 	}
 	for _, view := range views {
 		resp.RecentCommits = append(resp.RecentCommits, apiCommitSummary{
-			Repo:       s.apiRepoSummary(view.RepoDir),
-			Commit:     view.Commit,
-			Summary:    commitSummaryText(view),
-			TaskCount:  len(view.Tasks),
-			ActivityAt: s.commitActivityAt(view),
+			Repo:        s.apiRepoSummary(view.RepoDir),
+			Commit:      view.Commit,
+			Annotations: cloneAnnotations(view.Annotations),
+			Summary:     commitSummaryText(view),
+			TaskCount:   len(view.Tasks),
+			ActivityAt:  s.commitActivityAt(view),
 		})
 	}
 

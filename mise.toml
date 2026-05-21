@@ -50,3 +50,7 @@ run = "gofmt -w ./cmd ./internal"
 [tasks.check]
 description = "Run formatting check, tests, and build"
 depends = ["fmt", "test", "build"]
+
+[tasks.self-check]
+description = "Run localci against this repo and wait for the result"
+run = "go run ./cmd/localci invoke --wait"

@@ -49,6 +49,9 @@ watch(() => route.path, load)
         <PColumn header="Summary">
           <template #body="{ data }">{{ summarizeCommit(data) }}</template>
         </PColumn>
+        <PColumn header="Branch">
+          <template #body="{ data }">{{ data.annotations?.['git.branch'] ?? '' }}</template>
+        </PColumn>
         <PColumn header="Tasks">
           <template #body="{ data }">{{ data.tasks.length }}</template>
         </PColumn>

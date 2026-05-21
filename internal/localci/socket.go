@@ -9,13 +9,15 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 )
 
 type DaemonRequest struct {
-	Method   string `json:"method"`
-	RepoDir  string `json:"repo_dir,omitempty"`
-	Commit   string `json:"commit,omitempty"`
-	TaskName string `json:"task_name,omitempty"`
+	Method      string            `json:"method"`
+	RepoDir     string            `json:"repo_dir,omitempty"`
+	Commit      string            `json:"commit,omitempty"`
+	TaskName    string            `json:"task_name,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 type DaemonResponse struct {
@@ -64,11 +66,12 @@ func (c DaemonClient) ActiveTask(ctx context.Context) (*ActiveTask, error) {
 	return resp.ActiveTask, nil
 }
 
-func (c DaemonClient) Postcommit(ctx context.Context, repoDir string, commit string) ([]QueueEntry, error) {
+func (c DaemonClient) Postcommit(ctx context.Context, repoDir string, commit string, annotations map[string]string) ([]QueueEntry, error) {
 	resp, err := c.call(ctx, DaemonRequest{
-		Method:  "postcommit",
-		RepoDir: repoDir,
-		Commit:  commit,
+		Method:      "postcommit",
+		RepoDir:     repoDir,
+		Commit:      commit,
+		Annotations: annotations,
 	})
 	if err != nil {
 		return nil, err
@@ -227,7 +230,7 @@ func (s *DaemonServer) dispatch(req DaemonRequest) DaemonResponse {
 		}
 		return DaemonResponse{OK: true}
 	case "postcommit":
-		entries, err := s.enqueuePostcommit(req.RepoDir, req.Commit)
+		entries, err := s.enqueuePostcommit(req.RepoDir, req.Commit, req.Annotations)
 		if err != nil {
 			return errorResponse(err)
 		}
@@ -329,7 +332,7 @@ func (s *DaemonServer) buildStatusView(repoDir string, commit string) (CommitSta
 	return BuildCommitStatusView(s.Paths, repoDir, commit, tasks, queue, activePtr)
 }
 
-func (s *DaemonServer) enqueuePostcommit(repoDir string, commit string) ([]QueueEntry, error) {
+func (s *DaemonServer) enqueuePostcommit(repoDir string, commit string, annotations map[string]string) ([]QueueEntry, error) {
 	if repoDir == "" {
 		return nil, fmt.Errorf("repo_dir is required")
 	}
@@ -342,6 +345,9 @@ func (s *DaemonServer) enqueuePostcommit(repoDir string, commit string) ([]Queue
 
 	tasks, err := s.DiscoverTasks(context.Background(), repoDir)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureRunRecord(repoDir, commit, annotations); err != nil {
 		return nil, err
 	}
 
@@ -363,6 +369,32 @@ func (s *DaemonServer) enqueuePostcommit(repoDir string, commit string) ([]Queue
 	}
 
 	return enqueued, nil
+}
+
+func (s *DaemonServer) ensureRunRecord(repoDir string, commit string, annotations map[string]string) error {
+	req := InvokeRequest{
+		RepoDir:     repoDir,
+		Commit:      commit,
+		Annotations: annotations,
+	}
+	run, err := readRunRecord(s.Paths, req)
+	if err != nil {
+		if !errors.Is(err, ErrRecordNotFound) {
+			return err
+		}
+		run = newRunRecord(req, time.Now().UTC())
+		return writeRunRecord(s.Paths, req, run)
+	}
+	if len(annotations) == 0 {
+		return nil
+	}
+	if run.Annotations == nil {
+		run.Annotations = map[string]string{}
+	}
+	for key, value := range annotations {
+		run.Annotations[key] = value
+	}
+	return writeRunRecord(s.Paths, req, run)
 }
 
 func errorResponse(err error) DaemonResponse {

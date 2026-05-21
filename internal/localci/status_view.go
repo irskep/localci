@@ -21,9 +21,10 @@ const (
 )
 
 type CommitStatusView struct {
-	RepoDir string           `json:"repo_dir"`
-	Commit  string           `json:"commit"`
-	Tasks   []TaskStatusView `json:"tasks"`
+	RepoDir     string            `json:"repo_dir"`
+	Commit      string            `json:"commit"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	Tasks       []TaskStatusView  `json:"tasks"`
 }
 
 type TaskStatusView struct {
@@ -64,6 +65,9 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 	commitStatus, err := reader.ReadCommit(repoDir, commit)
 	if err != nil && !errors.Is(err, ErrRecordNotFound) {
 		return CommitStatusView{}, err
+	}
+	if err == nil {
+		view.Annotations = cloneAnnotations(commitStatus.Run.Annotations)
 	}
 
 	taskRecords := map[string]TaskRecord{}

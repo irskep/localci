@@ -29,6 +29,9 @@ watch(() => route.path, load)
       <p class="page-subtitle">
         {{ store.currentCommit?.repo.repo_name }}
         <template v-if="commit"> / {{ summarizeCommit(commit) }}</template>
+        <template v-if="commit?.annotations?.['git.branch']">
+          / {{ commit.annotations['git.branch'] }}
+        </template>
       </p>
     </section>
 

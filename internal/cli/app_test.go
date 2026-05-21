@@ -173,7 +173,7 @@ func TestParseWebTargetSingleDirOpensRepoPage(t *testing.T) {
 	}
 }
 
-func TestAppRunRecognizesInvoke(t *testing.T) {
+func TestAppRunRecognizesInvokeUsage(t *testing.T) {
 	t.Parallel()
 
 	app := App{
@@ -185,13 +185,81 @@ func TestAppRunRecognizesInvoke(t *testing.T) {
 		},
 	}
 
-	err := app.Run([]string{"invoke"})
+	err := app.Run([]string{"invoke", "a", "b", "c"})
 	if err == nil {
 		t.Fatalf("Run returned nil error, want usage error")
 	}
 
-	if got, want := err.Error(), "usage: localci invoke <repo> <commit>"; got != want {
+	if got, want := err.Error(), "usage: localci invoke [--wait] [--annotation key=value] [dir] [commit]"; got != want {
 		t.Fatalf("error = %q, want %q", got, want)
+	}
+}
+
+func TestParseInvokeTargetDefaultsToCWDAndHeadStar(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	app.InvokeCommitName = func(repo string) (string, error) {
+		if repo != repoDir {
+			t.Fatalf("repo = %q, want %q", repo, repoDir)
+		}
+		return "abc123*", nil
+	}
+
+	repo, commit, err := app.parseInvokeTarget(nil)
+	if err != nil {
+		t.Fatalf("parseInvokeTarget returned error: %v", err)
+	}
+	if commit == "" {
+		commit, err = app.invokeCommitName(repo)
+		if err != nil {
+			t.Fatalf("invokeCommitName returned error: %v", err)
+		}
+	}
+
+	if repo != repoDir {
+		t.Fatalf("repo = %q, want %q", repo, repoDir)
+	}
+	if commit != "abc123*" {
+		t.Fatalf("commit = %q, want %q", commit, "abc123*")
+	}
+}
+
+func TestParseAnnotationArgs(t *testing.T) {
+	t.Parallel()
+
+	annotations, remaining, err := parseAnnotationArgs([]string{
+		"--annotation", "git.branch=main",
+		"--annotation=ci.source=manual",
+		"/repo",
+		"abc123",
+	})
+	if err != nil {
+		t.Fatalf("parseAnnotationArgs returned error: %v", err)
+	}
+
+	if got, want := annotations["git.branch"], "main"; got != want {
+		t.Fatalf("git.branch = %q, want %q", got, want)
+	}
+	if got, want := annotations["ci.source"], "manual"; got != want {
+		t.Fatalf("ci.source = %q, want %q", got, want)
+	}
+	if got, want := strings.Join(remaining, " "), "/repo abc123"; got != want {
+		t.Fatalf("remaining = %q, want %q", got, want)
+	}
+}
+
+func TestParseAnnotationArgsRejectsInvalidAnnotations(t *testing.T) {
+	t.Parallel()
+
+	if _, _, err := parseAnnotationArgs([]string{"--annotation", "missing-value"}); err == nil {
+		t.Fatalf("parseAnnotationArgs returned nil error, want invalid annotation error")
 	}
 }
 

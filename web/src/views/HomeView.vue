@@ -66,6 +66,9 @@ onMounted(() => {
                 </template>
               </PColumn>
               <PColumn field="summary" header="Result" />
+              <PColumn header="Branch">
+                <template #body="{ data }">{{ data.annotations?.['git.branch'] ?? '' }}</template>
+              </PColumn>
               <PColumn header="Updated">
                 <template #body="{ data }">{{ activityTime(data) }}</template>
               </PColumn>

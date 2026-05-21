@@ -10,6 +10,9 @@ import (
 
 func writeRunRecord(paths Paths, req InvokeRequest, record RunRecord) error {
 	path := paths.RunRecordPath(req.RepoDir, req.Commit)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create run record directory: %w", err)
+	}
 	return writeJSONFile(path, record)
 }
 

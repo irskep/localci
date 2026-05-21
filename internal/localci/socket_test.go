@@ -150,7 +150,7 @@ func TestDaemonServerPostcommitEnqueuesNonActiveTasks(t *testing.T) {
 	waitForSocket(t, paths.DaemonSocketPath())
 
 	client := DaemonClient{Paths: paths}
-	enqueued, err := client.Postcommit(context.Background(), "/repo", "abc123")
+	enqueued, err := client.Postcommit(context.Background(), "/repo", "abc123", nil)
 	if err != nil {
 		t.Fatalf("Postcommit returned error: %v", err)
 	}

@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
 	"localci/internal/localci"
@@ -25,6 +26,7 @@ type App struct {
 	ConfigPath        string
 	LoadConfig        func(string) (localci.Config, error)
 	LatestCommit      func(string) (string, error)
+	InvokeCommitName  func(string) (string, error)
 }
 
 func Run(args []string) int {
@@ -68,6 +70,8 @@ func (a App) Run(args []string) error {
 		return a.runPostcommit(args[1:])
 	case "invoke":
 		return a.runInvoke(args[1:])
+	case "wait":
+		return a.runWait(args[1:])
 	case "status":
 		return a.runStatus(args[1:])
 	case "web":
@@ -96,8 +100,12 @@ func (a App) checkRequirements() error {
 }
 
 func (a App) runPostcommit(args []string) error {
+	annotations, args, err := parseAnnotationArgs(args)
+	if err != nil {
+		return err
+	}
 	if len(args) != 2 {
-		return fmt.Errorf("usage: localci postcommit <repo> <commit>")
+		return fmt.Errorf("usage: localci postcommit [--annotation key=value] <repo> <commit>")
 	}
 
 	repo, err := a.resolveRepoArg(args[0])
@@ -116,7 +124,7 @@ func (a App) runPostcommit(args []string) error {
 	}
 
 	client := localci.DaemonClient{Paths: runner.Paths}
-	enqueued, err := client.Postcommit(context.Background(), repo, commit)
+	enqueued, err := client.Postcommit(context.Background(), repo, commit, mergedAnnotations(localci.GitAnnotations(context.Background(), repo), annotations))
 	if err != nil {
 		return err
 	}
@@ -164,6 +172,7 @@ func (a App) runStatus(args []string) error {
 	}
 
 	fmt.Fprintf(a.Stdout, "Status for %s at %s\n", statusView.RepoDir, statusView.Commit)
+	a.printAnnotations(statusView.Annotations)
 	for _, task := range filtered {
 		if spec.Task != "" {
 			a.printTaskDetail(task)
@@ -205,8 +214,9 @@ Usage:
   localci start
   localci restart
   localci stop
-	localci postcommit <repo> <commit>
-  localci invoke <repo> <commit>
+  localci postcommit [--annotation key=value] <repo> <commit>
+  localci invoke [--wait] [--annotation key=value] [dir] [commit]
+  localci wait [dir] [commit]
   localci status [dir] <commit> [task]
   localci web [dir] [commit] [task]
   localci install-hooks [dir]
@@ -233,16 +243,32 @@ type commitTarget struct {
 }
 
 func (a App) runInvoke(args []string) error {
-	if len(args) != 2 {
-		return fmt.Errorf("usage: localci invoke <repo> <commit>")
+	wait := false
+	filtered := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "--wait" {
+			wait = true
+			continue
+		}
+		filtered = append(filtered, arg)
 	}
-
-	repo, err := a.resolveRepoArg(args[0])
+	args = filtered
+	annotations, args, err := parseAnnotationArgs(args)
 	if err != nil {
-		return fmt.Errorf("resolve repo: %w", err)
+		return err
 	}
 
-	commit := strings.TrimSpace(args[1])
+	repo, commit, err := a.parseInvokeTarget(args)
+	if err != nil {
+		return err
+	}
+	if commit == "" {
+		commit, err = a.invokeCommitName(repo)
+		if err != nil {
+			return err
+		}
+	}
+
 	if commit == "" {
 		return fmt.Errorf("commit must not be empty")
 	}
@@ -253,11 +279,20 @@ func (a App) runInvoke(args []string) error {
 	}
 
 	result, err := runner.Invoke(context.Background(), localci.InvokeRequest{
-		RepoDir: repo,
-		Commit:  commit,
+		RepoDir:     repo,
+		Commit:      commit,
+		Annotations: mergedAnnotations(localci.GitAnnotations(context.Background(), repo), annotations),
 	})
 	if err != nil {
 		return err
+	}
+
+	if wait {
+		view, err := a.statusViewForRun(runner, result)
+		if err != nil {
+			return err
+		}
+		return a.printWaitSummary(view)
 	}
 
 	a.printInvokeSummary(result)
@@ -266,6 +301,148 @@ func (a App) runInvoke(args []string) error {
 	}
 
 	return nil
+}
+
+func (a App) runWait(args []string) error {
+	spec, err := a.parseCommitTarget(args, "usage: localci wait [dir] [commit]")
+	if err != nil {
+		return err
+	}
+
+	runner, err := a.newRunner()
+	if err != nil {
+		return err
+	}
+
+	client := localci.DaemonClient{Paths: runner.Paths}
+	view, err := (localci.Waiter{Client: client}).Wait(context.Background(), spec.RepoDir, spec.Commit)
+	if err != nil {
+		return err
+	}
+
+	return a.printWaitSummary(view)
+}
+
+func (a App) parseInvokeTarget(args []string) (string, string, error) {
+	switch len(args) {
+	case 0:
+		repo, err := a.resolveRepoArg(a.Cwd)
+		if err != nil {
+			return "", "", fmt.Errorf("resolve dir: %w", err)
+		}
+		return repo, "", nil
+	case 1:
+		repo, err := a.resolveRepoArg(args[0])
+		if err != nil {
+			return "", "", fmt.Errorf("resolve dir: %w", err)
+		}
+		return repo, "", nil
+	case 2:
+		repo, err := a.resolveRepoArg(args[0])
+		if err != nil {
+			return "", "", fmt.Errorf("resolve repo: %w", err)
+		}
+		return repo, strings.TrimSpace(args[1]), nil
+	default:
+		return "", "", fmt.Errorf("usage: localci invoke [--wait] [--annotation key=value] [dir] [commit]")
+	}
+}
+
+func (a App) statusViewForRun(runner localci.Runner, result localci.RunRecord) (localci.CommitStatusView, error) {
+	tasks, err := runner.DiscoverTasks(context.Background(), result.RepoDir)
+	if err != nil {
+		return localci.CommitStatusView{}, err
+	}
+	return localci.BuildCommitStatusView(runner.Paths, result.RepoDir, result.Commit, tasks, nil, nil)
+}
+
+func (a App) printWaitSummary(view localci.CommitStatusView) error {
+	fmt.Fprintf(a.Stdout, "Completed %s at %s: %s\n", view.RepoDir, view.Commit, localci.SummarizeCommit(view))
+
+	failed := localci.FailedTasks(view)
+	if len(failed) == 0 {
+		return nil
+	}
+
+	fmt.Fprintln(a.Stdout, "Failed tasks:")
+	for _, task := range failed {
+		fmt.Fprintf(a.Stdout, "%s\n", formatTaskSummary(task))
+		if task.OutputDir != "" {
+			fmt.Fprintf(a.Stdout, "  Output: %s\n", task.OutputDir)
+		}
+		if resultURL, err := a.taskResultURL(view.RepoDir, view.Commit, task.Name); err == nil && resultURL != "" {
+			fmt.Fprintf(a.Stdout, "  Results: %s\n", resultURL)
+		}
+		primaryArtifact, primaryLog := localci.LoadPrimaryLog(task)
+		if primaryArtifact != "" {
+			fmt.Fprintf(a.Stdout, "  Primary log: %s\n", primaryArtifact)
+			if primaryLog != "" {
+				fmt.Fprintln(a.Stdout, primaryLog)
+			}
+		}
+	}
+	return fmt.Errorf("localci run failed")
+}
+
+func (a App) printAnnotations(annotations map[string]string) {
+	if len(annotations) == 0 {
+		return
+	}
+	fmt.Fprintln(a.Stdout, "Annotations:")
+	keys := make([]string, 0, len(annotations))
+	for key := range annotations {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		fmt.Fprintf(a.Stdout, "  %s=%s\n", key, annotations[key])
+	}
+}
+
+func parseAnnotationArgs(args []string) (map[string]string, []string, error) {
+	annotations := map[string]string{}
+	filtered := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		var value string
+		switch {
+		case arg == "--annotation":
+			i++
+			if i >= len(args) {
+				return nil, nil, fmt.Errorf("--annotation requires key=value")
+			}
+			value = args[i]
+		case strings.HasPrefix(arg, "--annotation="):
+			value = strings.TrimPrefix(arg, "--annotation=")
+		default:
+			filtered = append(filtered, arg)
+			continue
+		}
+		key, annotationValue, ok := strings.Cut(value, "=")
+		key = strings.TrimSpace(key)
+		if !ok || key == "" {
+			return nil, nil, fmt.Errorf("--annotation requires key=value")
+		}
+		annotations[key] = annotationValue
+	}
+	if len(annotations) == 0 {
+		return nil, filtered, nil
+	}
+	return annotations, filtered, nil
+}
+
+func mergedAnnotations(base map[string]string, override map[string]string) map[string]string {
+	if len(base) == 0 && len(override) == 0 {
+		return nil
+	}
+	merged := map[string]string{}
+	for key, value := range base {
+		merged[key] = value
+	}
+	for key, value := range override {
+		merged[key] = value
+	}
+	return merged
 }
 
 func (a App) newRunner() (localci.Runner, error) {
@@ -409,6 +586,25 @@ func (a App) postcommitResultURL(client localci.DaemonClient, repo string, commi
 	return a.buildWebURL(state.HTTPBaseURL, commitTarget{
 		RepoDir: repo,
 		Commit:  commit,
+	})
+}
+
+func (a App) taskResultURL(repo string, commit string, task string) (string, error) {
+	runner, err := a.newRunner()
+	if err != nil {
+		return "", err
+	}
+	state, err := (localci.DaemonClient{Paths: runner.Paths}).Ping(context.Background())
+	if err != nil {
+		return "", nil
+	}
+	if strings.TrimSpace(state.HTTPBaseURL) == "" {
+		return "", nil
+	}
+	return a.buildWebURL(state.HTTPBaseURL, commitTarget{
+		RepoDir: repo,
+		Commit:  commit,
+		Task:    task,
 	})
 }
 
@@ -627,4 +823,11 @@ func (a App) latestCommitForRepo(repoDir string) (string, error) {
 		return "", fmt.Errorf("no localci runs found for %s", repoDir)
 	}
 	return commits[0].Commit, nil
+}
+
+func (a App) invokeCommitName(repoDir string) (string, error) {
+	if a.InvokeCommitName != nil {
+		return a.InvokeCommitName(repoDir)
+	}
+	return localci.GitInvokeCommitName(context.Background(), repoDir)
 }

@@ -27,19 +27,21 @@ type Task struct {
 }
 
 type InvokeRequest struct {
-	RepoDir string
-	Commit  string
+	RepoDir     string
+	Commit      string
+	Annotations map[string]string
 }
 
 type RunRecord struct {
-	RepoDir     string       `json:"repo_dir"`
-	RepoID      string       `json:"repo_id"`
-	Commit      string       `json:"commit"`
-	Status      RunStatus    `json:"status"`
-	StartedAt   time.Time    `json:"started_at"`
-	FinishedAt  time.Time    `json:"finished_at,omitempty"`
-	Summary     RunSummary   `json:"summary"`
-	TaskResults []TaskRecord `json:"task_results"`
+	RepoDir     string            `json:"repo_dir"`
+	RepoID      string            `json:"repo_id"`
+	Commit      string            `json:"commit"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	Status      RunStatus         `json:"status"`
+	StartedAt   time.Time         `json:"started_at"`
+	FinishedAt  time.Time         `json:"finished_at,omitempty"`
+	Summary     RunSummary        `json:"summary"`
+	TaskResults []TaskRecord      `json:"task_results"`
 }
 
 func (r RunRecord) Success() bool {
@@ -107,12 +109,24 @@ func newRunRecord(req InvokeRequest, startedAt time.Time) RunRecord {
 		RepoDir:     req.RepoDir,
 		RepoID:      normalizeRepoDir(req.RepoDir),
 		Commit:      req.Commit,
+		Annotations: cloneAnnotations(req.Annotations),
 		Status:      RunStatusRunning,
 		StartedAt:   startedAt,
 		TaskResults: []TaskRecord{},
 	}
 	record.RefreshSummary()
 	return record
+}
+
+func cloneAnnotations(annotations map[string]string) map[string]string {
+	if len(annotations) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(annotations))
+	for key, value := range annotations {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func newTaskRecord(paths Paths, req InvokeRequest, task Task, attempt int, startedAt time.Time) TaskRecord {

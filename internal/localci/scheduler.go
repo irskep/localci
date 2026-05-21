@@ -85,6 +85,14 @@ func upsertTaskRecord(paths Paths, req InvokeRequest, record TaskRecord, now tim
 		}
 		run = newRunRecord(req, record.StartedAt)
 	}
+	if len(req.Annotations) > 0 {
+		if run.Annotations == nil {
+			run.Annotations = map[string]string{}
+		}
+		for key, value := range req.Annotations {
+			run.Annotations[key] = value
+		}
+	}
 
 	replaced := false
 	for i, existing := range run.TaskResults {

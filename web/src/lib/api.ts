@@ -24,6 +24,7 @@ export type HomeResponse = {
 export type CommitSummary = {
   repo: RepoSummary
   commit: string
+  annotations?: Record<string, string>
   summary: string
   task_count: number
   activity_at: string
@@ -69,6 +70,7 @@ export type ArtifactResponse = {
 export type CommitStatusView = {
   repo_dir: string
   commit: string
+  annotations?: Record<string, string>
   tasks: TaskStatusView[]
 }
 
