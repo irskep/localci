@@ -21,6 +21,8 @@ type App struct {
 	Cwd               string
 	OpenURL           func(string) error
 	CheckRequirements func() error
+	ConfigPath        string
+	LoadConfig        func(string) (localci.Config, error)
 }
 
 func Run(args []string) int {
@@ -96,7 +98,7 @@ func (a App) runPostcommit(args []string) error {
 		return fmt.Errorf("usage: localci postcommit <repo> <commit>")
 	}
 
-	repo, err := resolveDir(args[0], a.Cwd)
+	repo, err := a.resolveRepoArg(args[0])
 	if err != nil {
 		return fmt.Errorf("resolve repo: %w", err)
 	}
@@ -125,7 +127,7 @@ func (a App) runPostcommit(args []string) error {
 }
 
 func (a App) runStatus(args []string) error {
-	spec, err := parseCommitTarget(args, a.Cwd, "usage: localci status [dir] <commit> [task]")
+	spec, err := a.parseCommitTarget(args, "usage: localci status [dir] <commit> [task]")
 	if err != nil {
 		return err
 	}
@@ -185,7 +187,7 @@ func (a App) runStatus(args []string) error {
 }
 
 func (a App) runWeb(args []string) error {
-	spec, err := parseWebTarget(args, a.Cwd)
+	spec, err := a.parseWebTarget(args)
 	if err != nil {
 		return err
 	}
@@ -247,7 +249,7 @@ func (a App) runInvoke(args []string) error {
 		return fmt.Errorf("usage: localci invoke <repo> <commit>")
 	}
 
-	repo, err := resolveDir(args[0], a.Cwd)
+	repo, err := a.resolveRepoArg(args[0])
 	if err != nil {
 		return fmt.Errorf("resolve repo: %w", err)
 	}
@@ -312,15 +314,19 @@ func defaultLocalCIRoot() (string, error) {
 	return filepath.Join(home, ".localci"), nil
 }
 
-func parseCommitTarget(args []string, cwd string, usage string) (commitTarget, error) {
+func (a App) parseCommitTarget(args []string, usage string) (commitTarget, error) {
 	switch len(args) {
 	case 1:
+		repo, err := a.resolveRepoArg(a.Cwd)
+		if err != nil {
+			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
+		}
 		return commitTarget{
-			RepoDir: cwd,
+			RepoDir: repo,
 			Commit:  strings.TrimSpace(args[0]),
 		}, nil
 	case 2:
-		repo, err := resolveDir(args[0], cwd)
+		repo, err := a.resolveRepoArg(args[0])
 		if err != nil {
 			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
 		}
@@ -330,7 +336,7 @@ func parseCommitTarget(args []string, cwd string, usage string) (commitTarget, e
 			Commit:  strings.TrimSpace(args[1]),
 		}, nil
 	case 3:
-		repo, err := resolveDir(args[0], cwd)
+		repo, err := a.resolveRepoArg(args[0])
 		if err != nil {
 			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
 		}
@@ -345,21 +351,29 @@ func parseCommitTarget(args []string, cwd string, usage string) (commitTarget, e
 	}
 }
 
-func parseWebTarget(args []string, cwd string) (commitTarget, error) {
+func (a App) parseWebTarget(args []string) (commitTarget, error) {
 	switch len(args) {
 	case 0:
-		return commitTarget{RepoDir: cwd}, nil
+		repo, err := a.resolveRepoArg(a.Cwd)
+		if err != nil {
+			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
+		}
+		return commitTarget{RepoDir: repo}, nil
 	case 1:
-		repo, err := tryResolveExistingDir(args[0], cwd)
+		repo, err := a.tryResolveExistingRepoArg(args[0])
 		if err == nil {
 			return commitTarget{RepoDir: repo}, nil
 		}
+		defaultRepo, defaultErr := a.resolveRepoArg(a.Cwd)
+		if defaultErr != nil {
+			return commitTarget{}, fmt.Errorf("resolve dir: %w", defaultErr)
+		}
 		return commitTarget{
-			RepoDir: cwd,
+			RepoDir: defaultRepo,
 			Commit:  strings.TrimSpace(args[0]),
 		}, nil
 	case 2, 3:
-		return parseCommitTarget(args, cwd, "usage: localci web [dir] [commit] [task]")
+		return a.parseCommitTarget(args, "usage: localci web [dir] [commit] [task]")
 	default:
 		return commitTarget{}, fmt.Errorf("usage: localci web [dir] [commit] [task]")
 	}
@@ -451,7 +465,7 @@ func (a App) runInstallHooks(args []string) error {
 	repoDir := a.Cwd
 	if len(args) == 1 {
 		var err error
-		repoDir, err = resolveDir(args[0], a.Cwd)
+		repoDir, err = a.resolveRepoArg(args[0])
 		if err != nil {
 			return fmt.Errorf("resolve dir: %w", err)
 		}
@@ -465,25 +479,21 @@ func (a App) runInstallHooks(args []string) error {
 	return nil
 }
 
-func resolveDir(path string, cwd string) (string, error) {
-	if path == "" {
-		return "", fmt.Errorf("directory must not be empty")
-	}
-
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(cwd, path)
-	}
-
-	abs, err := filepath.Abs(path)
+func (a App) resolveRepoArg(path string) (string, error) {
+	cfg, err := a.loadConfig()
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Clean(abs), nil
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(a.Cwd, path)
+	}
+
+	return localci.ResolveRepoDir(cfg.Root, path)
 }
 
-func tryResolveExistingDir(path string, cwd string) (string, error) {
-	resolved, err := resolveDir(path, cwd)
+func (a App) tryResolveExistingRepoArg(path string) (string, error) {
+	resolved, err := a.resolveRepoArg(path)
 	if err != nil {
 		return "", err
 	}
@@ -495,4 +505,28 @@ func tryResolveExistingDir(path string, cwd string) (string, error) {
 		return "", fmt.Errorf("%s is not a directory", resolved)
 	}
 	return resolved, nil
+}
+
+func (a App) loadConfig() (localci.Config, error) {
+	path := a.ConfigPath
+	if path == "" {
+		root, err := defaultLocalCIRoot()
+		if err != nil {
+			return localci.Config{}, err
+		}
+		path = filepath.Join(root, "config.toml")
+	}
+
+	if a.LoadConfig != nil {
+		return a.LoadConfig(path)
+	}
+
+	cfg, err := localci.LoadConfig(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return localci.Config{Root: string(filepath.Separator)}, nil
+		}
+		return localci.Config{}, err
+	}
+	return cfg, nil
 }

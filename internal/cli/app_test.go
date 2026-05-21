@@ -2,8 +2,10 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"localci/internal/localci"
@@ -12,42 +14,129 @@ import (
 func TestParseCommitTargetDefaultsDirToCWD(t *testing.T) {
 	t.Parallel()
 
-	got, err := parseCommitTarget([]string{"abc123"}, "/repo", "usage")
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	got, err := app.parseCommitTarget([]string{"abc123"}, "usage")
 	if err != nil {
 		t.Fatalf("parseCommitTarget returned error: %v", err)
 	}
 
-	if got.RepoDir != "/repo" {
-		t.Fatalf("RepoDir = %q, want %q", got.RepoDir, "/repo")
+	if got.RepoDir != repoDir {
+		t.Fatalf("RepoDir = %q, want %q", got.RepoDir, repoDir)
 	}
-
 	if got.Commit != "abc123" {
 		t.Fatalf("Commit = %q, want %q", got.Commit, "abc123")
 	}
-
 	if got.Task != "" {
 		t.Fatalf("Task = %q, want empty", got.Task)
 	}
 }
 
-func TestParseCommitTargetWithRepoAndTask(t *testing.T) {
+func TestParseCommitTargetWithRepoAndTaskUsesCWD(t *testing.T) {
 	t.Parallel()
 
-	got, err := parseCommitTarget([]string{"./worktree", "abc123", "localci:test"}, "/repo", "usage")
+	root := t.TempDir()
+	baseDir := filepath.Join(root, "workspace")
+	repoDir := filepath.Join(baseDir, "worktree")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+
+	app := testApp(root, baseDir)
+	got, err := app.parseCommitTarget([]string{"./worktree", "abc123", "localci:test"}, "usage")
 	if err != nil {
 		t.Fatalf("parseCommitTarget returned error: %v", err)
 	}
 
-	if got.RepoDir != "/repo/worktree" {
-		t.Fatalf("RepoDir = %q, want %q", got.RepoDir, "/repo/worktree")
+	if got.RepoDir != repoDir {
+		t.Fatalf("RepoDir = %q, want %q", got.RepoDir, repoDir)
 	}
-
 	if got.Commit != "abc123" {
 		t.Fatalf("Commit = %q, want %q", got.Commit, "abc123")
 	}
-
 	if got.Task != "localci:test" {
 		t.Fatalf("Task = %q, want %q", got.Task, "localci:test")
+	}
+}
+
+func TestParseCommitTargetRejectsPathsOutsideConfiguredRoot(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	baseDir := filepath.Join(root, "workspace")
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+
+	app := testApp(root, baseDir)
+	_, err := app.parseCommitTarget([]string{"../../outside", "abc123"}, "usage")
+	if err == nil {
+		t.Fatalf("parseCommitTarget returned nil error, want path error")
+	}
+}
+
+func TestLoadConfigDefaultsRootToSlashWhenConfigIsMissing(t *testing.T) {
+	t.Parallel()
+
+	app := App{
+		Stdout:     io.Discard,
+		Stderr:     io.Discard,
+		Cwd:        "/repo",
+		ConfigPath: filepath.Join(t.TempDir(), "missing-config.toml"),
+	}
+
+	cfg, err := app.loadConfig()
+	if err != nil {
+		t.Fatalf("loadConfig returned error: %v", err)
+	}
+	if cfg.Root != string(filepath.Separator) {
+		t.Fatalf("Root = %q, want %q", cfg.Root, string(filepath.Separator))
+	}
+}
+
+func TestParseWebTargetDefaultsToCWDRepo(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	got, err := app.parseWebTarget(nil)
+	if err != nil {
+		t.Fatalf("parseWebTarget returned error: %v", err)
+	}
+
+	want := commitTarget{RepoDir: repoDir}
+	if got != want {
+		t.Fatalf("got = %#v, want %#v", got, want)
+	}
+}
+
+func TestParseWebTargetSingleDirOpensRepoPage(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	cwd := filepath.Join(root, "workspace")
+	repoDir := filepath.Join(cwd, "worktree")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+
+	app := testApp(root, cwd)
+	got, err := app.parseWebTarget([]string{"./worktree"})
+	if err != nil {
+		t.Fatalf("parseWebTarget returned error: %v", err)
+	}
+	if got.RepoDir != repoDir || got.Commit != "" || got.Task != "" {
+		t.Fatalf("unexpected target: %#v", got)
 	}
 }
 
@@ -133,7 +222,7 @@ func TestAppRunChecksRequirementsForCommands(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Run returned nil error, want requirements error")
 	}
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Fatalf("error = %v, want %v", err, io.EOF)
 	}
 }
@@ -163,43 +252,19 @@ func TestAppRunRecognizesInstallHooks(t *testing.T) {
 func TestParseCommitTargetReturnsCommandSpecificUsage(t *testing.T) {
 	t.Parallel()
 
-	_, err := parseCommitTarget([]string{}, "/repo", "usage: localci web [dir] <commit> [task]")
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	_, err := app.parseCommitTarget([]string{}, "usage: localci web [dir] <commit> [task]")
 	if err == nil {
 		t.Fatalf("parseCommitTarget returned nil error, want usage error")
 	}
 	if got, want := err.Error(), "usage: localci web [dir] <commit> [task]"; got != want {
 		t.Fatalf("error = %q, want %q", got, want)
-	}
-}
-
-func TestParseWebTargetDefaultsToHome(t *testing.T) {
-	t.Parallel()
-
-	got, err := parseWebTarget(nil, "/repo")
-	if err != nil {
-		t.Fatalf("parseWebTarget returned error: %v", err)
-	}
-	want := commitTarget{RepoDir: "/repo"}
-	if got != want {
-		t.Fatalf("got = %#v, want %#v", got, want)
-	}
-}
-
-func TestParseWebTargetSingleDirOpensRepoPage(t *testing.T) {
-	t.Parallel()
-
-	cwd := t.TempDir()
-	repoDir := cwd + "/worktree"
-	if err := os.Mkdir(repoDir, 0o755); err != nil {
-		t.Fatalf("Mkdir returned error: %v", err)
-	}
-
-	got, err := parseWebTarget([]string{"./worktree"}, cwd)
-	if err != nil {
-		t.Fatalf("parseWebTarget returned error: %v", err)
-	}
-	if got.RepoDir != repoDir || got.Commit != "" || got.Task != "" {
-		t.Fatalf("unexpected target: %#v", got)
 	}
 }
 
@@ -300,5 +365,16 @@ func TestOpenWebOpensURLAndPrintsIt(t *testing.T) {
 	}
 	if got := stdout.String(); got != want+"\n" {
 		t.Fatalf("stdout = %q, want %q", got, want+"\n")
+	}
+}
+
+func testApp(root string, cwd string) App {
+	return App{
+		Stdout: io.Discard,
+		Stderr: io.Discard,
+		Cwd:    cwd,
+		LoadConfig: func(string) (localci.Config, error) {
+			return localci.Config{Root: root}, nil
+		},
 	}
 }
