@@ -17,6 +17,10 @@ run = "go run ./cmd/localci {{arg(name='args', var=true)}}"
 description = "Run localci postcommit"
 run = "go run ./cmd/localci postcommit {{arg(name='args', var=true)}}"
 
+[tasks.web]
+description = "Open the localci web UI"
+run = "go run ./cmd/localci web {{arg(name='args', var=true)}}"
+
 [tasks.daemon-start]
 description = "Start the localci daemon"
 run = "go run ./cmd/localci start"
