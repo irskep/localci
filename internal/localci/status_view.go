@@ -229,9 +229,13 @@ func listTaskAttemptRecords(paths Paths, repoDir string, commit string, taskName
 func buildArtifactViews(outputDir string, files []string) []ArtifactView {
 	artifacts := make([]ArtifactView, 0, len(files))
 	for _, file := range files {
+		displayName := relativeArtifactName(outputDir, file)
+		if shouldHideArtifact(displayName) {
+			continue
+		}
 		artifacts = append(artifacts, ArtifactView{
 			Name:        filepath.Base(file),
-			DisplayName: relativeArtifactName(outputDir, file),
+			DisplayName: displayName,
 			Path:        file,
 		})
 	}
@@ -266,10 +270,6 @@ func artifactSortKey(name string) int {
 	switch strings.ToLower(name) {
 	case "combined.log":
 		return 0
-	case "summary.txt":
-		return 1
-	case "status.txt":
-		return 2
 	case "task.json":
 		return 100
 	default:
@@ -281,14 +281,21 @@ func artifactSortKey(name string) int {
 }
 
 func PrimaryArtifact(task TaskStatusView) (ArtifactView, bool) {
-	for _, preferred := range []string{"combined.log", "summary.txt", "status.txt"} {
+	for _, preferred := range []string{"combined.log"} {
 		for _, artifact := range task.Artifacts {
 			if artifact.DisplayName == preferred {
 				return artifact, true
 			}
 		}
 	}
+	if len(task.Artifacts) > 0 {
+		return task.Artifacts[0], true
+	}
 	return ArtifactView{}, false
+}
+
+func shouldHideArtifact(displayName string) bool {
+	return strings.EqualFold(displayName, "task.json")
 }
 
 func LoadPrimaryLog(task TaskStatusView) (string, string) {
