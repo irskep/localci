@@ -23,6 +23,7 @@ usage() {
 Usage:
   ./tmp.sh state
   ./tmp.sh home
+  ./tmp.sh repo <repo>
   ./tmp.sh commit <repo> <commit>
   ./tmp.sh task <repo> <commit> <task>
   ./tmp.sh artifact <repo> <commit> <task> <path>
@@ -44,6 +45,11 @@ case "${1:-}" in
     ;;
   home)
     request "$base_url"
+    ;;
+  repo)
+    [ "$#" -eq 2 ] || { usage >&2; exit 1; }
+    repo=$(urlencode "$2")
+    request "$base_url/repo?repo=$repo"
     ;;
   commit)
     [ "$#" -eq 3 ] || { usage >&2; exit 1; }

@@ -22,6 +22,16 @@ type WebServer struct {
 	DiscoverTasks func(context.Context, string) ([]Task, error)
 }
 
+type HomePageView struct {
+	ReposHTML template.HTML
+	TasksHTML template.HTML
+}
+
+type RepoPageView struct {
+	RepoDir     string
+	CommitsHTML template.HTML
+}
+
 type CommitPageView struct {
 	CommitStatusView
 	TasksHTML template.HTML
@@ -37,6 +47,7 @@ type TaskPageView struct {
 func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleHome)
+	mux.HandleFunc("/repo", s.handleRepo)
 	mux.HandleFunc("/commit", s.handleCommit)
 	mux.HandleFunc("/task", s.handleTask)
 	mux.HandleFunc("/retry", s.handleRetry)
@@ -60,7 +71,51 @@ func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
 }
 
 func (s WebServer) handleHome(w http.ResponseWriter, _ *http.Request) {
-	_ = homeTemplate.Execute(w, nil)
+	repos, err := HistoryReader{Paths: s.Paths}.ListRepos()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	views, err := s.buildHomeTaskViews(repos)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_ = homeTemplate.Execute(w, HomePageView{
+		ReposHTML: template.HTML(renderRepoLinksHTML(repos)),
+		TasksHTML: template.HTML(renderHomeTasksHTML(views)),
+	})
+}
+
+func (s WebServer) handleRepo(w http.ResponseWriter, r *http.Request) {
+	repoDir := r.URL.Query().Get("repo")
+	if repoDir == "" {
+		http.Error(w, "repo is required", http.StatusBadRequest)
+		return
+	}
+
+	commits, err := HistoryReader{Paths: s.Paths}.ListRepoCommits(repoDir)
+	if err != nil {
+		if errors.Is(err, ErrRecordNotFound) {
+			http.Error(w, "repo not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	views, err := s.buildRepoCommitViews(repoDir, commits)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_ = repoTemplate.Execute(w, RepoPageView{
+		RepoDir:     repoDir,
+		CommitsHTML: template.HTML(renderRepoCommitsHTML(views)),
+	})
 }
 
 func (s WebServer) handleCommit(w http.ResponseWriter, r *http.Request) {
@@ -248,7 +303,20 @@ var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html>
 <head><meta charset="utf-8"><title>localci</title></head>
 <body>
 <h1>localci</h1>
-<p>Open a commit view with <code>/commit?repo=...&commit=...</code>.</p>
+<h2>Repos</h2>
+<ul>{{.ReposHTML}}</ul>
+<h2>Tasks</h2>
+<ul>{{.TasksHTML}}</ul>
+</body>
+</html>`))
+
+var repoTemplate = template.Must(template.New("repo").Parse(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>{{.RepoDir}} - localci</title></head>
+<body>
+<p><a href="/">All repos</a></p>
+<h1>{{.RepoDir}}</h1>
+<ul>{{.CommitsHTML}}</ul>
 </body>
 </html>`))
 
@@ -256,6 +324,7 @@ var commitTemplate = template.Must(template.New("commit").Parse(`<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>{{.Commit}} - localci</title></head>
 <body>
+<p><a href="/">All repos</a> / <a href="/repo?repo={{urlquery .RepoDir}}">{{.RepoDir}}</a></p>
 <h1>{{.Commit}}</h1>
 <p>{{.RepoDir}}</p>
 <ul id="task-list">{{.TasksHTML}}</ul>
@@ -280,6 +349,7 @@ var taskTemplate = template.Must(template.New("task").Parse(`<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>{{.Name}} - localci</title></head>
 <body>
+<p><a href="/">All repos</a> / <a href="/repo?repo={{urlquery .RepoDir}}">{{.RepoDir}}</a> / <a href="/commit?repo={{urlquery .RepoDir}}&commit={{urlquery .Commit}}">{{.Commit}}</a></p>
 <h1>{{.Name}}</h1>
 <p id="task-status">Status: {{.Status}}</p>
 <p id="task-attempt">Attempt: {{.Attempt}}</p>
@@ -362,6 +432,60 @@ func renderCommitTasksHTML(view CommitStatusView) string {
 	return b.String()
 }
 
+func renderRepoLinksHTML(repos []RepoHistory) string {
+	var b strings.Builder
+	for _, repo := range repos {
+		fmt.Fprintf(&b, `<li><a href="%s">%s</a> (%d commit`,
+			template.HTMLEscapeString(repoPageURL(repo.RepoDir)),
+			template.HTMLEscapeString(repo.RepoDir),
+			len(repo.Commits),
+		)
+		if len(repo.Commits) != 1 {
+			b.WriteString("s")
+		}
+		b.WriteString(`)</li>`)
+	}
+	return b.String()
+}
+
+func renderRepoCommitsHTML(views []CommitStatusView) string {
+	var b strings.Builder
+	for _, view := range views {
+		fmt.Fprintf(&b, `<li><a href="%s">%s</a>`,
+			template.HTMLEscapeString(commitPageURL(view.RepoDir, view.Commit)),
+			template.HTMLEscapeString(view.Commit),
+		)
+		if len(view.Tasks) > 0 {
+			b.WriteString(`<ul>`)
+			b.WriteString(renderCommitTasksHTML(view))
+			b.WriteString(`</ul>`)
+		}
+		b.WriteString(`</li>`)
+	}
+	return b.String()
+}
+
+func renderHomeTasksHTML(views []CommitStatusView) string {
+	var b strings.Builder
+	for _, view := range views {
+		for _, task := range view.Tasks {
+			fmt.Fprintf(&b, `<li><a href="%s">%s</a> <code>%s</code> <a href="%s">%s</a> — %s`,
+				template.HTMLEscapeString(repoPageURL(view.RepoDir)),
+				template.HTMLEscapeString(view.RepoDir),
+				template.HTMLEscapeString(view.Commit),
+				template.HTMLEscapeString(taskPageURL(view.RepoDir, view.Commit, task.Name)),
+				template.HTMLEscapeString(task.Name),
+				template.HTMLEscapeString(string(task.Status)),
+			)
+			if task.Attempt > 0 {
+				fmt.Fprintf(&b, ` (attempt %d)`, task.Attempt)
+			}
+			b.WriteString(`</li>`)
+		}
+	}
+	return b.String()
+}
+
 func renderTaskFilesHTML(repoDir string, commit string, task TaskStatusView) string {
 	var b strings.Builder
 	for _, file := range task.OutputFiles {
@@ -389,4 +513,37 @@ func taskPageURL(repoDir string, commit string, taskName string) string {
 	return "/task?repo=" + template.URLQueryEscaper(repoDir) +
 		"&commit=" + template.URLQueryEscaper(commit) +
 		"&task=" + template.URLQueryEscaper(taskName)
+}
+
+func commitPageURL(repoDir string, commit string) string {
+	return "/commit?repo=" + template.URLQueryEscaper(repoDir) +
+		"&commit=" + template.URLQueryEscaper(commit)
+}
+
+func repoPageURL(repoDir string) string {
+	return "/repo?repo=" + template.URLQueryEscaper(repoDir)
+}
+
+func (s WebServer) buildHomeTaskViews(repos []RepoHistory) ([]CommitStatusView, error) {
+	views := []CommitStatusView{}
+	for _, repo := range repos {
+		commitViews, err := s.buildRepoCommitViews(repo.RepoDir, repo.Commits)
+		if err != nil {
+			return nil, err
+		}
+		views = append(views, commitViews...)
+	}
+	return views, nil
+}
+
+func (s WebServer) buildRepoCommitViews(repoDir string, commits []RunRecord) ([]CommitStatusView, error) {
+	views := make([]CommitStatusView, 0, len(commits))
+	for _, commit := range commits {
+		view, err := s.buildStatusView(repoDir, commit.Commit)
+		if err != nil {
+			return nil, err
+		}
+		views = append(views, view)
+	}
+	return views, nil
 }

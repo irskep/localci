@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"io"
+	"os"
 	"testing"
 
 	"localci/internal/localci"
@@ -149,6 +150,36 @@ func TestParseCommitTargetReturnsCommandSpecificUsage(t *testing.T) {
 	}
 }
 
+func TestParseWebTargetDefaultsToHome(t *testing.T) {
+	t.Parallel()
+
+	got, err := parseWebTarget(nil, "/repo")
+	if err != nil {
+		t.Fatalf("parseWebTarget returned error: %v", err)
+	}
+	if got != (commitTarget{}) {
+		t.Fatalf("got = %#v, want zero target", got)
+	}
+}
+
+func TestParseWebTargetSingleDirOpensRepoPage(t *testing.T) {
+	t.Parallel()
+
+	cwd := t.TempDir()
+	repoDir := cwd + "/worktree"
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	got, err := parseWebTarget([]string{"./worktree"}, cwd)
+	if err != nil {
+		t.Fatalf("parseWebTarget returned error: %v", err)
+	}
+	if got.RepoDir != repoDir || got.Commit != "" || got.Task != "" {
+		t.Fatalf("unexpected target: %#v", got)
+	}
+}
+
 func TestBuildWebURLCommit(t *testing.T) {
 	t.Parallel()
 
@@ -161,6 +192,36 @@ func TestBuildWebURLCommit(t *testing.T) {
 	}
 
 	want := "http://127.0.0.1:4312/commit?commit=abc123&repo=%2Frepo"
+	if got != want {
+		t.Fatalf("buildWebURL = %q, want %q", got, want)
+	}
+}
+
+func TestBuildWebURLHome(t *testing.T) {
+	t.Parallel()
+
+	got, err := buildWebURL("http://127.0.0.1:4312", commitTarget{})
+	if err != nil {
+		t.Fatalf("buildWebURL returned error: %v", err)
+	}
+
+	want := "http://127.0.0.1:4312/"
+	if got != want {
+		t.Fatalf("buildWebURL = %q, want %q", got, want)
+	}
+}
+
+func TestBuildWebURLRepo(t *testing.T) {
+	t.Parallel()
+
+	got, err := buildWebURL("http://127.0.0.1:4312", commitTarget{
+		RepoDir: "/repo",
+	})
+	if err != nil {
+		t.Fatalf("buildWebURL returned error: %v", err)
+	}
+
+	want := "http://127.0.0.1:4312/repo?repo=%2Frepo"
 	if got != want {
 		t.Fatalf("buildWebURL = %q, want %q", got, want)
 	}

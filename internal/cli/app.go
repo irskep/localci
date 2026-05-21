@@ -164,7 +164,7 @@ func (a App) runStatus(args []string) error {
 }
 
 func (a App) runWeb(args []string) error {
-	spec, err := parseCommitTarget(args, a.Cwd, "usage: localci web [dir] <commit> [task]")
+	spec, err := parseWebTarget(args, a.Cwd)
 	if err != nil {
 		return err
 	}
@@ -196,7 +196,7 @@ Usage:
 	localci postcommit <repo> <commit>
   localci invoke <repo> <commit>
   localci status [dir] <commit> [task]
-  localci web [dir] <commit> [task]
+  localci web [dir] [commit] [task]
   localci install-hooks [dir]
 `
 }
@@ -323,6 +323,26 @@ func parseCommitTarget(args []string, cwd string, usage string) (commitTarget, e
 	}
 }
 
+func parseWebTarget(args []string, cwd string) (commitTarget, error) {
+	switch len(args) {
+	case 0:
+		return commitTarget{}, nil
+	case 1:
+		repo, err := tryResolveExistingDir(args[0], cwd)
+		if err == nil {
+			return commitTarget{RepoDir: repo}, nil
+		}
+		return commitTarget{
+			RepoDir: cwd,
+			Commit:  strings.TrimSpace(args[0]),
+		}, nil
+	case 2, 3:
+		return parseCommitTarget(args, cwd, "usage: localci web [dir] [commit] [task]")
+	default:
+		return commitTarget{}, fmt.Errorf("usage: localci web [dir] [commit] [task]")
+	}
+}
+
 func (a App) openWeb(spec commitTarget, state localci.DaemonState) error {
 	if strings.TrimSpace(state.HTTPBaseURL) == "" {
 		return fmt.Errorf("daemon did not publish an HTTP base URL")
@@ -347,15 +367,24 @@ func buildWebURL(baseURL string, spec commitTarget) (string, error) {
 		return "", fmt.Errorf("parse daemon url: %w", err)
 	}
 
-	if spec.Task == "" {
+	switch {
+	case spec.RepoDir == "" && spec.Commit == "" && spec.Task == "":
+		root.Path = "/"
+	case spec.Commit == "":
+		root.Path = "/repo"
+	case spec.Task == "":
 		root.Path = "/commit"
-	} else {
+	default:
 		root.Path = "/task"
 	}
 
 	query := root.Query()
-	query.Set("repo", spec.RepoDir)
-	query.Set("commit", spec.Commit)
+	if spec.RepoDir != "" {
+		query.Set("repo", spec.RepoDir)
+	}
+	if spec.Commit != "" {
+		query.Set("commit", spec.Commit)
+	}
 	if spec.Task != "" {
 		query.Set("task", spec.Task)
 	}
@@ -429,4 +458,19 @@ func resolveDir(path string, cwd string) (string, error) {
 	}
 
 	return filepath.Clean(abs), nil
+}
+
+func tryResolveExistingDir(path string, cwd string) (string, error) {
+	resolved, err := resolveDir(path, cwd)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s is not a directory", resolved)
+	}
+	return resolved, nil
 }
