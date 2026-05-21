@@ -262,8 +262,8 @@ var commitTemplate = template.Must(template.New("commit").Parse(`<!doctype html>
 <script>
 (() => {
   const url = new URL("/ws/status", window.location.origin);
-  url.searchParams.set("repo", {{printf "%q" .RepoDir}});
-  url.searchParams.set("commit", {{printf "%q" .Commit}});
+  url.searchParams.set("repo", {{.RepoDir}});
+  url.searchParams.set("commit", {{.Commit}});
   const ws = new WebSocket(url);
   ws.onmessage = (event) => {
     const payload = JSON.parse(event.data);
@@ -291,9 +291,9 @@ var taskTemplate = template.Must(template.New("task").Parse(`<!doctype html>
 <script>
 (() => {
   const url = new URL("/ws/status", window.location.origin);
-  url.searchParams.set("repo", {{printf "%q" .RepoDir}});
-  url.searchParams.set("commit", {{printf "%q" .Commit}});
-  const taskName = {{printf "%q" .Name}};
+  url.searchParams.set("repo", {{.RepoDir}});
+  url.searchParams.set("commit", {{.Commit}});
+  const taskName = {{.Name}};
   url.searchParams.set("task", taskName);
   const ws = new WebSocket(url);
   ws.onmessage = (event) => {

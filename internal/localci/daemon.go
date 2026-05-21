@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -201,7 +202,9 @@ func (m DaemonManager) waitForReady(ctx context.Context) (DaemonState, error) {
 		client := DaemonClient{Paths: m.Paths}
 		state, err := client.Ping(ctx)
 		if err == nil {
-			return state, nil
+			if err := waitForHTTPReady(ctx, state.HTTPBaseURL); err == nil {
+				return state, nil
+			}
 		}
 
 		readState, stateErr := m.ReadState()
@@ -222,6 +225,32 @@ func (m DaemonManager) waitForReady(ctx context.Context) (DaemonState, error) {
 	}
 
 	return DaemonState{}, fmt.Errorf("daemon did not write state file")
+}
+
+func waitForHTTPReady(ctx context.Context, baseURL string) error {
+	if baseURL == "" {
+		return fmt.Errorf("daemon did not publish an HTTP base URL")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/", nil)
+	if err != nil {
+		return err
+	}
+
+	client := &http.Client{
+		Timeout: 200 * time.Millisecond,
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected daemon HTTP status %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 func (m DaemonManager) ReadState() (DaemonState, error) {

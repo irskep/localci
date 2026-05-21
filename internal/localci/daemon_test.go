@@ -3,6 +3,8 @@ package localci
 import (
 	"context"
 	"errors"
+	"net"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -67,6 +69,41 @@ func TestProcessAliveInvalidPID(t *testing.T) {
 	}
 	if alive {
 		t.Fatalf("processAlive returned true for invalid pid")
+	}
+}
+
+func TestWaitForHTTPReady(t *testing.T) {
+	t.Parallel()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		if isTCPPermissionError(err) {
+			t.Skip("tcp listeners are not permitted in this environment")
+		}
+		t.Fatalf("Listen returned error: %v", err)
+	}
+	defer listener.Close()
+
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})}
+	defer server.Close()
+
+	go func() {
+		_ = server.Serve(listener)
+	}()
+
+	if err := waitForHTTPReady(context.Background(), "http://"+listener.Addr().String()); err != nil {
+		t.Fatalf("waitForHTTPReady returned error: %v", err)
+	}
+}
+
+func TestWaitForHTTPReadyRejectsEmptyBaseURL(t *testing.T) {
+	t.Parallel()
+
+	err := waitForHTTPReady(context.Background(), "")
+	if err == nil {
+		t.Fatalf("waitForHTTPReady returned nil error")
 	}
 }
 
