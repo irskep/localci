@@ -1,7 +1,9 @@
 package localci
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -28,6 +30,25 @@ func LoadConfig(path string) (Config, error) {
 
 	cfg.Root = filepath.Clean(root)
 	return cfg, nil
+}
+
+func LoadConfigOrDefault(path string) (Config, error) {
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Config{Root: string(filepath.Separator)}, nil
+		}
+		return Config{}, err
+	}
+	return cfg, nil
+}
+
+func DefaultConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user home: %w", err)
+	}
+	return filepath.Join(home, ".localci", "config.toml"), nil
 }
 
 func ResolveRepoDir(root string, repoPath string) (string, error) {

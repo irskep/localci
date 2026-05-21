@@ -24,6 +24,7 @@ type WebServer struct {
 	Queue         QueueStore
 	DiscoverTasks func(context.Context, string) ([]Task, error)
 	AssetDir      string
+	RepoRoot      string
 }
 
 type HomePageView struct {
@@ -66,6 +67,8 @@ func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServerFS(assetFS)))
+	mux.HandleFunc("/api", s.handleAPI)
+	mux.HandleFunc("/api/", s.handleAPI)
 	mux.HandleFunc("/", s.handleHome)
 	mux.HandleFunc("/repo", s.handleRepo)
 	mux.HandleFunc("/commit", s.handleCommit)

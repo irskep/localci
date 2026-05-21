@@ -2,6 +2,7 @@ package localci
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -190,6 +191,157 @@ func TestWebServerServesEmbeddedAssetsAndOverride(t *testing.T) {
 			t.Fatalf("override asset missing expected content: %s", got)
 		}
 	})
+}
+
+func TestWebServerAPI(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := Paths{Root: root}
+	queue := QueueStore{Paths: paths}
+	repoDir := "/repo"
+	commit := "abc123"
+	req := InvokeRequest{RepoDir: repoDir, Commit: commit}
+
+	record := newTaskRecord(paths, req, Task{Name: "localci:test"}, 2, time.Now().UTC())
+	record.Status = TaskStatusSucceeded
+	record.FinishedAt = record.StartedAt.Add(time.Second)
+	record.DurationMilliseconds = durationMilliseconds(record.StartedAt, record.FinishedAt)
+	if err := os.MkdirAll(record.OutputDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	artifactPath := filepath.Join(record.OutputDir, "combined.log")
+	if err := os.WriteFile(artifactPath, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	if err := writeTaskRecord(record); err != nil {
+		t.Fatalf("writeTaskRecord returned error: %v", err)
+	}
+
+	run := newRunRecord(req, record.StartedAt)
+	run.FinishedAt = record.FinishedAt
+	run.TaskResults = []TaskRecord{record}
+	run.RefreshSummary()
+	if err := writeRunRecord(paths, req, run); err != nil {
+		t.Fatalf("writeRunRecord returned error: %v", err)
+	}
+
+	server := WebServer{
+		Paths:    paths,
+		Queue:    queue,
+		RepoRoot: "/",
+		DiscoverTasks: func(context.Context, string) ([]Task, error) {
+			return []Task{{Name: "localci:test"}}, nil
+		},
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		if isTCPPermissionError(err) {
+			t.Skip("tcp listeners are not permitted in this environment")
+		}
+		t.Fatalf("Listen returned error: %v", err)
+	}
+	defer listener.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	errs := make(chan error, 1)
+	go func() {
+		errs <- server.Serve(ctx, listener)
+	}()
+	defer func() {
+		cancel()
+		<-errs
+	}()
+
+	baseURL := "http://" + listener.Addr().String()
+
+	resp, err := http.Get(baseURL + "/api")
+	if err != nil {
+		t.Fatalf("GET /api returned error: %v", err)
+	}
+	var home apiHomeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&home); err != nil {
+		t.Fatalf("Decode home returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if len(home.Repos) != 1 || home.Repos[0].RepoPath != "repo" {
+		t.Fatalf("unexpected home repos: %#v", home.Repos)
+	}
+	if len(home.RecentCommits) != 1 || home.RecentCommits[0].Commit != commit {
+		t.Fatalf("unexpected recent commits: %#v", home.RecentCommits)
+	}
+
+	resp, err = http.Get(baseURL + "/api/repo/repo/commit/" + commit)
+	if err != nil {
+		t.Fatalf("GET commit api returned error: %v", err)
+	}
+	var commitResp apiCommitResponse
+	if err := json.NewDecoder(resp.Body).Decode(&commitResp); err != nil {
+		t.Fatalf("Decode commit returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if got := len(commitResp.Commit.Tasks); got != 1 {
+		t.Fatalf("commit task count = %d, want 1", got)
+	}
+
+	taskPath := url.PathEscape("localci:test")
+	resp, err = http.Get(baseURL + "/api/repo/repo/commit/" + commit + "/task/" + taskPath)
+	if err != nil {
+		t.Fatalf("GET task api returned error: %v", err)
+	}
+	var taskResp apiTaskResponse
+	if err := json.NewDecoder(resp.Body).Decode(&taskResp); err != nil {
+		t.Fatalf("Decode task returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if taskResp.PrimaryArtifact != "combined.log" || taskResp.PrimaryLog != "hello" {
+		t.Fatalf("unexpected primary log response: %#v", taskResp)
+	}
+
+	resp, err = http.Get(baseURL + "/api/repo/repo/commit/" + commit + "/task/" + taskPath + "/attempt/2/artifact")
+	if err != nil {
+		t.Fatalf("GET artifact index returned error: %v", err)
+	}
+	var artifactList apiArtifactListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&artifactList); err != nil {
+		t.Fatalf("Decode artifact list returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if len(artifactList.Artifacts) != 1 || artifactList.Artifacts[0].DisplayName != "combined.log" {
+		t.Fatalf("unexpected artifacts: %#v", artifactList.Artifacts)
+	}
+
+	resp, err = http.Get(baseURL + "/api/repo/repo/commit/" + commit + "/task/" + taskPath + "/attempt/2/artifact/combined.log")
+	if err != nil {
+		t.Fatalf("GET artifact returned error: %v", err)
+	}
+	var artifactResp apiArtifactResponse
+	if err := json.NewDecoder(resp.Body).Decode(&artifactResp); err != nil {
+		t.Fatalf("Decode artifact returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if artifactResp.Content != "hello" {
+		t.Fatalf("artifact content = %q, want %q", artifactResp.Content, "hello")
+	}
+
+	reqRetry, err := http.NewRequest(http.MethodPost, baseURL+"/api/repo/repo/commit/"+commit+"/task/"+taskPath+"/retry", nil)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+	resp, err = http.DefaultClient.Do(reqRetry)
+	if err != nil {
+		t.Fatalf("POST retry returned error: %v", err)
+	}
+	var retryResp map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&retryResp); err != nil {
+		t.Fatalf("Decode retry returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if retryResp["enqueued"] != true {
+		t.Fatalf("retry response = %#v, want enqueued=true", retryResp)
+	}
 }
 
 func TestWebServerHomeAndRepoPages(t *testing.T) {

@@ -555,13 +555,5 @@ func (a App) loadConfig() (localci.Config, error) {
 	if a.LoadConfig != nil {
 		return a.LoadConfig(path)
 	}
-
-	cfg, err := localci.LoadConfig(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return localci.Config{Root: string(filepath.Separator)}, nil
-		}
-		return localci.Config{}, err
-	}
-	return cfg, nil
+	return localci.LoadConfigOrDefault(path)
 }

@@ -177,6 +177,7 @@ func (m DaemonManager) Run(ctx context.Context) error {
 		Queue:         m.Scheduler.Queue,
 		DiscoverTasks: m.Scheduler.Runner.DiscoverTasks,
 		AssetDir:      os.Getenv("LOCALCI_WEB_DIR"),
+		RepoRoot:      m.repoRoot(),
 	}
 	webErrs := make(chan error, 1)
 	go func() {
@@ -330,6 +331,18 @@ func (m DaemonManager) httpAddress() string {
 	}
 
 	return "127.0.0.1:61924"
+}
+
+func (m DaemonManager) repoRoot() string {
+	configPath, err := DefaultConfigPath()
+	if err != nil {
+		return string(filepath.Separator)
+	}
+	cfg, err := LoadConfigOrDefault(configPath)
+	if err != nil {
+		return string(filepath.Separator)
+	}
+	return cfg.Root
 }
 
 func (m DaemonManager) recoverInterruptedWork() error {
