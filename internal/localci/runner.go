@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -153,13 +152,13 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task) (Task
 		"LOCALCI_CACHE_DIR="+record.SharedCacheDir,
 	)
 
-	logWriters, err := newTaskLogWriters(record.OutputDir, r.stdout(), r.stderr())
+	logWriters, err := newTaskLogWriters(record.OutputDir, r.stdout())
 	if err != nil {
 		return TaskRecord{}, err
 	}
 	defer logWriters.Close()
-	cmd.Stdout = logWriters.stdoutWriter
-	cmd.Stderr = logWriters.stderrWriter
+	cmd.Stdout = logWriters.writer
+	cmd.Stderr = logWriters.writer
 
 	if err := cmd.Start(); err != nil {
 		record.FinishedAt = r.now()
@@ -433,53 +432,22 @@ func intPtr(value int) *int {
 }
 
 type taskLogWriters struct {
-	stdoutFile   *os.File
-	stderrFile   *os.File
 	combinedFile *os.File
-	stdoutWriter io.Writer
-	stderrWriter io.Writer
+	writer       io.Writer
 }
 
-func newTaskLogWriters(outputDir string, stdout io.Writer, stderr io.Writer) (*taskLogWriters, error) {
-	stdoutFile, err := os.Create(filepath.Join(outputDir, "stdout.log"))
-	if err != nil {
-		return nil, fmt.Errorf("create stdout log: %w", err)
-	}
-	stderrFile, err := os.Create(filepath.Join(outputDir, "stderr.log"))
-	if err != nil {
-		_ = stdoutFile.Close()
-		return nil, fmt.Errorf("create stderr log: %w", err)
-	}
+func newTaskLogWriters(outputDir string, stdout io.Writer) (*taskLogWriters, error) {
 	combinedFile, err := os.Create(filepath.Join(outputDir, "combined.log"))
 	if err != nil {
-		_ = stdoutFile.Close()
-		_ = stderrFile.Close()
 		return nil, fmt.Errorf("create combined log: %w", err)
 	}
 
-	combinedWriter := &synchronizedWriter{target: combinedFile}
 	return &taskLogWriters{
-		stdoutFile:   stdoutFile,
-		stderrFile:   stderrFile,
 		combinedFile: combinedFile,
-		stdoutWriter: io.MultiWriter(stdoutFile, combinedWriter, stdout),
-		stderrWriter: io.MultiWriter(stderrFile, combinedWriter, stderr),
+		writer:       io.MultiWriter(combinedFile, stdout),
 	}, nil
 }
 
 func (w *taskLogWriters) Close() {
-	_ = w.stdoutFile.Close()
-	_ = w.stderrFile.Close()
 	_ = w.combinedFile.Close()
-}
-
-type synchronizedWriter struct {
-	mu     sync.Mutex
-	target io.Writer
-}
-
-func (w *synchronizedWriter) Write(data []byte) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.target.Write(data)
 }

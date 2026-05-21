@@ -163,7 +163,7 @@ func (s WebServer) handleTask(w http.ResponseWriter, r *http.Request) {
 	task, ok := findTaskStatus(view.Tasks, taskName)
 	if ok {
 		task = applySelectedAttempt(s.Paths, repoDir, commit, task, selectedAttempt)
-		primaryArtifact, primaryLog := loadPrimaryLog(task)
+		primaryArtifact, primaryLog := LoadPrimaryLog(task)
 		_ = taskTemplate.Execute(w, TaskPageView{
 			RepoDir:            repoDir,
 			RepoName:           repoLabel(repoDir),
@@ -448,7 +448,7 @@ func renderStatusPayload(view CommitStatusView) ([]byte, error) {
 	}
 
 	for _, task := range view.Tasks {
-		primaryArtifact, primaryLog := loadPrimaryLog(task)
+		primaryArtifact, primaryLog := LoadPrimaryLog(task)
 		payload.Tasks = append(payload.Tasks, taskPayload{
 			Name:            task.Name,
 			Attempt:         task.Attempt,
@@ -699,27 +699,4 @@ func repoLabel(repoDir string) string {
 		return repoDir
 	}
 	return label
-}
-
-func loadPrimaryLog(task TaskStatusView) (string, string) {
-	artifact, ok := primaryArtifact(task)
-	if !ok {
-		return "", ""
-	}
-	data, err := os.ReadFile(artifact.Path)
-	if err != nil {
-		return artifact.DisplayName, ""
-	}
-	return artifact.DisplayName, string(data)
-}
-
-func primaryArtifact(task TaskStatusView) (ArtifactView, bool) {
-	for _, preferred := range []string{"combined.log", "stdout.log", "stderr.log", "summary.txt", "status.txt"} {
-		for _, artifact := range task.Artifacts {
-			if artifact.DisplayName == preferred {
-				return artifact, true
-			}
-		}
-	}
-	return ArtifactView{}, false
 }

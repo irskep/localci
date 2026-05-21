@@ -8,12 +8,12 @@ set -eu
 mkdir -p "$LOCALCI_TASK_OUTPUT_DIR" "$LOCALCI_TASK_CACHE_DIR" "$LOCALCI_CACHE_DIR"
 
 status_file="$LOCALCI_TASK_OUTPUT_DIR/status.txt"
-log_file="$LOCALCI_TASK_OUTPUT_DIR/test.log"
 
 printf 'running\n' >"$status_file"
 printf 'running go test ./...\n' >"$LOCALCI_TASK_OUTPUT_DIR/summary.txt"
+printf 'go test ./...\n'
 
-if go test ./... >"$log_file" 2>&1; then
+if go test ./...; then
   printf 'succeeded\n' >"$status_file"
   exit 0
 fi

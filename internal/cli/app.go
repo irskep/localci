@@ -157,7 +157,26 @@ func (a App) runStatus(args []string) error {
 
 	fmt.Fprintf(a.Stdout, "Status for %s at %s\n", statusView.RepoDir, statusView.Commit)
 	for _, task := range filtered {
-		fmt.Fprintf(a.Stdout, "%s\t%s\t%s\n", task.Status, task.Name, task.OutputDir)
+		fmt.Fprintf(a.Stdout, "%s\t%s\t%s", task.Status, task.Name, task.OutputDir)
+		if task.Attempt > 0 {
+			fmt.Fprintf(a.Stdout, "\tattempt %d", task.Attempt)
+		}
+		if task.Failure != "" {
+			fmt.Fprintf(a.Stdout, "\tfailure=%s", task.Failure)
+		}
+		if task.DurationMilliseconds > 0 {
+			fmt.Fprintf(a.Stdout, "\t%dms", task.DurationMilliseconds)
+		}
+		fmt.Fprintln(a.Stdout)
+		if spec.Task != "" {
+			primaryArtifact, primaryLog := localci.LoadPrimaryLog(task)
+			if primaryArtifact != "" {
+				fmt.Fprintf(a.Stdout, "Primary log: %s\n", primaryArtifact)
+				if primaryLog != "" {
+					fmt.Fprintln(a.Stdout, primaryLog)
+				}
+			}
+		}
 		for _, file := range task.OutputFiles {
 			fmt.Fprintf(a.Stdout, "  %s\n", file)
 		}

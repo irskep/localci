@@ -24,6 +24,7 @@ func TestDaemonManagerRunWritesAndClearsState(t *testing.T) {
 		Now: func() time.Time {
 			return time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC)
 		},
+		HTTPAddress:  "127.0.0.1:0",
 		PollInterval: 10 * time.Millisecond,
 		Scheduler: Scheduler{
 			Queue:  QueueStore{Paths: paths},
@@ -148,6 +149,7 @@ func TestDaemonManagerRecoverInterruptedWorkRequeuesRunningTask(t *testing.T) {
 		Now: func() time.Time {
 			return recoveredAt
 		},
+		HTTPAddress: "127.0.0.1:0",
 		Scheduler: Scheduler{
 			Queue:  queue,
 			Runner: Runner{Paths: paths},
@@ -227,7 +229,8 @@ func TestDaemonManagerRecoverInterruptedWorkSkipsFinishedTask(t *testing.T) {
 	}
 
 	manager := DaemonManager{
-		Paths: paths,
+		Paths:       paths,
+		HTTPAddress: "127.0.0.1:0",
 		Scheduler: Scheduler{
 			Queue:  queue,
 			Runner: Runner{Paths: paths},

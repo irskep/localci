@@ -28,6 +28,7 @@ type DaemonManager struct {
 	Now            func() time.Time
 	Scheduler      Scheduler
 	PollInterval   time.Duration
+	HTTPAddress    string
 }
 
 type StartResult struct {
@@ -142,7 +143,7 @@ func (m DaemonManager) Run(ctx context.Context) error {
 		StartedAt: m.now(),
 	}
 
-	httpListener, err := net.Listen("tcp", "127.0.0.1:0")
+	httpListener, err := net.Listen("tcp", m.httpAddress())
 	if err != nil {
 		return err
 	}
@@ -320,6 +321,14 @@ func (m DaemonManager) pollInterval() time.Duration {
 		return m.PollInterval
 	}
 	return 250 * time.Millisecond
+}
+
+func (m DaemonManager) httpAddress() string {
+	if m.HTTPAddress != "" {
+		return m.HTTPAddress
+	}
+
+	return "127.0.0.1:61924"
 }
 
 func (m DaemonManager) recoverInterruptedWork() error {

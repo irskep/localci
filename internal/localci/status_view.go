@@ -3,6 +3,7 @@ package localci
 import (
 	"errors"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -265,14 +266,10 @@ func artifactSortKey(name string) int {
 	switch strings.ToLower(name) {
 	case "combined.log":
 		return 0
-	case "stdout.log":
-		return 1
-	case "stderr.log":
-		return 2
 	case "summary.txt":
-		return 3
+		return 1
 	case "status.txt":
-		return 4
+		return 2
 	case "task.json":
 		return 100
 	default:
@@ -281,4 +278,27 @@ func artifactSortKey(name string) int {
 		}
 		return 10
 	}
+}
+
+func PrimaryArtifact(task TaskStatusView) (ArtifactView, bool) {
+	for _, preferred := range []string{"combined.log", "summary.txt", "status.txt"} {
+		for _, artifact := range task.Artifacts {
+			if artifact.DisplayName == preferred {
+				return artifact, true
+			}
+		}
+	}
+	return ArtifactView{}, false
+}
+
+func LoadPrimaryLog(task TaskStatusView) (string, string) {
+	artifact, ok := PrimaryArtifact(task)
+	if !ok {
+		return "", ""
+	}
+	data, err := os.ReadFile(artifact.Path)
+	if err != nil {
+		return artifact.DisplayName, ""
+	}
+	return artifact.DisplayName, string(data)
 }

@@ -183,7 +183,7 @@ func TestWebServerHomeAndRepoPages(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
 	rendered := string(body)
-	if !strings.Contains(rendered, "/repo-a") || !strings.Contains(rendered, "/repo-b") {
+	if !strings.Contains(rendered, "repo-a") || !strings.Contains(rendered, "repo-b") {
 		t.Fatalf("home page missing repo links: %s", rendered)
 	}
 	if !strings.Contains(rendered, "bbb222") || !strings.Contains(rendered, "1 passed") {

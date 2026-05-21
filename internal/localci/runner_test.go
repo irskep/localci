@@ -118,7 +118,7 @@ exit 1
 		if _, err := os.Stat(taskPath); err != nil {
 			t.Fatalf("task record missing for %s at %s: %v", task, taskPath, err)
 		}
-		for _, logName := range []string{"combined.log", "stdout.log", "stderr.log"} {
+		for _, logName := range []string{"combined.log"} {
 			logPath := filepath.Join(taskDir, logName)
 			if _, err := os.Stat(logPath); err != nil {
 				t.Fatalf("log %s missing for %s: %v", logName, task, err)
@@ -179,7 +179,7 @@ func writeExecutable(t *testing.T, path string, contents string) {
 	}
 }
 
-func TestInvokeCapturesStdoutAndStderrLogs(t *testing.T) {
+func TestInvokeCapturesCombinedLog(t *testing.T) {
 	t.Parallel()
 
 	repoDir := t.TempDir()
@@ -215,22 +215,6 @@ exit 1
 	}
 
 	taskDir := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName("localci:test"), "attempt-001")
-	stdoutBytes, err := os.ReadFile(filepath.Join(taskDir, "stdout.log"))
-	if err != nil {
-		t.Fatalf("ReadFile(stdout.log) returned error: %v", err)
-	}
-	if got := string(stdoutBytes); got != "hello stdout\n" {
-		t.Fatalf("stdout.log = %q, want %q", got, "hello stdout\n")
-	}
-
-	stderrBytes, err := os.ReadFile(filepath.Join(taskDir, "stderr.log"))
-	if err != nil {
-		t.Fatalf("ReadFile(stderr.log) returned error: %v", err)
-	}
-	if got := string(stderrBytes); got != "hello stderr\n" {
-		t.Fatalf("stderr.log = %q, want %q", got, "hello stderr\n")
-	}
-
 	combinedBytes, err := os.ReadFile(filepath.Join(taskDir, "combined.log"))
 	if err != nil {
 		t.Fatalf("ReadFile(combined.log) returned error: %v", err)
