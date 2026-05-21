@@ -23,8 +23,9 @@ type WebServer struct {
 }
 
 type HomePageView struct {
-	ReposHTML template.HTML
-	RunsHTML  template.HTML
+	ReposHTML         template.HTML
+	RecentCommitsHTML template.HTML
+	QueueHTML         template.HTML
 }
 
 type RepoPageView struct {
@@ -92,9 +93,27 @@ func (s WebServer) handleHome(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
+	queueEntries, err := s.Queue.List()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	active, err := s.Queue.ReadActive()
+	if err != nil && !errors.Is(err, ErrRecordNotFound) {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var activePtr *ActiveTask
+	if err == nil {
+		activePtr = &active
+	}
+
 	_ = homeTemplate.Execute(w, HomePageView{
-		ReposHTML: template.HTML(renderRepoLinksHTML(repos)),
-		RunsHTML:  template.HTML(renderHomeRunsHTML(views)),
+		ReposHTML:         template.HTML(renderRepoLinksHTML(repos)),
+		RecentCommitsHTML: template.HTML(renderHomeRecentCommitsHTML(views)),
+		QueueHTML:         template.HTML(renderQueueHTML(activePtr, queueEntries)),
 	})
 }
 
@@ -329,8 +348,10 @@ var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html>
 <h1>localci</h1>
 <h2>Repos</h2>
 <ul>{{.ReposHTML}}</ul>
-<h2>Recent Runs</h2>
-<ul>{{.RunsHTML}}</ul>
+<h2>Recent Commit Activity</h2>
+<ul>{{.RecentCommitsHTML}}</ul>
+<h2>Queue</h2>
+<ul>{{.QueueHTML}}</ul>
 </body>
 </html>`))
 
@@ -524,7 +545,7 @@ func renderRepoRunsHTML(views []CommitStatusView) string {
 	return b.String()
 }
 
-func renderHomeRunsHTML(views []CommitStatusView) string {
+func renderHomeRecentCommitsHTML(views []CommitStatusView) string {
 	var b strings.Builder
 	for _, view := range views {
 		fmt.Fprintf(&b, `<li><a href="%s">%s</a> <a href="%s"><code>%s</code></a> — %s</li>`,
@@ -534,6 +555,32 @@ func renderHomeRunsHTML(views []CommitStatusView) string {
 			template.HTMLEscapeString(view.Commit),
 			template.HTMLEscapeString(commitSummaryText(view)),
 		)
+	}
+	return b.String()
+}
+
+func renderQueueHTML(active *ActiveTask, entries []QueueEntry) string {
+	var b strings.Builder
+	if active != nil {
+		fmt.Fprintf(&b, `<li><strong>active</strong> — <a href="%s">%s</a> <a href="%s"><code>%s</code></a> / %s</li>`,
+			template.HTMLEscapeString(repoPageURL(active.RepoDir)),
+			template.HTMLEscapeString(repoLabel(active.RepoDir)),
+			template.HTMLEscapeString(commitPageURL(active.RepoDir, active.Commit)),
+			template.HTMLEscapeString(active.Commit),
+			template.HTMLEscapeString(trimTaskPrefix(active.TaskName)),
+		)
+	}
+	for _, entry := range entries {
+		fmt.Fprintf(&b, `<li><strong>pending</strong> — <a href="%s">%s</a> <a href="%s"><code>%s</code></a> / %s</li>`,
+			template.HTMLEscapeString(repoPageURL(entry.RepoDir)),
+			template.HTMLEscapeString(repoLabel(entry.RepoDir)),
+			template.HTMLEscapeString(commitPageURL(entry.RepoDir, entry.Commit)),
+			template.HTMLEscapeString(entry.Commit),
+			template.HTMLEscapeString(trimTaskPrefix(entry.TaskName)),
+		)
+	}
+	if active == nil && len(entries) == 0 {
+		b.WriteString(`<li><strong>idle</strong></li>`)
 	}
 	return b.String()
 }

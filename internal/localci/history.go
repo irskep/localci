@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"sort"
+	"time"
 )
 
 type HistoryReader struct {
@@ -45,10 +46,12 @@ func (r HistoryReader) ListRepos() ([]RepoHistory, error) {
 	sort.Slice(repos, func(i int, j int) bool {
 		left := mostRecentRun(repos[i].Commits)
 		right := mostRecentRun(repos[j].Commits)
-		if left.StartedAt.Equal(right.StartedAt) {
+		leftAt := runActivityAt(left)
+		rightAt := runActivityAt(right)
+		if leftAt.Equal(rightAt) {
 			return repos[i].RepoDir < repos[j].RepoDir
 		}
-		return left.StartedAt.After(right.StartedAt)
+		return leftAt.After(rightAt)
 	})
 
 	return repos, nil
@@ -100,13 +103,15 @@ func (r HistoryReader) listRuns() ([]RunRecord, error) {
 
 func sortRunRecords(runs []RunRecord) {
 	sort.Slice(runs, func(i int, j int) bool {
-		if runs[i].StartedAt.Equal(runs[j].StartedAt) {
+		leftAt := runActivityAt(runs[i])
+		rightAt := runActivityAt(runs[j])
+		if leftAt.Equal(rightAt) {
 			if runs[i].RepoDir == runs[j].RepoDir {
 				return runs[i].Commit > runs[j].Commit
 			}
 			return runs[i].RepoDir < runs[j].RepoDir
 		}
-		return runs[i].StartedAt.After(runs[j].StartedAt)
+		return leftAt.After(rightAt)
 	})
 }
 
@@ -115,4 +120,11 @@ func mostRecentRun(runs []RunRecord) RunRecord {
 		return RunRecord{}
 	}
 	return runs[0]
+}
+
+func runActivityAt(run RunRecord) time.Time {
+	if !run.FinishedAt.IsZero() {
+		return run.FinishedAt
+	}
+	return run.StartedAt
 }

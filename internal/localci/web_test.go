@@ -114,7 +114,12 @@ func TestWebServerHomeAndRepoPages(t *testing.T) {
 
 	root := t.TempDir()
 	paths := Paths{Root: root}
-	queue := QueueStore{Paths: paths}
+	queue := QueueStore{
+		Paths: paths,
+		Now: func() time.Time {
+			return time.Date(2026, 5, 21, 11, 0, 0, 0, time.UTC)
+		},
+	}
 
 	writeRun := func(repoDir string, commit string, startedAt time.Time) {
 		t.Helper()
@@ -141,6 +146,19 @@ func TestWebServerHomeAndRepoPages(t *testing.T) {
 
 	writeRun("/repo-a", "aaa111", time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC))
 	writeRun("/repo-b", "bbb222", time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC))
+	entry, err := queue.Enqueue("/repo-a", "queued123", "localci:test")
+	if err != nil {
+		t.Fatalf("Enqueue returned error: %v", err)
+	}
+	if _, err := queue.MarkActive(entry); err != nil {
+		t.Fatalf("MarkActive returned error: %v", err)
+	}
+	if err := queue.Remove(entry); err != nil {
+		t.Fatalf("Remove returned error: %v", err)
+	}
+	if _, err := queue.Enqueue("/repo-b", "queued456", "localci:build"); err != nil {
+		t.Fatalf("Enqueue pending returned error: %v", err)
+	}
 
 	server := WebServer{
 		Paths: paths,
@@ -188,6 +206,18 @@ func TestWebServerHomeAndRepoPages(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "bbb222") || !strings.Contains(rendered, "1 passed") {
 		t.Fatalf("home page missing run summary: %s", rendered)
+	}
+	if !strings.Contains(rendered, "Recent Commit Activity") || !strings.Contains(rendered, "Queue") {
+		t.Fatalf("home page missing section headings: %s", rendered)
+	}
+	if !strings.Contains(rendered, "active") || !strings.Contains(rendered, "queued123") {
+		t.Fatalf("home page missing active queue item: %s", rendered)
+	}
+	if !strings.Contains(rendered, "pending") || !strings.Contains(rendered, "queued456") {
+		t.Fatalf("home page missing pending queue item: %s", rendered)
+	}
+	if strings.Contains(rendered, ">test</a> — succeeded") {
+		t.Fatalf("home page should not inline commit task rows: %s", rendered)
 	}
 
 	resp, err = http.Get(baseURL + "/repo?repo=" + url.QueryEscape("/repo-b"))
