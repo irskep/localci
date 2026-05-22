@@ -68,6 +68,15 @@ export type RetryResponse = {
   enqueued: boolean
 }
 
+export type CancelResponse = {
+  repo: RepoSummary
+  commit: string
+  task: string
+  active: boolean
+  pending: number
+  canceled: boolean
+}
+
 export type ArtifactListResponse = {
   repo: RepoSummary
   commit: string
@@ -223,6 +232,18 @@ export function parseRetryResponse(value: unknown): RetryResponse {
     attempt: asNumber(data.attempt, 'retry.attempt'),
     url: asString(data.url, 'retry.url'),
     enqueued: asBoolean(data.enqueued, 'retry.enqueued'),
+  }
+}
+
+export function parseCancelResponse(value: unknown): CancelResponse {
+  const data = asObject(value, 'cancel response')
+  return {
+    repo: parseRepoSummary(data.repo),
+    commit: asString(data.commit, 'cancel.commit'),
+    task: asString(data.task, 'cancel.task'),
+    active: asBoolean(data.active, 'cancel.active'),
+    pending: asNumber(data.pending, 'cancel.pending'),
+    canceled: asBoolean(data.canceled, 'cancel.canceled'),
   }
 }
 

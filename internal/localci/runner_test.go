@@ -2,6 +2,7 @@ package localci
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -225,5 +226,71 @@ exit 1
 	combined := string(combinedBytes)
 	if !strings.Contains(combined, "hello stdout\n") || !strings.Contains(combined, "hello stderr\n") {
 		t.Fatalf("combined.log missing expected output: %q", combined)
+	}
+}
+
+func TestRunTaskStopsWhenCancelMarkerAppears(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	rootDir := t.TempDir()
+	binDir := t.TempDir()
+
+	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
+set -eu
+if [ "$1" = "run" ] && [ "$2" = "localci:test" ]; then
+  printf 'started\n'
+  exec sleep 30
+fi
+exit 1
+`)
+
+	paths := Paths{Root: rootDir}
+	runner := Runner{
+		Paths:          paths,
+		MiseBin:        filepath.Join(binDir, "mise"),
+		Env:            append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH")),
+		PollInterval:   10 * time.Millisecond,
+		TerminateGrace: 10 * time.Millisecond,
+	}
+	req := InvokeRequest{RepoDir: repoDir, Commit: "abc123"}
+	task := Task{Name: "localci:test"}
+	outputDir := paths.TaskAttemptDir(repoDir, req.Commit, task.Name, 1)
+
+	type taskResult struct {
+		record TaskRecord
+		err    error
+	}
+	resultCh := make(chan taskResult, 1)
+	go func() {
+		record, err := runner.runTask(context.Background(), req, task, 0)
+		resultCh <- taskResult{record: record, err: err}
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(filepath.Join(outputDir, combinedLogName)); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("combined log was not created before deadline")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if err := os.WriteFile(filepath.Join(outputDir, cancelMarkerName), []byte("canceled\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(cancel marker) returned error: %v", err)
+	}
+
+	select {
+	case result := <-resultCh:
+		if !errors.Is(result.err, errTaskFailed) {
+			t.Fatalf("runTask error = %v, want errTaskFailed", result.err)
+		}
+		if result.record.Status != TaskStatusFailed || result.record.Failure != "canceled" {
+			t.Fatalf("record = %#v, want canceled failure", result.record)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("runTask did not stop after cancellation")
 	}
 }

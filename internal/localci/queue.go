@@ -29,6 +29,11 @@ type ActiveTask struct {
 	StartedAt time.Time `json:"started_at"`
 }
 
+type QueueCancelResult struct {
+	Active  bool
+	Pending int
+}
+
 var queueMutationMu sync.Mutex
 
 func (s QueueStore) Enqueue(repoDir string, commit string, taskName string) (QueueEntry, error) {
@@ -221,6 +226,49 @@ func (s QueueStore) Remove(entry QueueEntry) error {
 	defer queueMutationMu.Unlock()
 
 	return s.removeLocked(entry)
+}
+
+func (s QueueStore) Cancel(repoDir string, commit string, taskName string) (QueueCancelResult, error) {
+	queueMutationMu.Lock()
+	defer queueMutationMu.Unlock()
+
+	result := QueueCancelResult{}
+
+	entries, err := s.listLocked()
+	if err != nil {
+		return QueueCancelResult{}, err
+	}
+	for _, entry := range entries {
+		if entry.RepoDir != repoDir || entry.Commit != commit || entry.TaskName != taskName {
+			continue
+		}
+		if err := s.removeLocked(entry); err != nil {
+			return QueueCancelResult{}, err
+		}
+		result.Pending++
+	}
+
+	active, err := s.readActiveLocked()
+	if err != nil {
+		if errors.Is(err, ErrRecordNotFound) {
+			return result, nil
+		}
+		return QueueCancelResult{}, err
+	}
+	if active.RepoDir != repoDir || active.Commit != commit || active.TaskName != taskName {
+		return result, nil
+	}
+
+	outputDir := s.Paths.TaskAttemptDir(repoDir, commit, taskName, active.Attempt)
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return QueueCancelResult{}, err
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, cancelMarkerName), []byte("canceled\n"), 0o644); err != nil {
+		return QueueCancelResult{}, err
+	}
+	result.Active = true
+
+	return result, nil
 }
 
 func (s QueueStore) removeLocked(entry QueueEntry) error {

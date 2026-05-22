@@ -23,6 +23,9 @@ const taskResponse = computed(() => store.taskResponseFor(parsed.value.apiPath))
 const task = computed(() => taskResponse.value?.task)
 const taskError = computed(() => store.taskErrorFor(parsed.value.apiPath))
 const taskName = computed(() => task.value?.name ?? parsed.value.taskName ?? 'Task')
+const canCancel = computed(
+  () => task.value?.status === 'running' || task.value?.status === 'queued',
+)
 const title = computed(() => {
   const commitLabel = parsed.value.commit ? parsed.value.commit.slice(0, 12) : ''
   return commitLabel ? `${taskName.value} ${commitLabel}` : taskName.value
@@ -44,6 +47,11 @@ async function retry(): Promise<void> {
   )
   if (!result?.url) return
   if (route.path !== result.url) await router.push(result.url)
+}
+
+async function cancel(): Promise<void> {
+  if (!parsed.value.commit || !parsed.value.taskName || !canCancel.value) return
+  await store.cancelTask(parsed.value.repoPath, parsed.value.commit, parsed.value.taskName)
 }
 
 onMounted(subscribe)
@@ -92,7 +100,18 @@ onUnmounted(() => store.unsubscribeTask())
           <div class="panel">
             <div class="panel-header">
               <h2 class="panel-title">Attempts</h2>
-              <PButton label="Retry" size="small" icon="pi pi-refresh" @click="retry" />
+              <div class="panel-actions">
+                <PButton
+                  label="Cancel"
+                  size="small"
+                  severity="danger"
+                  outlined
+                  icon="pi pi-stop-circle"
+                  :disabled="!canCancel"
+                  @click="cancel"
+                />
+                <PButton label="Retry" size="small" icon="pi pi-refresh" @click="retry" />
+              </div>
             </div>
             <ul class="attempt-list">
               <li v-for="attempt in task.attempts" :key="attempt.attempt">

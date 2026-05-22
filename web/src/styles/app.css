@@ -231,6 +231,14 @@ pre {
   padding: 1rem 1.1rem;
 }
 
+.panel-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .panel-title {
   margin: 0;
   color: var(--color-text-heading);

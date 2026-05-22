@@ -351,7 +351,7 @@ func PrimaryArtifact(task TaskStatusView) (ArtifactView, bool) {
 }
 
 func shouldHideArtifact(displayName string) bool {
-	return strings.EqualFold(displayName, "task.json")
+	return strings.EqualFold(displayName, "task.json") || strings.EqualFold(displayName, cancelMarkerName)
 }
 
 func LoadPrimaryLog(task TaskStatusView) (string, string) {

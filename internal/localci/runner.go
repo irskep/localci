@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	combinedLogName = "combined.log"
-	taskPrefix      = "localci:"
+	combinedLogName  = "combined.log"
+	cancelMarkerName = ".localci-cancel"
+	taskPrefix       = "localci:"
 )
 
 type Runner struct {
@@ -204,6 +205,7 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task, reser
 	record.FinishedAt = r.now()
 	record.DurationMilliseconds = durationMilliseconds(record.StartedAt, record.FinishedAt)
 	var timeoutErr taskTimedOutError
+	var canceledErr taskCanceledError
 	var exitErr taskExitError
 
 	switch {
@@ -213,6 +215,10 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task, reser
 		record.Status = TaskStatusTimedOut
 		record.Failure = "timed-out"
 		record.Message = timeoutErr.Error()
+	case errors.As(runErr, &canceledErr):
+		record.Status = TaskStatusFailed
+		record.Failure = "canceled"
+		record.Message = canceledErr.Error()
 	case errors.As(runErr, &exitErr):
 		record.Status = TaskStatusFailed
 		record.Failure = "exit"
@@ -285,6 +291,14 @@ func (r Runner) watchTask(ctx context.Context, cmd *exec.Cmd, outputDir string, 
 			<-waitResult
 			return ctx.Err()
 		case <-pollTicker.C:
+			canceled, err := taskCancelRequested(outputDir)
+			if err != nil {
+				return fmt.Errorf("check cancellation marker: %w", err)
+			}
+			if canceled {
+				return r.stopCanceledTask(cmd, waitResult)
+			}
+
 			latest, err := latestOutputActivity(outputDir)
 			if err != nil {
 				return fmt.Errorf("scan output activity: %w", err)
@@ -323,6 +337,41 @@ func (r Runner) stopTimedOutTask(cmd *exec.Cmd, waitResult <-chan error, timeout
 	case <-waitResult:
 		return taskTimedOutError{After: timeout}
 	}
+}
+
+func (r Runner) stopCanceledTask(cmd *exec.Cmd, waitResult <-chan error) error {
+	if cmd.Process == nil {
+		return taskCanceledError{}
+	}
+
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return fmt.Errorf("terminate canceled task: %w", err)
+	}
+
+	timer := time.NewTimer(r.terminateGrace())
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			return fmt.Errorf("kill canceled task: %w", err)
+		}
+		<-waitResult
+		return taskCanceledError{}
+	case <-waitResult:
+		return taskCanceledError{}
+	}
+}
+
+func taskCancelRequested(outputDir string) (bool, error) {
+	_, err := os.Stat(filepath.Join(outputDir, cancelMarkerName))
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return false, err
 }
 
 func latestOutputActivity(dir string) (time.Time, error) {
@@ -449,6 +498,16 @@ func (e taskTimedOutError) Error() string {
 
 func (e taskTimedOutError) Is(target error) bool {
 	return target == errTaskTimedOut
+}
+
+type taskCanceledError struct{}
+
+func (e taskCanceledError) Error() string {
+	return "task canceled"
+}
+
+func (e taskCanceledError) Is(target error) bool {
+	return target == errTaskFailed
 }
 
 func durationMilliseconds(startedAt time.Time, finishedAt time.Time) int64 {

@@ -101,6 +101,15 @@ type apiRetryResponse struct {
 	Enqueued bool           `json:"enqueued"`
 }
 
+type apiCancelResponse struct {
+	Repo     apiRepoSummary `json:"repo"`
+	Commit   string         `json:"commit"`
+	Task     string         `json:"task"`
+	Active   bool           `json:"active"`
+	Pending  int            `json:"pending"`
+	Canceled bool           `json:"canceled"`
+}
+
 func (s WebServer) handleAPI(w http.ResponseWriter, r *http.Request) {
 	escapedPath := requestEscapedPath(r)
 	segments, err := splitEscapedPath(escapedPath)
@@ -286,6 +295,13 @@ func (s WebServer) handleAPIRepoRoutes(w http.ResponseWriter, r *http.Request, s
 	}
 
 	switch tail[4] {
+	case "cancel":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, http.MethodPost)
+			return
+		}
+		s.handleAPICancel(w, repoDir, commit, taskName)
+		return
 	case "retry":
 		if r.Method != http.MethodPost {
 			methodNotAllowed(w, http.MethodPost)
@@ -543,6 +559,46 @@ func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit 
 		Attempt:  entry.Attempt,
 		URL:      route,
 		Enqueued: enqueued,
+	})
+}
+
+func (s WebServer) handleAPICancel(w http.ResponseWriter, repoDir string, commit string, taskName string) {
+	view, err := s.buildStatusView(repoDir, commit)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err)
+		return
+	}
+	task, ok := findTaskStatus(view.Tasks, taskName)
+	if !ok {
+		writeAPIError(w, http.StatusNotFound, fmt.Errorf("task not found"))
+		return
+	}
+
+	result, err := s.Queue.Cancel(repoDir, commit, taskName)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if s.Events != nil {
+		if result.Active || result.Pending > 0 {
+			s.Events.EntryChanged(QueueEntry{
+				RepoDir:  repoDir,
+				RepoID:   normalizeRepoDir(repoDir),
+				Commit:   commit,
+				TaskName: taskName,
+				TaskKey:  sanitizeTaskName(taskName),
+				Attempt:  task.Attempt,
+			})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, apiCancelResponse{
+		Repo:     s.apiRepoSummary(repoDir),
+		Commit:   commit,
+		Task:     taskName,
+		Active:   result.Active,
+		Pending:  result.Pending,
+		Canceled: result.Active || result.Pending > 0,
 	})
 }
 

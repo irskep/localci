@@ -390,6 +390,30 @@ func TestWebServerAPI(t *testing.T) {
 	if retryResp.URL != "/repo/team/repo/commit/abc123/task/localci:test/attempt/3" {
 		t.Fatalf("retry URL = %q, want attempt route", retryResp.URL)
 	}
+
+	reqCancel, err := http.NewRequest(http.MethodPost, baseURL+"/api/repo/team/repo/commit/"+commit+"/task/"+taskPath+"/cancel", nil)
+	if err != nil {
+		t.Fatalf("NewRequest cancel returned error: %v", err)
+	}
+	resp, err = http.DefaultClient.Do(reqCancel)
+	if err != nil {
+		t.Fatalf("POST cancel returned error: %v", err)
+	}
+	var cancelResp apiCancelResponse
+	if err := json.NewDecoder(resp.Body).Decode(&cancelResp); err != nil {
+		t.Fatalf("Decode cancel returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if cancelResp.Active || cancelResp.Pending != 1 || !cancelResp.Canceled {
+		t.Fatalf("cancel response = %#v, want pending cancellation", cancelResp)
+	}
+	entries, err := queue.List()
+	if err != nil {
+		t.Fatalf("List after cancel returned error: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("queue after cancel = %#v, want empty", entries)
+	}
 }
 
 func TestWebServerHomeAndRepoPages(t *testing.T) {

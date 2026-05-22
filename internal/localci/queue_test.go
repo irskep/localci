@@ -1,6 +1,8 @@
 package localci
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -175,5 +177,59 @@ func TestQueueStoreClaimNextMarksActiveAndRemovesPendingAtomically(t *testing.T)
 	}
 	if claimedAgain.TaskName != entry.TaskName {
 		t.Fatalf("claimed active = %#v, want active task", claimedAgain)
+	}
+}
+
+func TestQueueStoreCancelRemovesPendingAndMarksActive(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := Paths{Root: root}
+	store := QueueStore{
+		Paths: paths,
+		Now: func() time.Time {
+			return time.Date(2026, 5, 21, 13, 0, 0, 0, time.UTC)
+		},
+	}
+
+	pending, err := store.Enqueue("/repo", "abc123", "localci:test")
+	if err != nil {
+		t.Fatalf("Enqueue pending returned error: %v", err)
+	}
+	other, err := store.Enqueue("/repo", "abc123", "localci:build")
+	if err != nil {
+		t.Fatalf("Enqueue other returned error: %v", err)
+	}
+	activeEntry := QueueEntry{
+		RepoDir:  "/repo",
+		RepoID:   normalizeRepoDir("/repo"),
+		Commit:   "abc123",
+		TaskName: "localci:test",
+		TaskKey:  sanitizeTaskName("localci:test"),
+		Attempt:  pending.Attempt + 1,
+	}
+	if _, err := store.MarkActive(activeEntry); err != nil {
+		t.Fatalf("MarkActive returned error: %v", err)
+	}
+
+	result, err := store.Cancel("/repo", "abc123", "localci:test")
+	if err != nil {
+		t.Fatalf("Cancel returned error: %v", err)
+	}
+	if !result.Active || result.Pending != 1 {
+		t.Fatalf("Cancel result = %#v, want active=true pending=1", result)
+	}
+
+	entries, err := store.List()
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(entries) != 1 || entries[0].TaskName != other.TaskName {
+		t.Fatalf("queue entries after cancel = %#v, want only other task", entries)
+	}
+
+	markerPath := filepath.Join(paths.TaskAttemptDir("/repo", "abc123", "localci:test", activeEntry.Attempt), cancelMarkerName)
+	if _, err := os.Stat(markerPath); err != nil {
+		t.Fatalf("cancel marker missing at %s: %v", markerPath, err)
 	}
 }

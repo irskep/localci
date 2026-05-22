@@ -5,6 +5,7 @@ import type {
   APIEvent,
   ArtifactListResponse,
   ArtifactResponse,
+  CancelResponse,
   CommitResponse,
   HomeResponse,
   QueueResponse,
@@ -17,6 +18,7 @@ import {
   parseAPIEvent,
   parseArtifactListResponse,
   parseArtifactResponse,
+  parseCancelResponse,
   parseCommitResponse,
   parseHomeResponse,
   parseQueueResponse,
@@ -386,6 +388,15 @@ export const useLocalciStore = defineStore('localci', () => {
     return await load(() => postJSON(retryPath, parseRetryResponse))
   }
 
+  async function cancelTask(
+    repoPath: string,
+    commit: string,
+    taskName: string,
+  ): Promise<CancelResponse | null> {
+    const cancelPath = `/api${taskURL(repoPath, commit, taskName)}/cancel`
+    return await load(() => postJSON(cancelPath, parseCancelResponse))
+  }
+
   return {
     activeEntry,
     artifactList,
@@ -395,6 +406,7 @@ export const useLocalciStore = defineStore('localci', () => {
     currentTask,
     error,
     artifactLoaded,
+    cancelTask,
     commitLoaded,
     home,
     homeLoaded,
