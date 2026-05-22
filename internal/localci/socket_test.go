@@ -86,6 +86,14 @@ func TestDaemonServerPingQueueActiveAndShutdown(t *testing.T) {
 		t.Fatalf("unexpected active task: %#v", readActive)
 	}
 
+	cancelResult, err := client.Cancel(context.Background(), "/repo", "abc123", "localci:test")
+	if err != nil {
+		t.Fatalf("Cancel returned error: %v", err)
+	}
+	if !cancelResult.Active || cancelResult.Pending != 1 {
+		t.Fatalf("Cancel result = %#v, want active=true pending=1", cancelResult)
+	}
+
 	if err := client.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown returned error: %v", err)
 	}
@@ -110,6 +118,7 @@ func TestDaemonServerPostcommitEnqueuesNonActiveTasks(t *testing.T) {
 	}
 
 	activeEntry := QueueEntry{
+		Kind:       QueueEntryKindTask,
 		RepoDir:    "/repo",
 		RepoID:     normalizeRepoDir("/repo"),
 		Commit:     "abc123",

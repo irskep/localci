@@ -180,6 +180,9 @@ func (m DaemonManager) Run(ctx context.Context) error {
 	if err := m.recoverInterruptedWork(); err != nil {
 		return err
 	}
+	if err := (CloneManager{Paths: m.Paths, Now: m.Now}).CleanupUnreferenced(m.Scheduler.Queue); err != nil {
+		return err
+	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -482,7 +485,13 @@ func (m DaemonManager) recoverInterruptedWork() error {
 	}
 	defer func() {
 		_ = m.Scheduler.Queue.ClearActive()
+		_ = (CloneManager{Paths: m.Paths, Now: m.Now}).Cleanup(active.RepoDir, active.Commit)
 	}()
+
+	if active.Kind == QueueEntryKindRun {
+		_, err := m.Scheduler.Queue.EnqueueRun(active.RepoDir, active.Commit, active.RequestedTasks)
+		return err
+	}
 
 	shouldRetry, err := recoverActiveTaskRecord(m.Paths, active, m.now())
 	if err != nil {
@@ -492,7 +501,7 @@ func (m DaemonManager) recoverInterruptedWork() error {
 		return nil
 	}
 
-	_, err = m.Scheduler.Queue.Enqueue(active.RepoDir, active.Commit, active.TaskName)
+	_, err = m.Scheduler.Queue.EnqueueRun(active.RepoDir, active.Commit, []string{active.TaskName})
 	return err
 }
 

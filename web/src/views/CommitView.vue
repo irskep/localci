@@ -6,10 +6,12 @@ import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import TaskSummaryLinks from '@/components/TaskSummaryLinks.vue'
 import {
   annotationEntries,
+  displayStatusSeverity,
+  displayTaskFailure,
+  displayTaskStatus,
   formatAnnotations,
   formatDuration,
   shortCommit,
-  statusSeverity,
   summarizeCommit,
 } from '@/lib/api'
 import { parseRepoRoute, repoPathURL, taskURL } from '@/lib/routes'
@@ -104,7 +106,7 @@ onUnmounted(() => store.unsubscribePage())
           </PColumn>
           <PColumn header="Status">
             <template #body="{ data }">
-              <PTag :severity="statusSeverity(data.status)" :value="data.status" />
+              <PTag :severity="displayStatusSeverity(data)" :value="displayTaskStatus(data)" />
             </template>
           </PColumn>
           <PColumn header="Attempt">
@@ -123,7 +125,7 @@ onUnmounted(() => store.unsubscribePage())
           </PColumn>
           <PColumn header="Failure">
             <template #body="{ data }">
-              <span class="muted">{{ data.failure }}</span>
+              <span class="muted">{{ displayTaskFailure(data) }}</span>
             </template>
           </PColumn>
         </PDataTable>

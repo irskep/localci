@@ -537,7 +537,7 @@ func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit 
 		enqueued = false
 	} else {
 		var enqueueErr error
-		entry, enqueueErr = s.Queue.Enqueue(repoDir, commit, taskName)
+		entry, enqueueErr = s.Queue.EnqueueRun(repoDir, commit, []string{taskName})
 		if enqueueErr != nil {
 			writeAPIError(w, http.StatusInternalServerError, enqueueErr)
 			return
@@ -547,7 +547,12 @@ func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit 
 		}
 	}
 
-	route, err := AttemptRoutePath(s.configuredRepoRoot(), repoDir, commit, taskName, entry.Attempt)
+	attempt, err := s.Queue.NextAttempt(repoDir, commit, taskName)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	route, err := AttemptRoutePath(s.configuredRepoRoot(), repoDir, commit, taskName, attempt)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
@@ -556,7 +561,7 @@ func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit 
 		Repo:     s.apiRepoSummary(repoDir),
 		Commit:   commit,
 		Task:     taskName,
-		Attempt:  entry.Attempt,
+		Attempt:  attempt,
 		URL:      route,
 		Enqueued: enqueued,
 	})
@@ -582,6 +587,7 @@ func (s WebServer) handleAPICancel(w http.ResponseWriter, repoDir string, commit
 	if s.Events != nil {
 		if result.Active || result.Pending > 0 {
 			s.Events.EntryChanged(QueueEntry{
+				Kind:     QueueEntryKindTask,
 				RepoDir:  repoDir,
 				RepoID:   normalizeRepoDir(repoDir),
 				Commit:   commit,
@@ -656,11 +662,6 @@ func (s WebServer) buildHomeCommitSummaries(repos []RepoHistory) ([]apiCommitSum
 }
 
 func (s WebServer) buildRepoCommitSummaries(repoDir string, commits []RunRecord) ([]apiCommitSummary, error) {
-	tasks, err := s.discoverTasks(repoDir)
-	if err != nil {
-		return nil, err
-	}
-
 	queue, err := s.Queue.List()
 	if err != nil {
 		return nil, err
@@ -677,7 +678,7 @@ func (s WebServer) buildRepoCommitSummaries(repoDir string, commits []RunRecord)
 
 	views := make([]apiCommitSummary, 0, len(commits))
 	for _, commit := range commits {
-		views = append(views, s.buildCommitSummary(repoDir, commit, tasks, queue, activePtr))
+		views = append(views, s.buildCommitSummary(repoDir, commit, commit.DiscoveredTasks, queue, activePtr))
 	}
 	return views, nil
 }

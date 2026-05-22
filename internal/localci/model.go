@@ -33,15 +33,16 @@ type InvokeRequest struct {
 }
 
 type RunRecord struct {
-	RepoDir     string            `json:"repo_dir"`
-	RepoID      string            `json:"repo_id"`
-	Commit      string            `json:"commit"`
-	Annotations map[string]string `json:"annotations,omitempty"`
-	Status      RunStatus         `json:"status"`
-	StartedAt   time.Time         `json:"started_at"`
-	FinishedAt  time.Time         `json:"finished_at,omitempty"`
-	Summary     RunSummary        `json:"summary"`
-	TaskResults []TaskRecord      `json:"task_results"`
+	RepoDir         string            `json:"repo_dir"`
+	RepoID          string            `json:"repo_id"`
+	Commit          string            `json:"commit"`
+	Annotations     map[string]string `json:"annotations,omitempty"`
+	Status          RunStatus         `json:"status"`
+	StartedAt       time.Time         `json:"started_at"`
+	FinishedAt      time.Time         `json:"finished_at,omitempty"`
+	Summary         RunSummary        `json:"summary"`
+	DiscoveredTasks []Task            `json:"discovered_tasks,omitempty"`
+	TaskResults     []TaskRecord      `json:"task_results"`
 }
 
 func (r RunRecord) Success() bool {

@@ -68,6 +68,9 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 	}
 	if err == nil {
 		view.Annotations = cloneAnnotations(commitStatus.Run.Annotations)
+		if len(discovered) == 0 {
+			discovered = append([]Task{}, commitStatus.Run.DiscoveredTasks...)
+		}
 	}
 
 	taskRecords := map[string]TaskRecord{}

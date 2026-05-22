@@ -396,11 +396,27 @@ function asBoolean(value: unknown, name: string): boolean {
   return value
 }
 
-export function summarizeCommit(commit: { tasks: Array<{ status: string }> }): string {
+export type TaskStatusLike = {
+  status: string
+  failure?: string
+}
+
+export function displayTaskStatus(task: TaskStatusLike): string {
+  if (task.status === 'failed' && task.failure === 'canceled') return 'canceled'
+  return task.status
+}
+
+export function displayTaskFailure(task: TaskStatusLike): string {
+  if (displayTaskStatus(task) === 'canceled') return ''
+  return task.failure ?? ''
+}
+
+export function summarizeCommit(commit: { tasks: TaskStatusLike[] }): string {
   const total = commit.tasks.length
   const failed = commit.tasks.filter(
-    (task) => task.status === 'failed' || task.status === 'timed-out',
+    (task) => displayTaskStatus(task) === 'failed' || displayTaskStatus(task) === 'timed-out',
   ).length
+  const canceled = commit.tasks.filter((task) => displayTaskStatus(task) === 'canceled').length
   const running = commit.tasks.filter((task) => task.status === 'running').length
   const queued = commit.tasks.filter((task) => task.status === 'queued').length
   const notRun = commit.tasks.filter((task) => task.status === 'not-run').length
@@ -408,6 +424,7 @@ export function summarizeCommit(commit: { tasks: Array<{ status: string }> }): s
 
   const parts: string[] = []
   if (failed > 0) parts.push(`${failed} failed`)
+  if (canceled > 0) parts.push(`${canceled} canceled`)
   if (running > 0) parts.push(`${running} running`)
   if (queued > 0) parts.push(`${queued} queued`)
   if (notRun > 0) parts.push(`${notRun} not run`)
@@ -431,6 +448,12 @@ export function statusSeverity(
     default:
       return 'secondary'
   }
+}
+
+export function displayStatusSeverity(
+  task: TaskStatusLike,
+): 'success' | 'info' | 'warn' | 'danger' | 'secondary' {
+  return statusSeverity(displayTaskStatus(task))
 }
 
 export function formatDuration(durationMs: number): string {

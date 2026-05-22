@@ -14,8 +14,8 @@ func (p Paths) ActiveRoot() string {
 	return filepath.Join(p.Root, "active")
 }
 
-func (p Paths) QueueEntryPath(repoDir string, commit string, task string, enqueuedAt time.Time) string {
-	filename := fmt.Sprintf("%020d-%s-%s.json", enqueuedAt.UTC().UnixNano(), normalizeRepoDir(repoDir), sanitizeTaskName(task))
+func (p Paths) QueueEntryPath(entry QueueEntry, enqueuedAt time.Time) string {
+	filename := fmt.Sprintf("%020d-%s-%s-%s.json", enqueuedAt.UTC().UnixNano(), normalizeRepoDir(entry.RepoDir), entry.Kind, sanitizeTaskName(entry.TaskKey))
 	return filepath.Join(p.QueueRoot(), filename)
 }
 

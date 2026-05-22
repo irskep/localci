@@ -278,7 +278,8 @@ func (s WebServer) handleRetry(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, ok := findTaskStatus(view.Tasks, taskName); !ok {
+	task, ok := findTaskStatus(view.Tasks, taskName)
+	if !ok {
 		http.Error(w, "task not found", http.StatusNotFound)
 		return
 	}
@@ -289,11 +290,18 @@ func (s WebServer) handleRetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var entry QueueEntry
+	attempt := task.Attempt
 	if err == nil && active.RepoDir == repoDir && active.Commit == commit && active.TaskName == taskName {
 		entry = active.QueueEntry
+		attempt = entry.Attempt
 	} else {
 		var enqueueErr error
-		entry, enqueueErr = s.Queue.Enqueue(repoDir, commit, taskName)
+		attempt, enqueueErr = s.Queue.NextAttempt(repoDir, commit, taskName)
+		if enqueueErr != nil {
+			http.Error(w, enqueueErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		entry, enqueueErr = s.Queue.EnqueueRun(repoDir, commit, []string{taskName})
 		if enqueueErr != nil {
 			http.Error(w, enqueueErr.Error(), http.StatusInternalServerError)
 			return
@@ -303,18 +311,13 @@ func (s WebServer) handleRetry(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	http.Redirect(w, r, taskAttemptPageURL(repoDir, commit, taskName, entry.Attempt), http.StatusSeeOther)
+	http.Redirect(w, r, taskAttemptPageURL(repoDir, commit, taskName, attempt), http.StatusSeeOther)
 }
 
 func (s WebServer) buildStatusView(repoDir string, commit string) (CommitStatusView, error) {
 	if repoDir == "" || commit == "" {
 		return CommitStatusView{}, fmt.Errorf("repo and commit are required")
 	}
-	tasks, err := s.discoverTasks(repoDir)
-	if err != nil {
-		return CommitStatusView{}, err
-	}
-
 	queue, err := s.Queue.List()
 	if err != nil {
 		return CommitStatusView{}, err
@@ -330,7 +333,7 @@ func (s WebServer) buildStatusView(repoDir string, commit string) (CommitStatusV
 		activePtr = &active
 	}
 
-	return BuildCommitStatusView(s.Paths, repoDir, commit, tasks, queue, activePtr)
+	return BuildCommitStatusView(s.Paths, repoDir, commit, nil, queue, activePtr)
 }
 
 var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html>

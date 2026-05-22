@@ -14,14 +14,23 @@ type QueueStore struct {
 	Now   func() time.Time
 }
 
+type QueueEntryKind string
+
+const (
+	QueueEntryKindRun  QueueEntryKind = "run"
+	QueueEntryKindTask QueueEntryKind = "task"
+)
+
 type QueueEntry struct {
-	RepoDir    string    `json:"repo_dir"`
-	RepoID     string    `json:"repo_id"`
-	Commit     string    `json:"commit"`
-	TaskName   string    `json:"task_name"`
-	TaskKey    string    `json:"task_key"`
-	Attempt    int       `json:"attempt"`
-	EnqueuedAt time.Time `json:"enqueued_at"`
+	Kind           QueueEntryKind `json:"kind"`
+	RepoDir        string         `json:"repo_dir"`
+	RepoID         string         `json:"repo_id"`
+	Commit         string         `json:"commit"`
+	TaskName       string         `json:"task_name,omitempty"`
+	TaskKey        string         `json:"task_key,omitempty"`
+	RequestedTasks []string       `json:"requested_tasks,omitempty"`
+	Attempt        int            `json:"attempt,omitempty"`
+	EnqueuedAt     time.Time      `json:"enqueued_at"`
 }
 
 type ActiveTask struct {
@@ -34,22 +43,60 @@ type QueueCancelResult struct {
 	Pending int
 }
 
+type QueueClaimState string
+
+const (
+	QueueClaimNone    QueueClaimState = "none"
+	QueueClaimActive  QueueClaimState = "active"
+	QueueClaimClaimed QueueClaimState = "claimed"
+)
+
 var queueMutationMu sync.Mutex
 
 func (s QueueStore) Enqueue(repoDir string, commit string, taskName string) (QueueEntry, error) {
 	queueMutationMu.Lock()
 	defer queueMutationMu.Unlock()
 
-	return s.enqueueLocked(repoDir, commit, taskName)
+	return s.enqueueTaskLocked(repoDir, commit, taskName)
 }
 
-func (s QueueStore) enqueueLocked(repoDir string, commit string, taskName string) (QueueEntry, error) {
+func (s QueueStore) EnqueueRun(repoDir string, commit string, requestedTasks []string) (QueueEntry, error) {
+	queueMutationMu.Lock()
+	defer queueMutationMu.Unlock()
+
+	return s.enqueueRunLocked(repoDir, commit, requestedTasks)
+}
+
+func (s QueueStore) enqueueRunLocked(repoDir string, commit string, requestedTasks []string) (QueueEntry, error) {
+	enqueuedAt := s.now()
+	entry := QueueEntry{
+		Kind:           QueueEntryKindRun,
+		RepoDir:        repoDir,
+		RepoID:         normalizeRepoDir(repoDir),
+		Commit:         commit,
+		TaskKey:        "run",
+		RequestedTasks: append([]string{}, requestedTasks...),
+		EnqueuedAt:     enqueuedAt,
+	}
+
+	if err := os.MkdirAll(s.Paths.QueueRoot(), 0o755); err != nil {
+		return QueueEntry{}, err
+	}
+	if err := writeJSONFile(s.Paths.QueueEntryPath(entry, enqueuedAt), entry); err != nil {
+		return QueueEntry{}, err
+	}
+
+	return entry, nil
+}
+
+func (s QueueStore) enqueueTaskLocked(repoDir string, commit string, taskName string) (QueueEntry, error) {
 	enqueuedAt := s.now()
 	attempt, err := s.nextAttemptLocked(repoDir, commit, taskName)
 	if err != nil {
 		return QueueEntry{}, err
 	}
 	entry := QueueEntry{
+		Kind:       QueueEntryKindTask,
 		RepoDir:    repoDir,
 		RepoID:     normalizeRepoDir(repoDir),
 		Commit:     commit,
@@ -62,7 +109,7 @@ func (s QueueStore) enqueueLocked(repoDir string, commit string, taskName string
 	if err := os.MkdirAll(s.Paths.QueueRoot(), 0o755); err != nil {
 		return QueueEntry{}, err
 	}
-	if err := writeJSONFile(s.Paths.QueueEntryPath(repoDir, commit, taskName, enqueuedAt), entry); err != nil {
+	if err := writeJSONFile(s.Paths.QueueEntryPath(entry, enqueuedAt), entry); err != nil {
 		return QueueEntry{}, err
 	}
 
@@ -87,6 +134,9 @@ func (s QueueStore) nextAttemptLocked(repoDir string, commit string, taskName st
 		return 0, err
 	}
 	for _, entry := range entries {
+		if entry.Kind != QueueEntryKindTask {
+			continue
+		}
 		if entry.RepoDir == repoDir && entry.Commit == commit && entry.TaskName == taskName && entry.Attempt >= attempt {
 			attempt = entry.Attempt + 1
 		}
@@ -154,7 +204,7 @@ func (s QueueStore) MarkActive(entry QueueEntry) (ActiveTask, error) {
 }
 
 func (s QueueStore) markActiveLocked(entry QueueEntry) (ActiveTask, error) {
-	if entry.Attempt <= 0 {
+	if entry.Kind == QueueEntryKindTask && entry.Attempt <= 0 {
 		attempt, err := s.nextAttemptLocked(entry.RepoDir, entry.Commit, entry.TaskName)
 		if err != nil {
 			return ActiveTask{}, err
@@ -239,6 +289,9 @@ func (s QueueStore) Cancel(repoDir string, commit string, taskName string) (Queu
 		return QueueCancelResult{}, err
 	}
 	for _, entry := range entries {
+		if entry.Kind != QueueEntryKindTask {
+			continue
+		}
 		if entry.RepoDir != repoDir || entry.Commit != commit || entry.TaskName != taskName {
 			continue
 		}
@@ -272,7 +325,7 @@ func (s QueueStore) Cancel(repoDir string, commit string, taskName string) (Queu
 }
 
 func (s QueueStore) removeLocked(entry QueueEntry) error {
-	path := s.Paths.QueueEntryPath(entry.RepoDir, entry.Commit, entry.TaskName, entry.EnqueuedAt)
+	path := s.Paths.QueueEntryPath(entry, entry.EnqueuedAt)
 	err := os.Remove(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -280,35 +333,59 @@ func (s QueueStore) removeLocked(entry QueueEntry) error {
 	return nil
 }
 
-func (s QueueStore) ClaimNext() (QueueEntry, bool, error) {
+func (s QueueStore) LiveRefs() (map[string]bool, error) {
+	queueMutationMu.Lock()
+	defer queueMutationMu.Unlock()
+
+	refs := map[string]bool{}
+	entries, err := s.listLocked()
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		refs[queueRefKey(entry.RepoDir, entry.Commit)] = true
+	}
+
+	active, err := s.readActiveLocked()
+	if err != nil {
+		if errors.Is(err, ErrRecordNotFound) {
+			return refs, nil
+		}
+		return nil, err
+	}
+	refs[queueRefKey(active.RepoDir, active.Commit)] = true
+	return refs, nil
+}
+
+func (s QueueStore) ClaimNext() (QueueEntry, QueueClaimState, error) {
 	queueMutationMu.Lock()
 	defer queueMutationMu.Unlock()
 
 	active, err := s.readActiveLocked()
 	if err == nil {
-		return active.QueueEntry, false, nil
+		return active.QueueEntry, QueueClaimActive, nil
 	}
 	if err != nil && !errors.Is(err, ErrRecordNotFound) {
-		return QueueEntry{}, false, err
+		return QueueEntry{}, QueueClaimNone, err
 	}
 
 	entries, err := s.listLocked()
 	if err != nil {
-		return QueueEntry{}, false, err
+		return QueueEntry{}, QueueClaimNone, err
 	}
 	if len(entries) == 0 {
-		return QueueEntry{}, false, nil
+		return QueueEntry{}, QueueClaimNone, nil
 	}
 
 	entry := entries[0]
 	if _, err := s.markActiveLocked(entry); err != nil {
-		return QueueEntry{}, false, err
+		return QueueEntry{}, QueueClaimNone, err
 	}
 	if err := s.removeLocked(entry); err != nil {
 		_ = s.clearActiveLocked()
-		return QueueEntry{}, false, err
+		return QueueEntry{}, QueueClaimNone, err
 	}
-	return entry, true, nil
+	return entry, QueueClaimClaimed, nil
 }
 
 func (s QueueStore) readQueueEntry(path string) (QueueEntry, error) {
@@ -324,4 +401,8 @@ func (s QueueStore) now() time.Time {
 		return s.Now()
 	}
 	return time.Now().UTC()
+}
+
+func queueRefKey(repoDir string, commit string) string {
+	return normalizeRepoDir(repoDir) + ":" + commit
 }

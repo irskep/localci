@@ -39,6 +39,8 @@ type miseTask struct {
 	Name string `json:"name"`
 }
 
+const setupTaskName = "localci:setup"
+
 func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error) {
 	if strings.TrimSpace(req.RepoDir) == "" {
 		return RunRecord{}, fmt.Errorf("repo dir must not be empty")
@@ -51,21 +53,56 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 		return RunRecord{}, fmt.Errorf("create commit root: %w", err)
 	}
 
-	tasks, err := r.DiscoverTasks(ctx, req.RepoDir)
+	clones := CloneManager{Paths: r.Paths, Now: r.Now}
+	info, err := clones.Prepare(ctx, req.RepoDir, req.Commit)
+	if err != nil {
+		_, run, recordErr := recordSetupFailure(r.Paths, req, err, r.now())
+		if recordErr != nil {
+			return RunRecord{}, recordErr
+		}
+		return run, nil
+	}
+	defer func() {
+		_ = clones.Cleanup(req.RepoDir, req.Commit)
+	}()
+
+	if err := r.Trust(ctx, info.Worktree); err != nil {
+		_, run, recordErr := recordSetupFailure(r.Paths, req, err, r.now())
+		if recordErr != nil {
+			return RunRecord{}, recordErr
+		}
+		return run, nil
+	}
+
+	tasks, err := r.DiscoverTasks(ctx, info.Worktree)
+	if err != nil {
+		_, run, recordErr := recordSetupFailure(r.Paths, req, err, r.now())
+		if recordErr != nil {
+			return RunRecord{}, recordErr
+		}
+		return run, nil
+	}
+
+	now := r.now()
+	record, err := ensureRunRecordWithTasks(r.Paths, req, tasks, now)
 	if err != nil {
 		return RunRecord{}, err
 	}
 
-	now := r.now()
-	record := newRunRecord(req, now)
-	record.TaskResults = make([]TaskRecord, 0, len(tasks))
-
-	if err := writeRunRecord(r.Paths, req, record); err != nil {
-		return RunRecord{}, err
+	setup, userTasks, hasSetup := splitSetupTask(tasks)
+	if hasSetup {
+		taskRecord, runErr := r.runTask(ctx, req, info.Worktree, setup, 0)
+		record, err = upsertTaskRecord(r.Paths, req, taskRecord, r.now())
+		if err != nil {
+			return RunRecord{}, err
+		}
+		if runErr != nil {
+			return record, nil
+		}
 	}
 
-	for _, task := range tasks {
-		taskRecord, runErr := r.runTask(ctx, req, task, 0)
+	for _, task := range userTasks {
+		taskRecord, runErr := r.runTask(ctx, req, info.Worktree, task, 0)
 		record.TaskResults = append(record.TaskResults, taskRecord)
 		record.FinishedAt = r.now()
 		record.RefreshSummary()
@@ -120,12 +157,23 @@ func (r Runner) DiscoverTasks(ctx context.Context, repoDir string) ([]Task, erro
 	return tasks, nil
 }
 
+func (r Runner) Trust(ctx context.Context, workDir string) error {
+	cmd := exec.CommandContext(ctx, r.miseBin(), "trust")
+	cmd.Dir = workDir
+	cmd.Env = r.env()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("mise trust: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
 var (
 	errTaskFailed   = errors.New("task failed")
 	errTaskTimedOut = errors.New("task timed out")
 )
 
-func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task, reservedAttempt int) (TaskRecord, error) {
+func (r Runner) runTask(ctx context.Context, req InvokeRequest, workDir string, task Task, reservedAttempt int) (TaskRecord, error) {
 	startedAt := r.now()
 	attempt := reservedAttempt
 	if attempt <= 0 {
@@ -153,6 +201,7 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task, reser
 		return TaskRecord{}, err
 	}
 	entry := QueueEntry{
+		Kind:     QueueEntryKindTask,
 		RepoDir:  req.RepoDir,
 		RepoID:   normalizeRepoDir(req.RepoDir),
 		Commit:   req.Commit,
@@ -165,7 +214,7 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task, reser
 	}
 
 	cmd := exec.CommandContext(ctx, r.miseBin(), "run", task.Name)
-	cmd.Dir = req.RepoDir
+	cmd.Dir = workDir
 	cmd.Env = append(r.env(),
 		"LOCALCI_TASK_OUTPUT_DIR="+record.OutputDir,
 		"LOCALCI_TASK_CACHE_DIR="+record.TaskCacheDir,

@@ -15,3 +15,5 @@
 - Use `mise run daemon-restart` when changing the web UI; it builds `web/dist` and restarts the daemon with `LOCALCI_WEB_DIR`.
 - Use `mise run web` to rebuild the web UI, restart the daemon, and open the current repo page.
 - Use `mise run check` for the basic local build/test check.
+
+This project has no users. Migrations are irrelevant. Make sweeping changes with no guilt.

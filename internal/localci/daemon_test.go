@@ -243,7 +243,7 @@ func TestDaemonManagerRecoverInterruptedWorkRequeuesRunningTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
-	if len(entries) != 1 || entries[0].TaskName != task.Name {
+	if len(entries) != 1 || entries[0].Kind != QueueEntryKindRun || len(entries[0].RequestedTasks) != 1 || entries[0].RequestedTasks[0] != task.Name {
 		t.Fatalf("unexpected queue after recovery: %#v", entries)
 	}
 

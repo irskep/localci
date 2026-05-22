@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseAPIEvent, parseTaskResponse } from '@/lib/api'
+import {
+  displayStatusSeverity,
+  displayTaskFailure,
+  displayTaskStatus,
+  parseAPIEvent,
+  parseTaskResponse,
+  summarizeCommit,
+} from '@/lib/api'
 
 describe('api validation', () => {
   it('parses valid append events', () => {
@@ -57,5 +64,33 @@ describe('api validation', () => {
     })
 
     expect(response.task.artifacts).toEqual([{ display_name: 'combined.log' }])
+  })
+
+  it('displays canceled task failures as canceled', () => {
+    const task = { status: 'failed', failure: 'canceled' }
+
+    expect(displayTaskStatus(task)).toBe('canceled')
+    expect(displayTaskFailure(task)).toBe('')
+    expect(displayStatusSeverity(task)).toBe('secondary')
+  })
+
+  it('keeps non-canceled failures as failed', () => {
+    const task = { status: 'failed', failure: 'exit' }
+
+    expect(displayTaskStatus(task)).toBe('failed')
+    expect(displayTaskFailure(task)).toBe('exit')
+    expect(displayStatusSeverity(task)).toBe('danger')
+  })
+
+  it('summarizes canceled tasks separately from failed tasks', () => {
+    expect(
+      summarizeCommit({
+        tasks: [
+          { status: 'succeeded', failure: '' },
+          { status: 'failed', failure: 'canceled' },
+          { status: 'failed', failure: 'exit' },
+        ],
+      }),
+    ).toBe('1 failed, 1 canceled, 1/3 passed')
   })
 })

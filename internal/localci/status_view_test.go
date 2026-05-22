@@ -42,10 +42,10 @@ func TestBuildCommitStatusView(t *testing.T) {
 	}
 
 	queued := []QueueEntry{
-		{RepoDir: "/repo", Commit: "abc123", TaskName: "localci:fmt"},
+		{Kind: QueueEntryKindTask, RepoDir: "/repo", Commit: "abc123", TaskName: "localci:fmt"},
 	}
 	active := &ActiveTask{
-		QueueEntry: QueueEntry{RepoDir: "/repo", Commit: "abc123", TaskName: "localci:test"},
+		QueueEntry: QueueEntry{Kind: QueueEntryKindTask, RepoDir: "/repo", Commit: "abc123", TaskName: "localci:test"},
 	}
 
 	view, err := BuildCommitStatusView(paths, "/repo", "abc123", []Task{

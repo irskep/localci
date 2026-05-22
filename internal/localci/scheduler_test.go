@@ -15,6 +15,10 @@ func TestSchedulerRunNextExecutesQueuedTaskAndClearsActive(t *testing.T) {
 	root := t.TempDir()
 	repoDir := t.TempDir()
 	binDir := t.TempDir()
+	paths := Paths{Root: root}
+	if err := os.MkdirAll(paths.CloneWorktreeDir(repoDir, "abc123"), 0o755); err != nil {
+		t.Fatalf("MkdirAll clone worktree returned error: %v", err)
+	}
 
 	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
 set -eu
@@ -27,7 +31,7 @@ exit 1
 
 	now := time.Date(2026, 5, 20, 23, 0, 0, 0, time.UTC)
 	queue := QueueStore{
-		Paths: Paths{Root: root},
+		Paths: paths,
 		Now: func() time.Time {
 			return now
 		},
@@ -38,7 +42,7 @@ exit 1
 	}
 
 	runner := Runner{
-		Paths:   Paths{Root: root},
+		Paths:   paths,
 		MiseBin: filepath.Join(binDir, "mise"),
 		Env:     append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH")),
 		Now: func() time.Time {
@@ -98,6 +102,7 @@ func TestSchedulerRunNextRespectsExistingActiveTask(t *testing.T) {
 	queue := QueueStore{Paths: Paths{Root: root}}
 
 	active := QueueEntry{
+		Kind:       QueueEntryKindTask,
 		RepoDir:    "/repo",
 		RepoID:     normalizeRepoDir("/repo"),
 		Commit:     "abc123",
@@ -132,6 +137,10 @@ func TestSchedulerRunNextReusesTimeoutWatcher(t *testing.T) {
 	root := t.TempDir()
 	repoDir := t.TempDir()
 	binDir := t.TempDir()
+	paths := Paths{Root: root}
+	if err := os.MkdirAll(paths.CloneWorktreeDir(repoDir, "abc123"), 0o755); err != nil {
+		t.Fatalf("MkdirAll clone worktree returned error: %v", err)
+	}
 
 	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
 set -eu
@@ -142,13 +151,13 @@ fi
 exit 1
 `)
 
-	queue := QueueStore{Paths: Paths{Root: root}}
+	queue := QueueStore{Paths: paths}
 	if _, err := queue.Enqueue(repoDir, "abc123", "localci:test"); err != nil {
 		t.Fatalf("Enqueue returned error: %v", err)
 	}
 
 	runner := Runner{
-		Paths:             Paths{Root: root},
+		Paths:             paths,
 		MiseBin:           filepath.Join(binDir, "mise"),
 		Env:               append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH")),
 		InactivityTimeout: 50 * time.Millisecond,

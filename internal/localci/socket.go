@@ -21,13 +21,14 @@ type DaemonRequest struct {
 }
 
 type DaemonResponse struct {
-	OK         bool              `json:"ok"`
-	Error      string            `json:"error,omitempty"`
-	State      *DaemonState      `json:"state,omitempty"`
-	Queue      []QueueEntry      `json:"queue,omitempty"`
-	Enqueued   []QueueEntry      `json:"enqueued,omitempty"`
-	ActiveTask *ActiveTask       `json:"active_task,omitempty"`
-	StatusView *CommitStatusView `json:"status_view,omitempty"`
+	OK         bool               `json:"ok"`
+	Error      string             `json:"error,omitempty"`
+	State      *DaemonState       `json:"state,omitempty"`
+	Queue      []QueueEntry       `json:"queue,omitempty"`
+	Enqueued   []QueueEntry       `json:"enqueued,omitempty"`
+	Canceled   *QueueCancelResult `json:"canceled,omitempty"`
+	ActiveTask *ActiveTask        `json:"active_task,omitempty"`
+	StatusView *CommitStatusView  `json:"status_view,omitempty"`
 }
 
 type DaemonClient struct {
@@ -105,6 +106,22 @@ func (c DaemonClient) Retry(ctx context.Context, repoDir string, commit string, 
 		return nil, err
 	}
 	return resp.Enqueued, nil
+}
+
+func (c DaemonClient) Cancel(ctx context.Context, repoDir string, commit string, taskName string) (QueueCancelResult, error) {
+	resp, err := c.call(ctx, DaemonRequest{
+		Method:   "cancel",
+		RepoDir:  repoDir,
+		Commit:   commit,
+		TaskName: taskName,
+	})
+	if err != nil {
+		return QueueCancelResult{}, err
+	}
+	if resp.Canceled == nil {
+		return QueueCancelResult{}, fmt.Errorf("daemon cancel returned no result")
+	}
+	return *resp.Canceled, nil
 }
 
 func (c DaemonClient) call(ctx context.Context, req DaemonRequest) (DaemonResponse, error) {
@@ -253,6 +270,12 @@ func (s *DaemonServer) dispatch(req DaemonRequest) DaemonResponse {
 			return errorResponse(err)
 		}
 		return DaemonResponse{OK: true, Enqueued: entries}
+	case "cancel":
+		result, err := s.cancelTask(req.RepoDir, req.Commit, req.TaskName)
+		if err != nil {
+			return errorResponse(err)
+		}
+		return DaemonResponse{OK: true, Canceled: &result}
 	default:
 		return DaemonResponse{
 			OK:    false,
@@ -271,25 +294,6 @@ func (s *DaemonServer) enqueueRetry(repoDir string, commit string, taskName stri
 	if taskName == "" {
 		return nil, fmt.Errorf("task_name is required")
 	}
-	if s.DiscoverTasks == nil {
-		return nil, fmt.Errorf("daemon task discovery is not configured")
-	}
-
-	tasks, err := s.DiscoverTasks(context.Background(), repoDir)
-	if err != nil {
-		return nil, err
-	}
-	found := false
-	for _, task := range tasks {
-		if task.Name == taskName {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return nil, fmt.Errorf("task %q not found", taskName)
-	}
-
 	active, err := s.Queue.IsTaskActive(repoDir, commit, taskName)
 	if err != nil {
 		return nil, err
@@ -298,7 +302,7 @@ func (s *DaemonServer) enqueueRetry(repoDir string, commit string, taskName stri
 		return nil, nil
 	}
 
-	entry, err := s.Queue.Enqueue(repoDir, commit, taskName)
+	entry, err := s.Queue.EnqueueRun(repoDir, commit, []string{taskName})
 	if err != nil {
 		return nil, err
 	}
@@ -308,6 +312,33 @@ func (s *DaemonServer) enqueueRetry(repoDir string, commit string, taskName stri
 	return []QueueEntry{entry}, nil
 }
 
+func (s *DaemonServer) cancelTask(repoDir string, commit string, taskName string) (QueueCancelResult, error) {
+	if repoDir == "" {
+		return QueueCancelResult{}, fmt.Errorf("repo_dir is required")
+	}
+	if commit == "" {
+		return QueueCancelResult{}, fmt.Errorf("commit is required")
+	}
+	if taskName == "" {
+		return QueueCancelResult{}, fmt.Errorf("task_name is required")
+	}
+	result, err := s.Queue.Cancel(repoDir, commit, taskName)
+	if err != nil {
+		return QueueCancelResult{}, err
+	}
+	if s.Events != nil && (result.Active || result.Pending > 0) {
+		s.Events.EntryChanged(QueueEntry{
+			Kind:     QueueEntryKindTask,
+			RepoDir:  repoDir,
+			RepoID:   normalizeRepoDir(repoDir),
+			Commit:   commit,
+			TaskName: taskName,
+			TaskKey:  sanitizeTaskName(taskName),
+		})
+	}
+	return result, nil
+}
+
 func (s *DaemonServer) buildStatusView(repoDir string, commit string) (CommitStatusView, error) {
 	if repoDir == "" {
 		return CommitStatusView{}, fmt.Errorf("repo_dir is required")
@@ -315,15 +346,6 @@ func (s *DaemonServer) buildStatusView(repoDir string, commit string) (CommitSta
 	if commit == "" {
 		return CommitStatusView{}, fmt.Errorf("commit is required")
 	}
-	if s.DiscoverTasks == nil {
-		return CommitStatusView{}, fmt.Errorf("daemon task discovery is not configured")
-	}
-
-	tasks, err := s.DiscoverTasks(context.Background(), repoDir)
-	if err != nil {
-		return CommitStatusView{}, err
-	}
-
 	queue, err := s.Queue.List()
 	if err != nil {
 		return CommitStatusView{}, err
@@ -338,7 +360,7 @@ func (s *DaemonServer) buildStatusView(repoDir string, commit string) (CommitSta
 		activePtr = &active
 	}
 
-	return BuildCommitStatusView(s.Paths, repoDir, commit, tasks, queue, activePtr)
+	return BuildCommitStatusView(s.Paths, repoDir, commit, nil, queue, activePtr)
 }
 
 func (s *DaemonServer) enqueuePostcommit(repoDir string, commit string, annotations map[string]string) ([]QueueEntry, error) {
@@ -348,39 +370,18 @@ func (s *DaemonServer) enqueuePostcommit(repoDir string, commit string, annotati
 	if commit == "" {
 		return nil, fmt.Errorf("commit is required")
 	}
-	if s.DiscoverTasks == nil {
-		return nil, fmt.Errorf("daemon task discovery is not configured")
-	}
-
-	tasks, err := s.DiscoverTasks(context.Background(), repoDir)
-	if err != nil {
-		return nil, err
-	}
 	if err := s.ensureRunRecord(repoDir, commit, annotations); err != nil {
 		return nil, err
 	}
 
-	enqueued := make([]QueueEntry, 0, len(tasks))
-	for _, task := range tasks {
-		active, err := s.Queue.IsTaskActive(repoDir, commit, task.Name)
-		if err != nil {
-			return nil, err
-		}
-		if active {
-			continue
-		}
-
-		entry, err := s.Queue.Enqueue(repoDir, commit, task.Name)
-		if err != nil {
-			return nil, err
-		}
-		if s.Events != nil {
-			s.Events.EntryChanged(entry)
-		}
-		enqueued = append(enqueued, entry)
+	entry, err := s.Queue.EnqueueRun(repoDir, commit, nil)
+	if err != nil {
+		return nil, err
 	}
-
-	return enqueued, nil
+	if s.Events != nil {
+		s.Events.EntryChanged(entry)
+	}
+	return []QueueEntry{entry}, nil
 }
 
 func (s *DaemonServer) ensureRunRecord(repoDir string, commit string, annotations map[string]string) error {

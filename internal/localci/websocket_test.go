@@ -208,6 +208,7 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 	}
 
 	EventNotifier{Root: root, Hub: server.EventHub}.ArtifactAppended(QueueEntry{
+		Kind:     QueueEntryKindTask,
 		RepoDir:  repoDir,
 		Commit:   commit,
 		TaskName: taskName,

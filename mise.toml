@@ -20,6 +20,14 @@ run = "go build -o ./bin/localci ./cmd/localci"
 description = "Build the Vue UI"
 run = "pnpm --dir web run build-only"
 
+[tasks."localci:setup"]
+description = "Install dependencies for cloned localci runs"
+run = [
+  "mise trust",
+  "mise install",
+  "pnpm --dir web install --frozen-lockfile",
+]
+
 [tasks.run]
 description = "Run localci"
 usage = '''

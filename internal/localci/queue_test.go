@@ -80,6 +80,7 @@ func TestQueueStoreActiveMarker(t *testing.T) {
 	}
 
 	entry := QueueEntry{
+		Kind:       QueueEntryKindTask,
 		RepoDir:    "/repo",
 		RepoID:     normalizeRepoDir("/repo"),
 		Commit:     "abc123",
@@ -141,12 +142,12 @@ func TestQueueStoreClaimNextMarksActiveAndRemovesPendingAtomically(t *testing.T)
 		t.Fatalf("Enqueue returned error: %v", err)
 	}
 
-	claimed, didClaim, err := store.ClaimNext()
+	claimed, claimState, err := store.ClaimNext()
 	if err != nil {
 		t.Fatalf("ClaimNext returned error: %v", err)
 	}
-	if !didClaim {
-		t.Fatalf("ClaimNext didClaim = false, want true")
+	if claimState != QueueClaimClaimed {
+		t.Fatalf("ClaimNext claimState = %q, want %q", claimState, QueueClaimClaimed)
 	}
 	if claimed.TaskName != entry.TaskName || claimed.Attempt != entry.Attempt {
 		t.Fatalf("claimed entry = %#v, want %#v", claimed, entry)
@@ -168,12 +169,12 @@ func TestQueueStoreClaimNextMarksActiveAndRemovesPendingAtomically(t *testing.T)
 		t.Fatalf("active task = %#v, want %#v", active, entry)
 	}
 
-	claimedAgain, didClaim, err := store.ClaimNext()
+	claimedAgain, claimState, err := store.ClaimNext()
 	if err != nil {
 		t.Fatalf("ClaimNext with active returned error: %v", err)
 	}
-	if didClaim {
-		t.Fatalf("ClaimNext with active didClaim = true, want false")
+	if claimState != QueueClaimActive {
+		t.Fatalf("ClaimNext with active claimState = %q, want %q", claimState, QueueClaimActive)
 	}
 	if claimedAgain.TaskName != entry.TaskName {
 		t.Fatalf("claimed active = %#v, want active task", claimedAgain)
@@ -201,6 +202,7 @@ func TestQueueStoreCancelRemovesPendingAndMarksActive(t *testing.T) {
 		t.Fatalf("Enqueue other returned error: %v", err)
 	}
 	activeEntry := QueueEntry{
+		Kind:     QueueEntryKindTask,
 		RepoDir:  "/repo",
 		RepoID:   normalizeRepoDir("/repo"),
 		Commit:   "abc123",

@@ -51,12 +51,16 @@ func TestInvokeRunsTasksSeriallyAndWritesResults(t *testing.T) {
 	t.Parallel()
 
 	repoDir := t.TempDir()
+	initGitRepo(t, repoDir, "abc123")
 	rootDir := t.TempDir()
 	binDir := t.TempDir()
 	markerFile := filepath.Join(rootDir, "serial-order.txt")
 
 	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
 set -eu
+if [ "$1" = "trust" ]; then
+  exit 0
+fi
 if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--all" ]; then
   printf '%s\n' '[{"name":"localci:first"},{"name":"localci:second"}]'
   exit 0
@@ -135,11 +139,15 @@ func TestInvokeIncrementsTaskAttemptDirectories(t *testing.T) {
 	t.Parallel()
 
 	repoDir := t.TempDir()
+	initGitRepo(t, repoDir, "abc123")
 	rootDir := t.TempDir()
 	binDir := t.TempDir()
 
 	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
 set -eu
+if [ "$1" = "trust" ]; then
+  exit 0
+fi
 if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--all" ]; then
   printf '%s\n' '[{"name":"localci:test"}]'
   exit 0
@@ -183,15 +191,33 @@ func writeExecutable(t *testing.T, path string, contents string) {
 	}
 }
 
+func initGitRepo(t *testing.T, repoDir string, tag string) {
+	t.Helper()
+
+	runGit(t, repoDir, "init")
+	runGit(t, repoDir, "config", "user.email", "localci@example.test")
+	runGit(t, repoDir, "config", "user.name", "localci")
+	if err := os.WriteFile(filepath.Join(repoDir, "README.md"), []byte("test repo\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile README returned error: %v", err)
+	}
+	runGit(t, repoDir, "add", "README.md")
+	runGit(t, repoDir, "commit", "-m", "initial")
+	runGit(t, repoDir, "tag", tag)
+}
+
 func TestInvokeCapturesCombinedLog(t *testing.T) {
 	t.Parallel()
 
 	repoDir := t.TempDir()
+	initGitRepo(t, repoDir, "abc123")
 	rootDir := t.TempDir()
 	binDir := t.TempDir()
 
 	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
 set -eu
+if [ "$1" = "trust" ]; then
+  exit 0
+fi
 if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--all" ]; then
   printf '%s\n' '[{"name":"localci:test"}]'
   exit 0
@@ -263,7 +289,7 @@ exit 1
 	}
 	resultCh := make(chan taskResult, 1)
 	go func() {
-		record, err := runner.runTask(context.Background(), req, task, 0)
+		record, err := runner.runTask(context.Background(), req, repoDir, task, 0)
 		resultCh <- taskResult{record: record, err: err}
 	}()
 

@@ -31,6 +31,22 @@ func (p Paths) CommitRoot(repoDir string, commit string) string {
 	return filepath.Join(p.RepoRoot(repoDir), commit)
 }
 
+func (p Paths) CloneRoot(repoDir string) string {
+	return filepath.Join(p.RepoRoot(repoDir), "clones")
+}
+
+func (p Paths) CloneDir(repoDir string, commit string) string {
+	return filepath.Join(p.CloneRoot(repoDir), commit)
+}
+
+func (p Paths) CloneWorktreeDir(repoDir string, commit string) string {
+	return filepath.Join(p.CloneDir(repoDir, commit), "worktree")
+}
+
+func (p Paths) CloneInfoPath(repoDir string, commit string) string {
+	return filepath.Join(p.CloneRoot(repoDir), commit+".info.json")
+}
+
 func (p Paths) RunRecordPath(repoDir string, commit string) string {
 	return filepath.Join(p.CommitRoot(repoDir, commit), "run.json")
 }

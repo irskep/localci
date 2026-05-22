@@ -27,7 +27,6 @@ type App struct {
 	LoadConfig        func(string) (localci.Config, error)
 	LatestCommit      func(string) (string, error)
 	HeadCommit        func(string) (string, error)
-	InvokeCommitName  func(string) (string, error)
 }
 
 func Run(args []string) int {
@@ -74,6 +73,8 @@ func (a App) Run(args []string) error {
 		return a.runPostcommit(args[1:])
 	case "invoke":
 		return a.runInvoke(args[1:])
+	case "cancel":
+		return a.runCancel(args[1:])
 	case "wait":
 		return a.runWait(args[1:])
 	case "status":
@@ -229,6 +230,8 @@ Usage:
   localci stop
   localci postcommit [--annotation key=value] <repo> <commit>
   localci invoke [--wait] [--annotation key=value] [dir] [commit]
+  localci cancel
+  localci cancel [dir] <commit> <task>
   localci wait [dir] [commit]
   localci status [dir] <commit> [task]
   localci web [dir] [commit] [task]
@@ -292,7 +295,7 @@ func (a App) runInvoke(args []string) error {
 		return err
 	}
 	if commit == "" {
-		commit, err = a.invokeCommitName(repo)
+		commit, err = a.headCommit(repo)
 		if err != nil {
 			return err
 		}
@@ -329,6 +332,59 @@ func (a App) runInvoke(args []string) error {
 		return fmt.Errorf("invoke finished with failing tasks")
 	}
 
+	return nil
+}
+
+func (a App) runCancel(args []string) error {
+	runner, err := a.newRunner()
+	if err != nil {
+		return err
+	}
+	client := localci.DaemonClient{Paths: runner.Paths}
+
+	var repoDir string
+	var commit string
+	var taskName string
+	if len(args) == 0 {
+		active, err := client.ActiveTask(context.Background())
+		if err != nil {
+			return err
+		}
+		if active == nil || active.Kind != localci.QueueEntryKindTask {
+			return fmt.Errorf("no active task to cancel")
+		}
+		repoDir = active.RepoDir
+		commit = active.Commit
+		taskName = active.TaskName
+	} else {
+		spec, err := a.parseCommitTarget(args, "usage: localci cancel [dir] <commit> <task>")
+		if err != nil {
+			return err
+		}
+		if spec.Task == "" {
+			return fmt.Errorf("usage: localci cancel [dir] <commit> <task>")
+		}
+		repoDir = spec.RepoDir
+		commit = spec.Commit
+		taskName = spec.Task
+	}
+
+	result, err := client.Cancel(context.Background(), repoDir, commit, taskName)
+	if err != nil {
+		return err
+	}
+	if !result.Active && result.Pending == 0 {
+		fmt.Fprintf(a.Stdout, "No queued or running task matched %s at %s\n", taskName, commit)
+		return nil
+	}
+	fmt.Fprintf(a.Stdout, "Canceled %s at %s", taskName, commit)
+	if result.Active {
+		fmt.Fprint(a.Stdout, " (running)")
+	}
+	if result.Pending > 0 {
+		fmt.Fprintf(a.Stdout, " (%d queued)", result.Pending)
+	}
+	fmt.Fprintln(a.Stdout)
 	return nil
 }
 
@@ -958,11 +1014,4 @@ func (a App) headCommit(repoDir string) (string, error) {
 		return a.HeadCommit(repoDir)
 	}
 	return localci.GitHeadCommit(context.Background(), repoDir)
-}
-
-func (a App) invokeCommitName(repoDir string) (string, error) {
-	if a.InvokeCommitName != nil {
-		return a.InvokeCommitName(repoDir)
-	}
-	return localci.GitInvokeCommitName(context.Background(), repoDir)
 }

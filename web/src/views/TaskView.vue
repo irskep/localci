@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
@@ -12,12 +12,13 @@ import {
   taskURL,
 } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
-import { formatDuration, statusSeverity } from '@/lib/api'
+import { displayStatusSeverity, displayTaskStatus, formatDuration } from '@/lib/api'
 import { useLocalciStore } from '@/stores/localci'
 
 const route = useRoute()
 const router = useRouter()
 const store = useLocalciStore()
+const canceling = ref(false)
 const parsed = computed(() => parseRepoRoute(route.path))
 const taskResponse = computed(() => store.taskResponseFor(parsed.value.apiPath))
 const task = computed(() => taskResponse.value?.task)
@@ -50,12 +51,27 @@ async function retry(): Promise<void> {
 }
 
 async function cancel(): Promise<void> {
-  if (!parsed.value.commit || !parsed.value.taskName || !canCancel.value) return
-  await store.cancelTask(parsed.value.repoPath, parsed.value.commit, parsed.value.taskName)
+  if (!parsed.value.commit || !parsed.value.taskName || !canCancel.value || canceling.value) return
+  canceling.value = true
+  const result = await store.cancelTask(
+    parsed.value.repoPath,
+    parsed.value.commit,
+    parsed.value.taskName,
+  )
+  if (!result?.canceled) canceling.value = false
 }
 
 onMounted(subscribe)
-watch(() => route.path, subscribe)
+watch(
+  () => route.path,
+  () => {
+    canceling.value = false
+    subscribe()
+  },
+)
+watch(canCancel, (cancelable) => {
+  if (!cancelable) canceling.value = false
+})
 onUnmounted(() => store.unsubscribeTask())
 </script>
 
@@ -102,12 +118,13 @@ onUnmounted(() => store.unsubscribeTask())
               <h2 class="panel-title">Attempts</h2>
               <div class="panel-actions">
                 <PButton
-                  label="Cancel"
+                  :label="canceling ? 'Canceling...' : 'Cancel'"
                   size="small"
                   severity="danger"
                   outlined
                   icon="pi pi-stop-circle"
-                  :disabled="!canCancel"
+                  :loading="canceling"
+                  :disabled="!canCancel || canceling"
                   @click="cancel"
                 />
                 <PButton label="Retry" size="small" icon="pi pi-refresh" @click="retry" />
@@ -120,7 +137,10 @@ onUnmounted(() => store.unsubscribeTask())
                 >
                   <span>attempt {{ attempt.attempt }}</span>
                   <span>
-                    <PTag :severity="statusSeverity(attempt.status)" :value="attempt.status" />
+                    <PTag
+                      :severity="displayStatusSeverity(attempt)"
+                      :value="displayTaskStatus(attempt)"
+                    />
                     {{ formatDuration(attempt.duration_ms) }}
                   </span>
                 </RouterLink>
@@ -159,7 +179,7 @@ onUnmounted(() => store.unsubscribeTask())
             <h2 class="panel-title">Primary Log</h2>
             <div class="task-log-meta">
               <PTag v-if="taskError" severity="warn" :value="taskError" />
-              <PTag :severity="statusSeverity(task.status)" :value="task.status" />
+              <PTag :severity="displayStatusSeverity(task)" :value="displayTaskStatus(task)" />
               <span class="muted mono">{{ taskResponse?.primary_artifact || 'combined.log' }}</span>
             </div>
           </div>

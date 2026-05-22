@@ -331,7 +331,7 @@ func TestAppRunRecognizesInvokeUsage(t *testing.T) {
 	}
 }
 
-func TestParseInvokeTargetDefaultsToCWDAndHeadStar(t *testing.T) {
+func TestParseInvokeTargetDefaultsToCWDAndHead(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -341,11 +341,11 @@ func TestParseInvokeTargetDefaultsToCWDAndHeadStar(t *testing.T) {
 	}
 
 	app := testApp(root, repoDir)
-	app.InvokeCommitName = func(repo string) (string, error) {
+	app.HeadCommit = func(repo string) (string, error) {
 		if repo != repoDir {
 			t.Fatalf("repo = %q, want %q", repo, repoDir)
 		}
-		return "abc123*", nil
+		return "abc123", nil
 	}
 
 	repo, commit, err := app.parseInvokeTarget(nil)
@@ -353,17 +353,17 @@ func TestParseInvokeTargetDefaultsToCWDAndHeadStar(t *testing.T) {
 		t.Fatalf("parseInvokeTarget returned error: %v", err)
 	}
 	if commit == "" {
-		commit, err = app.invokeCommitName(repo)
+		commit, err = app.headCommit(repo)
 		if err != nil {
-			t.Fatalf("invokeCommitName returned error: %v", err)
+			t.Fatalf("headCommit returned error: %v", err)
 		}
 	}
 
 	if repo != repoDir {
 		t.Fatalf("repo = %q, want %q", repo, repoDir)
 	}
-	if commit != "abc123*" {
-		t.Fatalf("commit = %q, want %q", commit, "abc123*")
+	if commit != "abc123" {
+		t.Fatalf("commit = %q, want %q", commit, "abc123")
 	}
 }
 

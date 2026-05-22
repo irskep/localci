@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import type { TaskSummary, TaskStatusView } from '@/lib/api'
+import { displayTaskStatus } from '@/lib/api'
 import { taskURL } from '@/lib/routes'
 
 const props = defineProps<{
@@ -13,7 +14,13 @@ const props = defineProps<{
 const groups = computed(() => [
   {
     label: 'failed',
-    tasks: props.tasks.filter((task) => task.status === 'failed' || task.status === 'timed-out'),
+    tasks: props.tasks.filter(
+      (task) => displayTaskStatus(task) === 'failed' || displayTaskStatus(task) === 'timed-out',
+    ),
+  },
+  {
+    label: 'canceled',
+    tasks: props.tasks.filter((task) => displayTaskStatus(task) === 'canceled'),
   },
   {
     label: 'running',

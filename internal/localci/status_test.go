@@ -136,6 +136,7 @@ func TestBuildCommitStatusViewIncludesQueuedAttempt(t *testing.T) {
 	}
 
 	view, err := BuildCommitStatusView(paths, repoDir, commit, []Task{{Name: "localci:test"}}, []QueueEntry{{
+		Kind:     QueueEntryKindTask,
 		RepoDir:  repoDir,
 		RepoID:   normalizeRepoDir(repoDir),
 		Commit:   commit,
