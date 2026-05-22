@@ -126,6 +126,9 @@ func (s WebServer) handleAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch segments[1] {
+	case "daemon":
+		s.handleAPIDaemon(w, r, segments[2:])
+		return
 	case "queue":
 		if r.Method != http.MethodGet {
 			methodNotAllowed(w, http.MethodGet)
@@ -140,6 +143,23 @@ func (s WebServer) handleAPI(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+}
+
+func (s WebServer) handleAPIDaemon(w http.ResponseWriter, r *http.Request, segments []string) {
+	if len(segments) != 1 || segments[0] != "shutdown" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+	if s.Shutdown == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, fmt.Errorf("daemon shutdown is not configured"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	go s.Shutdown()
 }
 
 func (s WebServer) handleAPIHome(w http.ResponseWriter, _ *http.Request) {

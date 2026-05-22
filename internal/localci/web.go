@@ -24,6 +24,7 @@ type WebServer struct {
 	RepoRoot      string
 	Events        *EventNotifier
 	EventHub      *EventHub
+	Shutdown      func()
 }
 
 type HomePageView struct {

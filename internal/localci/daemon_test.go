@@ -135,6 +135,43 @@ func TestWaitForHTTPReadyRejectsEmptyBaseURL(t *testing.T) {
 	}
 }
 
+func TestEnsureHTTPAddressAvailableShutsDownUntrackedDaemon(t *testing.T) {
+	t.Parallel()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		if isTCPPermissionError(err) {
+			t.Skip("tcp listeners are not permitted in this environment")
+		}
+		t.Fatalf("Listen returned error: %v", err)
+	}
+
+	server := &http.Server{}
+	server.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/daemon/shutdown" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		go func() {
+			_ = server.Close()
+		}()
+	})
+
+	errs := make(chan error, 1)
+	go func() {
+		errs <- server.Serve(listener)
+	}()
+
+	manager := DaemonManager{HTTPAddress: listener.Addr().String()}
+	if err := manager.ensureHTTPAddressAvailable(context.Background()); err != nil {
+		t.Fatalf("ensureHTTPAddressAvailable returned error: %v", err)
+	}
+	if err := <-errs; err != nil && !errors.Is(err, http.ErrServerClosed) {
+		t.Fatalf("Serve returned error: %v", err)
+	}
+}
+
 func TestDaemonManagerRecoverInterruptedWorkRequeuesRunningTask(t *testing.T) {
 	t.Parallel()
 

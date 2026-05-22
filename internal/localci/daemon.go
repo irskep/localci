@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -46,6 +47,9 @@ func (m DaemonManager) Start(ctx context.Context) (StartResult, error) {
 	}
 
 	if err := os.MkdirAll(m.Paths.DaemonRoot(), 0o755); err != nil {
+		return StartResult{}, err
+	}
+	if err := m.ensureHTTPAddressAvailable(ctx); err != nil {
 		return StartResult{}, err
 	}
 
@@ -187,6 +191,7 @@ func (m DaemonManager) Run(ctx context.Context) error {
 		RepoRoot:      m.repoRoot(),
 		Events:        eventNotifier,
 		EventHub:      eventHub,
+		Shutdown:      cancel,
 	}
 	webErrs := make(chan error, 1)
 	go func() {
@@ -270,6 +275,50 @@ func waitForHTTPReady(ctx context.Context, baseURL string) error {
 		return fmt.Errorf("unexpected daemon HTTP status %d", resp.StatusCode)
 	}
 
+	return nil
+}
+
+func (m DaemonManager) ensureHTTPAddressAvailable(ctx context.Context) error {
+	address := m.httpAddress()
+	listener, err := net.Listen("tcp", address)
+	if err == nil {
+		_ = listener.Close()
+		return nil
+	}
+	if strings.HasSuffix(address, ":0") {
+		return nil
+	}
+
+	if shutdownErr := shutdownHTTPDaemon(ctx, "http://"+address); shutdownErr != nil {
+		return fmt.Errorf("daemon HTTP address %s is already in use and did not accept shutdown: %w", address, err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		listener, err = net.Listen("tcp", address)
+		if err == nil {
+			_ = listener.Close()
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("timed out waiting for daemon HTTP address %s to become available", address)
+}
+
+func shutdownHTTPDaemon(ctx context.Context, baseURL string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/daemon/shutdown", nil)
+	if err != nil {
+		return err
+	}
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected shutdown status %d", resp.StatusCode)
+	}
 	return nil
 }
 
