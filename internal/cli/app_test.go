@@ -124,6 +124,55 @@ func TestParseCommitTargetResolvesHeadAlias(t *testing.T) {
 	}
 }
 
+func TestParseCommitTargetWithCommitAndTaskUsesCWD(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	app.HeadCommit = func(repo string) (string, error) {
+		if repo != repoDir {
+			t.Fatalf("repo = %q, want %q", repo, repoDir)
+		}
+		return "abc123", nil
+	}
+
+	got, err := app.parseCommitTarget([]string{"HEAD", "//:localci:noisy-fail"}, "usage")
+	if err != nil {
+		t.Fatalf("parseCommitTarget returned error: %v", err)
+	}
+
+	if got.RepoDir != repoDir {
+		t.Fatalf("RepoDir = %q, want %q", got.RepoDir, repoDir)
+	}
+	if got.Commit != "abc123" {
+		t.Fatalf("Commit = %q, want %q", got.Commit, "abc123")
+	}
+	if got.Task != "//:localci:noisy-fail" {
+		t.Fatalf("Task = %q, want %q", got.Task, "//:localci:noisy-fail")
+	}
+}
+
+func TestParseCommitTargetWithMissingPathStillReportsPathError(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	_, err := app.parseCommitTarget([]string{"./missing", "HEAD"}, "usage")
+	if err == nil {
+		t.Fatalf("parseCommitTarget returned nil error, want path error")
+	}
+}
+
 func TestParseWebTargetResolvesHeadAlias(t *testing.T) {
 	t.Parallel()
 
@@ -660,11 +709,11 @@ func TestPrintTaskDetailUsesArtifactDisplayNames(t *testing.T) {
 	if !strings.Contains(rendered, "failed  test  attempt 1  failure=exit-code") {
 		t.Fatalf("detail missing summary: %s", rendered)
 	}
-	if !strings.Contains(rendered, "Artifacts:\n  combined.log\n  dist/index.html\n") {
-		t.Fatalf("detail missing artifact display names: %s", rendered)
+	if !strings.Contains(rendered, "Artifacts:\n  combined.log\t/tmp/out/combined.log\n  dist/index.html\t/tmp/out/dist/index.html\n") {
+		t.Fatalf("detail missing artifact paths: %s", rendered)
 	}
-	if strings.Contains(rendered, "/tmp/out/dist/index.html") {
-		t.Fatalf("detail should not print artifact absolute paths: %s", rendered)
+	if !strings.Contains(rendered, "Primary log path: /tmp/out/combined.log\n") {
+		t.Fatalf("detail missing primary log path: %s", rendered)
 	}
 }
 

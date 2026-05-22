@@ -377,6 +377,9 @@ func (a App) printWaitSummary(view localci.CommitStatusView) error {
 		primaryArtifact, primaryLog := localci.LoadPrimaryLog(task)
 		if primaryArtifact != "" {
 			fmt.Fprintf(a.Stdout, "  Primary log: %s\n", primaryArtifact)
+			if primaryLogPath := artifactPathByDisplayName(task, primaryArtifact); primaryLogPath != "" {
+				fmt.Fprintf(a.Stdout, "  Primary log path: %s\n", primaryLogPath)
+			}
 			if primaryLog != "" {
 				fmt.Fprintln(a.Stdout, primaryLog)
 			}
@@ -509,18 +512,34 @@ func (a App) parseCommitTarget(args []string, usage string) (commitTarget, error
 			Commit:  commit,
 		}, nil
 	case 2:
-		repo, err := a.resolveRepoArg(args[0])
-		if err != nil {
+		repo, err := a.tryResolveExistingRepoArg(args[0])
+		if err == nil {
+			commit, err := a.resolveCommitAlias(repo, args[1])
+			if err != nil {
+				return commitTarget{}, err
+			}
+
+			return commitTarget{
+				RepoDir: repo,
+				Commit:  commit,
+			}, nil
+		}
+		if looksLikePathArg(args[0]) {
 			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
 		}
-		commit, err := a.resolveCommitAlias(repo, args[1])
+		defaultRepo, defaultErr := a.resolveRepoArg(a.Cwd)
+		if defaultErr != nil {
+			return commitTarget{}, fmt.Errorf("resolve dir: %w", defaultErr)
+		}
+		commit, err := a.resolveCommitAlias(defaultRepo, args[0])
 		if err != nil {
 			return commitTarget{}, err
 		}
 
 		return commitTarget{
-			RepoDir: repo,
+			RepoDir: defaultRepo,
 			Commit:  commit,
+			Task:    strings.TrimSpace(args[1]),
 		}, nil
 	case 3:
 		repo, err := a.resolveRepoArg(args[0])
@@ -540,6 +559,11 @@ func (a App) parseCommitTarget(args []string, usage string) (commitTarget, error
 	default:
 		return commitTarget{}, fmt.Errorf("%s", usage)
 	}
+}
+
+func looksLikePathArg(arg string) bool {
+	arg = strings.TrimSpace(arg)
+	return arg == "." || arg == ".." || strings.HasPrefix(arg, "~") || strings.ContainsAny(arg, `/\`)
 }
 
 func (a App) parseWebTarget(args []string) (commitTarget, error) {
@@ -780,16 +804,28 @@ func (a App) printTaskDetail(task localci.TaskStatusView) {
 	if len(task.Artifacts) > 0 {
 		fmt.Fprintln(a.Stdout, "Artifacts:")
 		for _, artifact := range task.Artifacts {
-			fmt.Fprintf(a.Stdout, "  %s\n", artifact.DisplayName)
+			fmt.Fprintf(a.Stdout, "  %s\t%s\n", artifact.DisplayName, artifact.Path)
 		}
 	}
 	primaryArtifact, primaryLog := localci.LoadPrimaryLog(task)
 	if primaryArtifact != "" {
 		fmt.Fprintf(a.Stdout, "Primary log: %s\n", primaryArtifact)
+		if primaryLogPath := artifactPathByDisplayName(task, primaryArtifact); primaryLogPath != "" {
+			fmt.Fprintf(a.Stdout, "Primary log path: %s\n", primaryLogPath)
+		}
 		if primaryLog != "" {
 			fmt.Fprintln(a.Stdout, primaryLog)
 		}
 	}
+}
+
+func artifactPathByDisplayName(task localci.TaskStatusView, displayName string) string {
+	for _, artifact := range task.Artifacts {
+		if artifact.DisplayName == displayName {
+			return artifact.Path
+		}
+	}
+	return ""
 }
 
 func (a App) runInstallHooks(args []string) error {
