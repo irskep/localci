@@ -2,7 +2,15 @@
 import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-import { artifactURL, attemptURL, parseRepoRoute } from '@/lib/routes'
+import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import {
+  artifactURL,
+  attemptURL,
+  commitURL,
+  parseRepoRoute,
+  repoPathURL,
+  taskURL,
+} from '@/lib/routes'
 import { formatDuration, statusSeverity } from '@/lib/api'
 import { useLocalciStore } from '@/stores/localci'
 
@@ -10,6 +18,7 @@ const route = useRoute()
 const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
 const task = computed(() => store.currentTask?.task)
+const taskName = computed(() => task.value?.name ?? parsed.value.taskName ?? 'Task')
 
 async function load(): Promise<void> {
   if (parsed.value.kind !== 'task' && parsed.value.kind !== 'attempt') return
@@ -27,9 +36,34 @@ watch(() => route.path, load)
 
 <template>
   <main class="page task-page">
+    <AppBreadcrumbs
+      :items="[
+        { label: 'Home', to: '/' },
+        { label: 'Repo', to: '/repo' },
+        {
+          label: store.currentTask?.repo.repo_name ?? parsed.repoPath,
+          to: repoPathURL(parsed.repoPath),
+        },
+        {
+          label: parsed.commit ? parsed.commit.slice(0, 12) : 'Commit',
+          to: parsed.commit ? commitURL(parsed.repoPath, parsed.commit) : undefined,
+        },
+        {
+          label: taskName,
+          to:
+            parsed.kind === 'attempt' && parsed.commit && parsed.taskName
+              ? taskURL(parsed.repoPath, parsed.commit, parsed.taskName)
+              : undefined,
+        },
+        ...(parsed.kind === 'attempt' && parsed.attempt
+          ? [{ label: `attempt ${parsed.attempt}` }]
+          : []),
+      ]"
+    />
+
     <section class="page-header">
       <span class="eyebrow">Task</span>
-      <h1 class="page-title">{{ task?.short_name ?? parsed.taskName }}</h1>
+      <h1 class="page-title">{{ taskName }}</h1>
       <p class="page-subtitle">
         {{ store.currentTask?.repo.repo_name }}
         <template v-if="parsed.commit"> / {{ parsed.commit }}</template>

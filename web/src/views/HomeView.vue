@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 
+import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import { annotationEntries, shortCommit } from '@/lib/api'
 import type { CommitSummary, QueueEntry } from '@/lib/api'
 import { commitURL, taskURL } from '@/lib/routes'
@@ -29,6 +30,8 @@ onMounted(() => {
 
 <template>
   <main class="page">
+    <AppBreadcrumbs :items="[{ label: 'Home' }]" />
+
     <section class="page-header">
       <span class="eyebrow">Overview</span>
       <h1 class="page-title">Runs across every repo</h1>

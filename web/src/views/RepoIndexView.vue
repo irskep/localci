@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 
+import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import { useLocalciStore } from '@/stores/localci'
 
 const store = useLocalciStore()
@@ -13,6 +14,8 @@ onMounted(async () => {
 
 <template>
   <main class="page">
+    <AppBreadcrumbs :items="[{ label: 'Home', to: '/' }, { label: 'Repo' }]" />
+
     <section class="page-header">
       <span class="eyebrow">Repo</span>
       <h1 class="page-title">Tracked repositories</h1>

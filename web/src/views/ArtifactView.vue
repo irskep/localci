@@ -2,12 +2,14 @@
 import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-import { parseRepoRoute } from '@/lib/routes'
+import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import { attemptURL, commitURL, parseRepoRoute, repoPathURL, taskURL } from '@/lib/routes'
 import { useLocalciStore } from '@/stores/localci'
 
 const route = useRoute()
 const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
+const taskName = computed(() => store.currentArtifact?.task ?? parsed.value.taskName ?? 'Task')
 
 async function load(): Promise<void> {
   if (parsed.value.kind !== 'artifact') return
@@ -20,6 +22,36 @@ watch(() => route.path, load)
 
 <template>
   <main class="page">
+    <AppBreadcrumbs
+      :items="[
+        { label: 'Home', to: '/' },
+        { label: 'Repo', to: '/repo' },
+        {
+          label: store.currentArtifact?.repo.repo_name ?? parsed.repoPath,
+          to: repoPathURL(parsed.repoPath),
+        },
+        {
+          label: parsed.commit ? parsed.commit.slice(0, 12) : 'Commit',
+          to: parsed.commit ? commitURL(parsed.repoPath, parsed.commit) : undefined,
+        },
+        {
+          label: taskName,
+          to:
+            parsed.commit && parsed.taskName
+              ? taskURL(parsed.repoPath, parsed.commit, parsed.taskName)
+              : undefined,
+        },
+        {
+          label: parsed.attempt ? `attempt ${parsed.attempt}` : 'Attempt',
+          to:
+            parsed.commit && parsed.taskName && parsed.attempt
+              ? attemptURL(parsed.repoPath, parsed.commit, parsed.taskName, parsed.attempt)
+              : undefined,
+        },
+        { label: parsed.artifactPath ?? 'Artifact' },
+      ]"
+    />
+
     <section class="page-header">
       <span class="eyebrow">Artifact</span>
       <h1 class="page-title">{{ parsed.artifactPath }}</h1>

@@ -2,6 +2,7 @@
 import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import {
   annotationEntries,
   formatAnnotations,
@@ -10,7 +11,7 @@ import {
   statusSeverity,
   summarizeCommit,
 } from '@/lib/api'
-import { parseRepoRoute, taskURL } from '@/lib/routes'
+import { parseRepoRoute, repoPathURL, taskURL } from '@/lib/routes'
 import { useLocalciStore } from '@/stores/localci'
 
 const route = useRoute()
@@ -30,6 +31,18 @@ watch(() => route.path, load)
 
 <template>
   <main class="page">
+    <AppBreadcrumbs
+      :items="[
+        { label: 'Home', to: '/' },
+        { label: 'Repo', to: '/repo' },
+        {
+          label: store.currentCommit?.repo.repo_name ?? parsed.repoPath,
+          to: repoPathURL(parsed.repoPath),
+        },
+        { label: parsed.commit ? shortCommit(parsed.commit) : 'Commit' },
+      ]"
+    />
+
     <section class="page-header">
       <span class="eyebrow">Commit</span>
       <h1 class="page-title mono">{{ parsed.commit ? shortCommit(parsed.commit) : '' }}</h1>

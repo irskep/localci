@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 
+import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import { shortCommit } from '@/lib/api'
 import type { QueueEntry } from '@/lib/api'
 import { taskURL } from '@/lib/routes'
@@ -21,6 +22,8 @@ onMounted(() => {
 
 <template>
   <main class="page">
+    <AppBreadcrumbs :items="[{ label: 'Home', to: '/' }, { label: 'Queue' }]" />
+
     <section class="page-header">
       <span class="eyebrow">Queue</span>
       <h1 class="page-title">Scheduler state</h1>

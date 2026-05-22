@@ -2,6 +2,7 @@
 import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import { annotationEntries, shortCommit, summarizeCommit } from '@/lib/api'
 import { commitURL, parseRepoRoute } from '@/lib/routes'
 import { useLocalciStore } from '@/stores/localci'
@@ -22,6 +23,14 @@ watch(() => route.path, load)
 
 <template>
   <main class="page">
+    <AppBreadcrumbs
+      :items="[
+        { label: 'Home', to: '/' },
+        { label: 'Repo', to: '/repo' },
+        { label: store.currentRepo?.repo.repo_name ?? parsed.repoPath },
+      ]"
+    />
+
     <section class="page-header">
       <span class="eyebrow">Repo</span>
       <h1 class="page-title">{{ store.currentRepo?.repo.repo_name ?? parsed.repoPath }}</h1>
