@@ -80,12 +80,7 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 		}
 	}
 
-	queuedByTask := map[string][]QueueEntry{}
-	for _, entry := range queued {
-		if entry.RepoDir == repoDir && entry.Commit == commit {
-			queuedByTask[entry.TaskName] = append(queuedByTask[entry.TaskName], entry)
-		}
-	}
+	queuedByTask := queuedEntriesByTask(queued, repoDir, commit, discovered)
 
 	for _, task := range discovered {
 		status := ExecutionStatusNotRun
@@ -150,6 +145,43 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 	})
 
 	return view, nil
+}
+
+func queuedEntriesByTask(queued []QueueEntry, repoDir string, commit string, discovered []Task) map[string][]QueueEntry {
+	byTask := map[string][]QueueEntry{}
+	for _, entry := range queued {
+		if entry.RepoDir != repoDir || entry.Commit != commit {
+			continue
+		}
+		for _, taskName := range queueEntryTaskNames(entry, discovered) {
+			taskEntry := entry
+			taskEntry.TaskName = taskName
+			taskEntry.TaskKey = sanitizeTaskName(taskName)
+			byTask[taskName] = append(byTask[taskName], taskEntry)
+		}
+	}
+	return byTask
+}
+
+func queueEntryTaskNames(entry QueueEntry, discovered []Task) []string {
+	switch entry.Kind {
+	case QueueEntryKindTask:
+		if entry.TaskName == "" {
+			return nil
+		}
+		return []string{entry.TaskName}
+	case QueueEntryKindRun:
+		if len(entry.RequestedTasks) > 0 {
+			return append([]string{}, entry.RequestedTasks...)
+		}
+		names := make([]string, 0, len(discovered))
+		for _, task := range discovered {
+			names = append(names, task.Name)
+		}
+		return names
+	default:
+		return nil
+	}
 }
 
 func mergeLiveAttemptViews(existing []TaskAttemptView, queued []QueueEntry, active *ActiveTask, repoDir string, commit string, taskName string) []TaskAttemptView {

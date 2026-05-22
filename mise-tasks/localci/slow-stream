@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+printf 'cwd: %s\n' "$(pwd)"
+
 # early exit
 exit 0
 

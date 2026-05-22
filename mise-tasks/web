@@ -1,5 +1,7 @@
 #!/bin/sh
 set -eu
 
+printf 'cwd: %s\n' "$(pwd)"
+
 mise run daemon-restart
 exec go run ./cmd/localci web "$@"

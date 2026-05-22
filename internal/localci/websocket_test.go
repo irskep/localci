@@ -37,6 +37,7 @@ func TestAPIEventWebSocketSendsSnapshot(t *testing.T) {
 
 	run := newRunRecord(req, task.StartedAt)
 	run.FinishedAt = task.StartedAt.Add(time.Second)
+	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 	run.TaskResults = []TaskRecord{task}
 	run.RefreshSummary()
 	if err := writeRunRecord(paths, req, run); err != nil {
@@ -138,6 +139,7 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 	}
 
 	run := newRunRecord(req, task.StartedAt)
+	run.DiscoveredTasks = []Task{{Name: taskName}}
 	run.TaskResults = []TaskRecord{task}
 	run.RefreshSummary()
 	if err := writeRunRecord(paths, req, run); err != nil {

@@ -289,10 +289,7 @@ func (s QueueStore) Cancel(repoDir string, commit string, taskName string) (Queu
 		return QueueCancelResult{}, err
 	}
 	for _, entry := range entries {
-		if entry.Kind != QueueEntryKindTask {
-			continue
-		}
-		if entry.RepoDir != repoDir || entry.Commit != commit || entry.TaskName != taskName {
+		if !queueEntryTargetsTask(entry, repoDir, commit, taskName) {
 			continue
 		}
 		if err := s.removeLocked(entry); err != nil {
@@ -322,6 +319,20 @@ func (s QueueStore) Cancel(repoDir string, commit string, taskName string) (Queu
 	result.Active = true
 
 	return result, nil
+}
+
+func queueEntryTargetsTask(entry QueueEntry, repoDir string, commit string, taskName string) bool {
+	if entry.RepoDir != repoDir || entry.Commit != commit {
+		return false
+	}
+	switch entry.Kind {
+	case QueueEntryKindTask:
+		return entry.TaskName == taskName
+	case QueueEntryKindRun:
+		return len(entry.RequestedTasks) == 1 && entry.RequestedTasks[0] == taskName
+	default:
+		return false
+	}
 }
 
 func (s QueueStore) removeLocked(entry QueueEntry) error {

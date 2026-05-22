@@ -690,10 +690,12 @@ func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered 
 	}
 
 	queuedByTask := map[string]int{}
-	for _, entry := range queued {
-		if entry.RepoDir == repoDir && entry.Commit == run.Commit {
-			if entry.Attempt > queuedByTask[entry.TaskName] {
-				queuedByTask[entry.TaskName] = entry.Attempt
+	queuedTaskSeen := map[string]bool{}
+	for taskName, entries := range queuedEntriesByTask(queued, repoDir, run.Commit, discovered) {
+		for _, entry := range entries {
+			queuedTaskSeen[taskName] = true
+			if entry.Attempt > queuedByTask[taskName] {
+				queuedByTask[taskName] = entry.Attempt
 			}
 		}
 	}
@@ -720,7 +722,8 @@ func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered 
 			if active.Attempt > summary.AttemptCount {
 				summary.AttemptCount = active.Attempt
 			}
-		} else if queuedAttempt := queuedByTask[task.Name]; queuedAttempt > 0 {
+		} else if queuedTaskSeen[task.Name] {
+			queuedAttempt := queuedByTask[task.Name]
 			summary.Status = ExecutionStatusQueued
 			summary.Attempt = queuedAttempt
 			if queuedAttempt > summary.AttemptCount {

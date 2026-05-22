@@ -35,6 +35,12 @@ func TestBuildCommitStatusView(t *testing.T) {
 
 	run := newRunRecord(req, taskSucceeded.StartedAt)
 	run.FinishedAt = taskSucceeded.FinishedAt
+	run.DiscoveredTasks = []Task{
+		{Name: "localci:test"},
+		{Name: "localci:fmt"},
+		{Name: "localci:build"},
+		{Name: "localci:lint"},
+	}
 	run.TaskResults = []TaskRecord{taskSucceeded}
 	run.RefreshSummary()
 	if err := writeRunRecord(paths, req, run); err != nil {

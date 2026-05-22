@@ -191,6 +191,7 @@ func TestDaemonManagerRecoverInterruptedWorkRequeuesRunningTask(t *testing.T) {
 	}
 
 	run := newRunRecord(req, startedAt)
+	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 	run.TaskResults = []TaskRecord{task}
 	run.RefreshSummary()
 	if err := writeRunRecord(paths, req, run); err != nil {
@@ -275,6 +276,7 @@ func TestDaemonManagerRecoverInterruptedWorkSkipsFinishedTask(t *testing.T) {
 
 	run := newRunRecord(req, startedAt)
 	run.FinishedAt = task.FinishedAt
+	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 	run.TaskResults = []TaskRecord{task}
 	run.RefreshSummary()
 	if err := writeRunRecord(paths, req, run); err != nil {

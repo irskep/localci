@@ -1,22 +1,35 @@
 [tasks."localci:build"]
 description = "Build the Vue UI"
-run = "pnpm exec vite build --outDir \"$LOCALCI_TASK_OUTPUT_DIR/dist\""
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "pnpm exec vite build --outDir \"$LOCALCI_TASK_OUTPUT_DIR/dist\"",
+]
 
 [tasks."localci:fmt"]
 description = "Check Vue formatting"
-run = "pnpm exec oxfmt --check src/"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "pnpm exec oxfmt --check src/",
+]
 
 [tasks."localci:lint"]
 description = "Run Vue lint checks"
 run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
   "pnpm exec oxlint .",
   "pnpm exec eslint . --max-warnings 0",
 ]
 
 [tasks."localci:test"]
 description = "Run Vue unit tests"
-run = "pnpm exec vitest --run"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "pnpm exec vitest --run",
+]
 
 [tasks."localci:typecheck"]
 description = "Run Vue type checking"
-run = "pnpm exec vue-tsc --build"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "pnpm exec vue-tsc --build",
+]

@@ -14,15 +14,22 @@ pnpm = "11.2.2"
 
 [tasks.build]
 description = "Build the localci binary"
-run = "go build -o ./bin/localci ./cmd/localci"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "go build -o ./bin/localci ./cmd/localci",
+]
 
 [tasks.web-build]
 description = "Build the Vue UI"
-run = "pnpm --dir web run build-only"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "pnpm --dir web run build-only",
+]
 
 [tasks."localci:setup"]
 description = "Install dependencies for cloned localci runs"
 run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
   "mise trust",
   "mise install",
   "pnpm --dir web install --frozen-lockfile",
@@ -34,6 +41,7 @@ usage = '''
 arg "[args]" var=#true
 '''
 run = '''
+printf 'cwd: %s\n' "$(pwd)"
 eval "set -- ${usage_args:-}"
 go run ./cmd/localci "$@"
 '''
@@ -44,6 +52,7 @@ usage = '''
 arg "[args]" var=#true
 '''
 run = '''
+printf 'cwd: %s\n' "$(pwd)"
 eval "set -- ${usage_args:-}"
 go run ./cmd/localci postcommit "$@"
 '''
@@ -54,6 +63,7 @@ usage = '''
 arg "[args]" var=#true
 '''
 run = '''
+printf 'cwd: %s\n' "$(pwd)"
 eval "set -- ${usage_args:-}"
 go run ./cmd/localci wait "$@"
 '''
@@ -61,28 +71,46 @@ go run ./cmd/localci wait "$@"
 [tasks.daemon-start]
 description = "Start the localci daemon"
 depends = ["//:web-build"]
-run = 'LOCALCI_WEB_DIR="{{config_root}}/web/dist" go run ./cmd/localci start'
+run = '''
+printf 'cwd: %s\n' "$(pwd)"
+LOCALCI_WEB_DIR="{{config_root}}/web/dist" go run ./cmd/localci start
+'''
 
 [tasks.daemon-restart]
 description = "Restart the localci daemon"
 depends = ["//:web-build"]
-run = 'LOCALCI_WEB_DIR="{{config_root}}/web/dist" go run ./cmd/localci restart'
+run = '''
+printf 'cwd: %s\n' "$(pwd)"
+LOCALCI_WEB_DIR="{{config_root}}/web/dist" go run ./cmd/localci restart
+'''
 
 [tasks.daemon-stop]
 description = "Stop the localci daemon"
-run = "go run ./cmd/localci stop"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "go run ./cmd/localci stop",
+]
 
 [tasks.hooks-install]
 description = "Install the localci post-commit hook for this repo"
-run = "go run ./cmd/localci install-hooks"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "go run ./cmd/localci install-hooks",
+]
 
 [tasks.test]
 description = "Run Go tests"
-run = "go test ./..."
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "go test ./...",
+]
 
 [tasks.fmt]
 description = "Format Go sources"
-run = "gofmt -w ./cmd ./internal"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "gofmt -w ./cmd ./internal",
+]
 
 [tasks.check]
 description = "Run formatting check, tests, and build"
@@ -90,4 +118,7 @@ depends = ["//:fmt", "//:test", "//:build"]
 
 [tasks.self-check]
 description = "Run localci against this repo and wait for the result"
-run = "go run ./cmd/localci invoke --wait"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "go run ./cmd/localci invoke --wait",
+]

@@ -20,6 +20,10 @@ func TestStatusReaderReadCommit(t *testing.T) {
 	run := newRunRecord(req, time.Date(2026, 5, 20, 21, 0, 0, 0, time.UTC))
 	run.FinishedAt = run.StartedAt.Add(time.Second)
 	run.Status = RunStatusSucceeded
+	run.DiscoveredTasks = []Task{
+		{Name: "localci:build"},
+		{Name: "localci:test"},
+	}
 
 	taskA := newTaskRecord(paths, req, Task{Name: "localci:build"}, 1, run.StartedAt)
 	taskA.Status = TaskStatusSucceeded
@@ -129,6 +133,7 @@ func TestBuildCommitStatusViewIncludesQueuedAttempt(t *testing.T) {
 
 	run := newRunRecord(req, record.StartedAt)
 	run.FinishedAt = record.FinishedAt
+	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 	run.TaskResults = []TaskRecord{record}
 	run.RefreshSummary()
 	if err := writeRunRecord(paths, req, run); err != nil {

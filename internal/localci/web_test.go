@@ -41,6 +41,7 @@ func TestWebServerCommitAndArtifactPages(t *testing.T) {
 
 	run := newRunRecord(req, record.StartedAt)
 	run.FinishedAt = record.StartedAt.Add(time.Second)
+	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 	run.TaskResults = []TaskRecord{record}
 	run.RefreshSummary()
 	if err := writeRunRecord(paths, req, run); err != nil {
@@ -247,6 +248,7 @@ func TestWebServerAPI(t *testing.T) {
 
 	run := newRunRecord(req, record.StartedAt)
 	run.FinishedAt = record.FinishedAt
+	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 	run.TaskResults = []TaskRecord{record}
 	run.RefreshSummary()
 	if err := writeRunRecord(paths, req, run); err != nil {
@@ -444,6 +446,7 @@ func TestWebServerHomeAndRepoPages(t *testing.T) {
 
 		run := newRunRecord(req, startedAt)
 		run.FinishedAt = startedAt.Add(time.Second)
+		run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 		run.TaskResults = []TaskRecord{record}
 		run.RefreshSummary()
 		if err := writeRunRecord(paths, req, run); err != nil {

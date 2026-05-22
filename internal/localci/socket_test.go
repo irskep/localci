@@ -163,7 +163,7 @@ func TestDaemonServerPostcommitEnqueuesNonActiveTasks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Postcommit returned error: %v", err)
 	}
-	if len(enqueued) != 1 || enqueued[0].TaskName != "localci:build" {
+	if len(enqueued) != 1 || enqueued[0].Kind != QueueEntryKindRun || len(enqueued[0].RequestedTasks) != 0 {
 		t.Fatalf("unexpected enqueued tasks: %#v", enqueued)
 	}
 
@@ -171,7 +171,7 @@ func TestDaemonServerPostcommitEnqueuesNonActiveTasks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
-	if len(queueEntries) != 1 || queueEntries[0].TaskName != "localci:build" {
+	if len(queueEntries) != 1 || queueEntries[0].Kind != QueueEntryKindRun || len(queueEntries[0].RequestedTasks) != 0 {
 		t.Fatalf("unexpected queue contents: %#v", queueEntries)
 	}
 
@@ -201,6 +201,11 @@ func TestDaemonServerStatusView(t *testing.T) {
 
 	run := newRunRecord(req, taskRecord.StartedAt)
 	run.FinishedAt = taskRecord.FinishedAt
+	run.DiscoveredTasks = []Task{
+		{Name: "localci:build"},
+		{Name: "localci:fmt"},
+		{Name: "localci:test"},
+	}
 	run.TaskResults = []TaskRecord{taskRecord}
 	run.RefreshSummary()
 	if err := writeRunRecord(paths, req, run); err != nil {
@@ -295,7 +300,7 @@ func TestDaemonServerRetryEnqueuesSingleTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Retry returned error: %v", err)
 	}
-	if len(enqueued) != 1 || enqueued[0].TaskName != "localci:test" {
+	if len(enqueued) != 1 || enqueued[0].Kind != QueueEntryKindRun || len(enqueued[0].RequestedTasks) != 1 || enqueued[0].RequestedTasks[0] != "localci:test" {
 		t.Fatalf("unexpected retry queue response: %#v", enqueued)
 	}
 
@@ -303,7 +308,7 @@ func TestDaemonServerRetryEnqueuesSingleTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
-	if len(queueEntries) != 1 || queueEntries[0].TaskName != "localci:test" {
+	if len(queueEntries) != 1 || queueEntries[0].Kind != QueueEntryKindRun || len(queueEntries[0].RequestedTasks) != 1 || queueEntries[0].RequestedTasks[0] != "localci:test" {
 		t.Fatalf("unexpected queue contents: %#v", queueEntries)
 	}
 

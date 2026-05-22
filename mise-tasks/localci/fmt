@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+printf 'cwd: %s\n' "$(pwd)"
+
 : "${LOCALCI_TASK_OUTPUT_DIR:?}"
 : "${LOCALCI_TASK_CACHE_DIR:?}"
 : "${LOCALCI_CACHE_DIR:?}"
