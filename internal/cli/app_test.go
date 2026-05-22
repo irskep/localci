@@ -97,6 +97,60 @@ func TestParseCommitTargetWithRepoAndTaskUsesCWD(t *testing.T) {
 	}
 }
 
+func TestParseCommitTargetResolvesHeadAlias(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	app.HeadCommit = func(repo string) (string, error) {
+		if repo != repoDir {
+			t.Fatalf("repo = %q, want %q", repo, repoDir)
+		}
+		return "abc123", nil
+	}
+
+	got, err := app.parseCommitTarget([]string{"HEAD"}, "usage")
+	if err != nil {
+		t.Fatalf("parseCommitTarget returned error: %v", err)
+	}
+
+	if got.Commit != "abc123" {
+		t.Fatalf("Commit = %q, want %q", got.Commit, "abc123")
+	}
+}
+
+func TestParseWebTargetResolvesHeadAlias(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	app.HeadCommit = func(repo string) (string, error) {
+		if repo != repoDir {
+			t.Fatalf("repo = %q, want %q", repo, repoDir)
+		}
+		return "abc123", nil
+	}
+
+	got, err := app.parseWebTarget([]string{"HEAD"})
+	if err != nil {
+		t.Fatalf("parseWebTarget returned error: %v", err)
+	}
+
+	if got.Commit != "abc123" {
+		t.Fatalf("Commit = %q, want %q", got.Commit, "abc123")
+	}
+}
+
 func TestParseCommitTargetRejectsPathsOutsideConfiguredRoot(t *testing.T) {
 	t.Parallel()
 

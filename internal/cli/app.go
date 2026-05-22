@@ -26,6 +26,7 @@ type App struct {
 	ConfigPath        string
 	LoadConfig        func(string) (localci.Config, error)
 	LatestCommit      func(string) (string, error)
+	HeadCommit        func(string) (string, error)
 	InvokeCommitName  func(string) (string, error)
 }
 
@@ -499,29 +500,41 @@ func (a App) parseCommitTarget(args []string, usage string) (commitTarget, error
 		if err != nil {
 			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
 		}
+		commit, err := a.resolveCommitAlias(repo, args[0])
+		if err != nil {
+			return commitTarget{}, err
+		}
 		return commitTarget{
 			RepoDir: repo,
-			Commit:  strings.TrimSpace(args[0]),
+			Commit:  commit,
 		}, nil
 	case 2:
 		repo, err := a.resolveRepoArg(args[0])
 		if err != nil {
 			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
 		}
+		commit, err := a.resolveCommitAlias(repo, args[1])
+		if err != nil {
+			return commitTarget{}, err
+		}
 
 		return commitTarget{
 			RepoDir: repo,
-			Commit:  strings.TrimSpace(args[1]),
+			Commit:  commit,
 		}, nil
 	case 3:
 		repo, err := a.resolveRepoArg(args[0])
 		if err != nil {
 			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
 		}
+		commit, err := a.resolveCommitAlias(repo, args[1])
+		if err != nil {
+			return commitTarget{}, err
+		}
 
 		return commitTarget{
 			RepoDir: repo,
-			Commit:  strings.TrimSpace(args[1]),
+			Commit:  commit,
 			Task:    strings.TrimSpace(args[2]),
 		}, nil
 	default:
@@ -546,9 +559,13 @@ func (a App) parseWebTarget(args []string) (commitTarget, error) {
 		if defaultErr != nil {
 			return commitTarget{}, fmt.Errorf("resolve dir: %w", defaultErr)
 		}
+		commit, err := a.resolveCommitAlias(defaultRepo, args[0])
+		if err != nil {
+			return commitTarget{}, err
+		}
 		return commitTarget{
 			RepoDir: defaultRepo,
-			Commit:  strings.TrimSpace(args[0]),
+			Commit:  commit,
 		}, nil
 	case 2, 3:
 		return a.parseCommitTarget(args, "usage: localci web [dir] [commit] [task]")
@@ -823,6 +840,21 @@ func (a App) latestCommitForRepo(repoDir string) (string, error) {
 		return "", fmt.Errorf("no localci runs found for %s", repoDir)
 	}
 	return commits[0].Commit, nil
+}
+
+func (a App) resolveCommitAlias(repoDir string, commit string) (string, error) {
+	commit = strings.TrimSpace(commit)
+	if commit != "HEAD" {
+		return commit, nil
+	}
+	return a.headCommit(repoDir)
+}
+
+func (a App) headCommit(repoDir string) (string, error) {
+	if a.HeadCommit != nil {
+		return a.HeadCommit(repoDir)
+	}
+	return localci.GitHeadCommit(context.Background(), repoDir)
 }
 
 func (a App) invokeCommitName(repoDir string) (string, error) {

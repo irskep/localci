@@ -21,11 +21,19 @@ func GitAnnotations(ctx context.Context, repoDir string) map[string]string {
 }
 
 func GitInvokeCommitName(ctx context.Context, repoDir string) (string, error) {
+	head, err := GitHeadCommit(ctx, repoDir)
+	if err != nil {
+		return "", err
+	}
+	return head + "*", nil
+}
+
+func GitHeadCommit(ctx context.Context, repoDir string) (string, error) {
 	head, err := gitOutput(ctx, repoDir, "rev-parse", "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("resolve git HEAD: %w", err)
 	}
-	return head + "*", nil
+	return head, nil
 }
 
 func currentGitBranch(ctx context.Context, repoDir string) string {
