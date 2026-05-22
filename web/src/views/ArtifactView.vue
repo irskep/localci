@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
@@ -11,13 +11,14 @@ const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
 const taskName = computed(() => store.currentArtifact?.task ?? parsed.value.taskName ?? 'Task')
 
-async function load(): Promise<void> {
+function subscribe(): void {
   if (parsed.value.kind !== 'artifact') return
-  await store.loadArtifact(parsed.value.apiPath)
+  store.subscribeArtifact(parsed.value.apiPath)
 }
 
-onMounted(load)
-watch(() => route.path, load)
+onMounted(subscribe)
+watch(() => route.path, subscribe)
+onUnmounted(() => store.unsubscribeArtifact())
 </script>
 
 <template>

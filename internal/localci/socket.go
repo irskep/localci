@@ -142,6 +142,7 @@ type DaemonServer struct {
 	Queue         QueueStore
 	ReadState     func() (DaemonState, error)
 	DiscoverTasks func(context.Context, string) ([]Task, error)
+	Events        *EventNotifier
 	Shutdown      func()
 	mu            sync.Mutex
 }
@@ -301,6 +302,9 @@ func (s *DaemonServer) enqueueRetry(repoDir string, commit string, taskName stri
 	if err != nil {
 		return nil, err
 	}
+	if s.Events != nil {
+		s.Events.EntryChanged(entry)
+	}
 	return []QueueEntry{entry}, nil
 }
 
@@ -369,6 +373,9 @@ func (s *DaemonServer) enqueuePostcommit(repoDir string, commit string, annotati
 		entry, err := s.Queue.Enqueue(repoDir, commit, task.Name)
 		if err != nil {
 			return nil, err
+		}
+		if s.Events != nil {
+			s.Events.EntryChanged(entry)
 		}
 		enqueued = append(enqueued, entry)
 	}

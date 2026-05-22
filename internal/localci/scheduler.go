@@ -9,6 +9,7 @@ import (
 type Scheduler struct {
 	Queue  QueueStore
 	Runner Runner
+	Events *EventNotifier
 }
 
 type RunNextResult struct {
@@ -44,10 +45,19 @@ func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
 	}
 	defer func() {
 		_ = s.Queue.ClearActive()
+		if s.Events != nil {
+			s.Events.EntryChanged(entry)
+		}
 	}()
+	if s.Events != nil {
+		s.Events.EntryChanged(entry)
+	}
 
 	if err := s.Queue.Remove(entry); err != nil {
 		return RunNextResult{}, err
+	}
+	if s.Events != nil {
+		s.Events.QueueChanged()
 	}
 
 	taskRecord, runErr := s.Runner.runTask(ctx, InvokeRequest{
@@ -61,6 +71,9 @@ func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
 	}, taskRecord, s.Runner.now())
 	if writeErr != nil {
 		return RunNextResult{}, writeErr
+	}
+	if s.Events != nil {
+		s.Events.EntryChanged(entry)
 	}
 
 	result := RunNextResult{

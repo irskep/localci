@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import { shortCommit } from '@/lib/api'
@@ -16,8 +16,9 @@ function taskLabel(entry: QueueEntry): string {
 }
 
 onMounted(() => {
-  void store.loadQueue()
+  store.subscribeQueue()
 })
+onUnmounted(() => store.unsubscribePage())
 </script>
 
 <template>

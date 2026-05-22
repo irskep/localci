@@ -112,6 +112,10 @@ func (s WebServer) handleAPI(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if len(segments) >= 2 && segments[len(segments)-1] == "events" {
+		s.handleAPIEvents(w, r, segments)
+		return
+	}
 	if len(segments) == 1 {
 		if r.Method != http.MethodGet {
 			methodNotAllowed(w, http.MethodGet)
@@ -501,6 +505,9 @@ func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit 
 		if enqueueErr != nil {
 			writeAPIError(w, http.StatusInternalServerError, enqueueErr)
 			return
+		}
+		if s.Events != nil {
+			s.Events.EntryChanged(entry)
 		}
 	}
 

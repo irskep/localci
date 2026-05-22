@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import { useLocalciStore } from '@/stores/localci'
@@ -7,9 +7,10 @@ import { useLocalciStore } from '@/stores/localci'
 const store = useLocalciStore()
 const repos = computed(() => store.home?.repos ?? [])
 
-onMounted(async () => {
-  if (!store.home) await store.loadHome()
+onMounted(() => {
+  store.subscribeHome()
 })
+onUnmounted(() => store.unsubscribePage())
 </script>
 
 <template>

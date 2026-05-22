@@ -159,11 +159,18 @@ func (m DaemonManager) Run(ctx context.Context) error {
 		_ = os.Remove(m.Paths.DaemonSocketPath())
 	}()
 
+	eventHub := NewEventHub()
+	eventNotifier := &EventNotifier{Root: m.repoRoot(), Hub: eventHub}
+	scheduler := m.Scheduler
+	scheduler.Events = eventNotifier
+	scheduler.Runner.Events = eventNotifier
+
 	server := &DaemonServer{
 		Paths:         m.Paths,
-		Queue:         m.Scheduler.Queue,
+		Queue:         scheduler.Queue,
 		ReadState:     m.ReadState,
-		DiscoverTasks: m.Scheduler.Runner.DiscoverTasks,
+		DiscoverTasks: scheduler.Runner.DiscoverTasks,
+		Events:        eventNotifier,
 		Shutdown:      cancel,
 	}
 
@@ -174,10 +181,12 @@ func (m DaemonManager) Run(ctx context.Context) error {
 
 	webServer := WebServer{
 		Paths:         m.Paths,
-		Queue:         m.Scheduler.Queue,
-		DiscoverTasks: m.Scheduler.Runner.DiscoverTasks,
+		Queue:         scheduler.Queue,
+		DiscoverTasks: scheduler.Runner.DiscoverTasks,
 		AssetDir:      os.Getenv("LOCALCI_WEB_DIR"),
 		RepoRoot:      m.repoRoot(),
+		Events:        eventNotifier,
+		EventHub:      eventHub,
 	}
 	webErrs := make(chan error, 1)
 	go func() {
@@ -199,7 +208,7 @@ func (m DaemonManager) Run(ctx context.Context) error {
 		case err := <-webErrs:
 			return err
 		case <-ticker.C:
-			_, err := m.Scheduler.RunNext(ctx)
+			_, err := scheduler.RunNext(ctx)
 			if err != nil && !errors.Is(err, errTaskFailed) && !errors.Is(err, errTaskTimedOut) {
 				return err
 			}

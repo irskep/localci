@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import TaskSummaryLinks from '@/components/TaskSummaryLinks.vue'
@@ -25,8 +25,9 @@ function activityTime(entry: CommitSummary): string {
 }
 
 onMounted(() => {
-  void store.loadHome()
+  store.subscribeHome()
 })
+onUnmounted(() => store.unsubscribePage())
 </script>
 
 <template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
@@ -13,13 +13,14 @@ const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
 const commits = computed(() => store.currentRepo?.commits ?? [])
 
-async function load(): Promise<void> {
+function subscribe(): void {
   if (parsed.value.kind !== 'repo') return
-  await store.loadRepo(parsed.value.apiPath)
+  store.subscribeRepo(parsed.value.apiPath)
 }
 
-onMounted(load)
-watch(() => route.path, load)
+onMounted(subscribe)
+watch(() => route.path, subscribe)
+onUnmounted(() => store.unsubscribePage())
 </script>
 
 <template>

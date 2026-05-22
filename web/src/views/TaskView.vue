@@ -21,14 +21,10 @@ const parsed = computed(() => parseRepoRoute(route.path))
 const taskResponse = computed(() => store.taskResponseFor(parsed.value.apiPath))
 const task = computed(() => taskResponse.value?.task)
 const taskName = computed(() => task.value?.name ?? parsed.value.taskName ?? 'Task')
-const shouldRefresh = computed(
-  () => task.value?.status === 'queued' || task.value?.status === 'running',
-)
-let refreshTimer: ReturnType<typeof window.setInterval> | undefined
 
-async function load(): Promise<void> {
+function subscribe(): void {
   if (parsed.value.kind !== 'task' && parsed.value.kind !== 'attempt') return
-  await store.loadTask(parsed.value.apiPath)
+  store.subscribeTask(parsed.value.apiPath)
 }
 
 async function retry(): Promise<void> {
@@ -42,28 +38,9 @@ async function retry(): Promise<void> {
   if (route.path !== result.url) await router.push(result.url)
 }
 
-function stopRefresh(): void {
-  if (!refreshTimer) return
-  window.clearInterval(refreshTimer)
-  refreshTimer = undefined
-}
-
-function syncRefresh(): void {
-  if (!shouldRefresh.value || (parsed.value.kind !== 'task' && parsed.value.kind !== 'attempt')) {
-    stopRefresh()
-    return
-  }
-  if (refreshTimer) return
-  refreshTimer = window.setInterval(() => {
-    void load()
-  }, 1000)
-}
-
-onMounted(load)
-watch(() => route.path, load)
-watch(shouldRefresh, syncRefresh)
-watch(() => parsed.value.kind, syncRefresh)
-onUnmounted(stopRefresh)
+onMounted(subscribe)
+watch(() => route.path, subscribe)
+onUnmounted(() => store.unsubscribeTask())
 </script>
 
 <template>

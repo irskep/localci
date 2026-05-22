@@ -12,9 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
-
-	"github.com/coder/websocket"
 
 	"localci/webassets"
 )
@@ -25,6 +22,8 @@ type WebServer struct {
 	DiscoverTasks func(context.Context, string) ([]Task, error)
 	AssetDir      string
 	RepoRoot      string
+	Events        *EventNotifier
+	EventHub      *EventHub
 }
 
 type HomePageView struct {
@@ -68,7 +67,6 @@ func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.HandleFunc("/api", s.handleAPI)
 	mux.HandleFunc("/api/", s.handleAPI)
-	mux.HandleFunc("/ws/status", s.handleStatusWebSocket)
 	if s.servesFrontendApp() {
 		mux.HandleFunc("/", serveFrontendApp(assetFS))
 	} else {
@@ -300,50 +298,12 @@ func (s WebServer) handleRetry(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, enqueueErr.Error(), http.StatusInternalServerError)
 			return
 		}
+		if s.Events != nil {
+			s.Events.EntryChanged(entry)
+		}
 	}
 
 	http.Redirect(w, r, taskAttemptPageURL(repoDir, commit, taskName, entry.Attempt), http.StatusSeeOther)
-}
-
-func (s WebServer) handleStatusWebSocket(w http.ResponseWriter, r *http.Request) {
-	repoDir := r.URL.Query().Get("repo")
-	commit := r.URL.Query().Get("commit")
-	if repoDir == "" || commit == "" {
-		http.Error(w, "repo and commit are required", http.StatusBadRequest)
-		return
-	}
-
-	conn, err := websocket.Accept(w, r, nil)
-	if err != nil {
-		return
-	}
-	defer conn.Close(websocket.StatusNormalClosure, "")
-
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-
-	ctx := r.Context()
-	for {
-		view, err := s.buildStatusView(repoDir, commit)
-		if err != nil {
-			_ = conn.Close(websocket.StatusInternalError, err.Error())
-			return
-		}
-		data, err := renderStatusPayload(view)
-		if err != nil {
-			_ = conn.Close(websocket.StatusInternalError, err.Error())
-			return
-		}
-		if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
-			return
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
 }
 
 func (s WebServer) buildStatusView(repoDir string, commit string) (CommitStatusView, error) {

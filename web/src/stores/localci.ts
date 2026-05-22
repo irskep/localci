@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import type {
+  APIEvent,
   ArtifactListResponse,
   ArtifactResponse,
   CommitResponse,
@@ -36,6 +37,12 @@ export const useLocalciStore = defineStore('localci', () => {
   const commitLoaded = ref(false)
   const taskLoaded = ref(false)
   const artifactLoaded = ref(false)
+  let taskSocket: WebSocket | null = null
+  let taskSocketKey = ''
+  let artifactSocket: WebSocket | null = null
+  let artifactSocketKey = ''
+  let pageSocket: WebSocket | null = null
+  let pageSocketKey = ''
 
   const queueCount = computed(
     () => queue.value?.pending.length ?? home.value?.queue.pending.length ?? 0,
@@ -76,12 +83,30 @@ export const useLocalciStore = defineStore('localci', () => {
     homeLoaded.value = true
   }
 
+  function subscribeHome(): void {
+    homeLoaded.value = false
+    subscribePage<HomeResponse>('/api', (data) => {
+      home.value = data
+      queue.value = data.queue
+      homeLoaded.value = true
+    })
+  }
+
   async function loadQueue(): Promise<void> {
     queueLoaded.value = false
     queue.value = null
     const result = await load(() => getJSON<QueueResponse>('/api/queue'))
     if (result) queue.value = result
     queueLoaded.value = true
+  }
+
+  function subscribeQueue(): void {
+    queueLoaded.value = false
+    queue.value = null
+    subscribePage<QueueResponse>('/api/queue', (data) => {
+      queue.value = data
+      queueLoaded.value = true
+    })
   }
 
   async function loadRepo(apiPath: string): Promise<void> {
@@ -92,12 +117,62 @@ export const useLocalciStore = defineStore('localci', () => {
     repoLoaded.value = true
   }
 
+  function subscribeRepo(apiPath: string): void {
+    repoLoaded.value = false
+    currentRepo.value = null
+    subscribePage<RepoResponse>(apiPath, (data) => {
+      currentRepo.value = data
+      repoLoaded.value = true
+    })
+  }
+
   async function loadCommit(apiPath: string): Promise<void> {
     commitLoaded.value = false
     currentCommit.value = null
     const result = await load(() => getJSON<CommitResponse>(apiPath))
     if (result) currentCommit.value = result
     commitLoaded.value = true
+  }
+
+  function subscribeCommit(apiPath: string): void {
+    commitLoaded.value = false
+    currentCommit.value = null
+    subscribePage<CommitResponse>(apiPath, (data) => {
+      currentCommit.value = data
+      commitLoaded.value = true
+    })
+  }
+
+  function subscribePage<T>(apiPath: string, apply: (data: T) => void): void {
+    if (pageSocket && pageSocketKey === apiPath) return
+    unsubscribePage()
+    pageSocketKey = apiPath
+    loading.value = true
+    error.value = ''
+    pageSocket = openEventSocket(apiPath)
+    pageSocket.addEventListener('message', (message) => {
+      if (pageSocketKey !== apiPath) return
+      const event = JSON.parse(message.data as string) as APIEvent<T>
+      if (event.type === 'snapshot' || event.type === 'replace') {
+        apply(event.data)
+        loading.value = false
+      }
+      if (event.type === 'error') {
+        error.value = event.message
+        loading.value = false
+      }
+    })
+    pageSocket.addEventListener('error', () => {
+      if (pageSocketKey !== apiPath) return
+      error.value = 'Event stream disconnected'
+      loading.value = false
+    })
+  }
+
+  function unsubscribePage(): void {
+    if (pageSocket) pageSocket.close()
+    pageSocket = null
+    pageSocketKey = ''
   }
 
   function taskResponseFor(apiPath: string): TaskResponse | null {
@@ -145,6 +220,48 @@ export const useLocalciStore = defineStore('localci', () => {
     }
   }
 
+  function subscribeTask(apiPath: string): void {
+    if (taskSocket && taskSocketKey === apiPath) return
+    unsubscribeTask()
+    taskSocketKey = apiPath
+    const previous = taskResponseFor(apiPath)
+    taskRequest.value = { state: 'loading', key: apiPath, previous }
+    taskSocket = openEventSocket(apiPath)
+    taskSocket.addEventListener('message', (message) => {
+      if (taskSocketKey !== apiPath) return
+      const event = JSON.parse(message.data as string) as APIEvent<TaskResponse>
+      if (event.type === 'snapshot' || event.type === 'replace') {
+        taskRequest.value = { state: 'loaded', key: apiPath, data: event.data }
+        taskLoaded.value = true
+      }
+      if (event.type === 'error') {
+        taskRequest.value = {
+          state: 'error',
+          key: apiPath,
+          message: event.message,
+          previous: taskResponseFor(apiPath),
+        }
+        error.value = event.message
+      }
+    })
+    taskSocket.addEventListener('error', () => {
+      if (taskSocketKey !== apiPath) return
+      const previous = taskResponseFor(apiPath)
+      taskRequest.value = {
+        state: 'error',
+        key: apiPath,
+        message: 'Task event stream disconnected',
+        previous,
+      }
+    })
+  }
+
+  function unsubscribeTask(): void {
+    if (taskSocket) taskSocket.close()
+    taskSocket = null
+    taskSocketKey = ''
+  }
+
   async function loadArtifactList(apiPath: string): Promise<void> {
     const result = await load(() => getJSON<ArtifactListResponse>(apiPath))
     if (result) artifactList.value = result
@@ -156,6 +273,47 @@ export const useLocalciStore = defineStore('localci', () => {
     const result = await load(() => getJSON<ArtifactResponse>(apiPath))
     if (result) currentArtifact.value = result
     artifactLoaded.value = true
+  }
+
+  function subscribeArtifact(apiPath: string): void {
+    if (artifactSocket && artifactSocketKey === apiPath) return
+    unsubscribeArtifact()
+    artifactSocketKey = apiPath
+    artifactLoaded.value = false
+    currentArtifact.value = null
+    artifactSocket = openEventSocket(apiPath)
+    artifactSocket.addEventListener('message', (message) => {
+      if (artifactSocketKey !== apiPath) return
+      const event = JSON.parse(message.data as string) as APIEvent<ArtifactResponse>
+      if (event.type === 'snapshot' || event.type === 'replace') {
+        currentArtifact.value = event.data
+        artifactLoaded.value = true
+        return
+      }
+      if (event.type === 'append' && currentArtifact.value) {
+        const currentLength = currentArtifact.value.content.length
+        if (currentLength === event.offset) {
+          currentArtifact.value = {
+            ...currentArtifact.value,
+            content: currentArtifact.value.content + event.text,
+          }
+          return
+        }
+        void loadArtifact(apiPath)
+      }
+      if (event.type === 'error') {
+        error.value = event.message
+      }
+    })
+    artifactSocket.addEventListener('error', () => {
+      if (artifactSocketKey === apiPath) error.value = 'Artifact event stream disconnected'
+    })
+  }
+
+  function unsubscribeArtifact(): void {
+    if (artifactSocket) artifactSocket.close()
+    artifactSocket = null
+    artifactSocketKey = ''
   }
 
   async function retryTask(
@@ -192,9 +350,24 @@ export const useLocalciStore = defineStore('localci', () => {
     queueCount,
     repoLoaded,
     retryTask,
+    subscribeCommit,
+    subscribeHome,
+    subscribeQueue,
+    subscribeRepo,
     taskErrorFor,
     taskLoaded,
     taskLoadingFor,
     taskResponseFor,
+    subscribeArtifact,
+    subscribeTask,
+    unsubscribeArtifact,
+    unsubscribePage,
+    unsubscribeTask,
   }
 })
+
+function openEventSocket(apiPath: string): WebSocket {
+  const url = new URL(`${apiPath}/events`, window.location.href)
+  url.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return new WebSocket(url)
+}

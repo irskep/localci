@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
@@ -21,13 +21,14 @@ const parsed = computed(() => parseRepoRoute(route.path))
 const commit = computed(() => store.currentCommit?.commit)
 const tasks = computed(() => commit.value?.tasks ?? [])
 
-async function load(): Promise<void> {
+function subscribe(): void {
   if (parsed.value.kind !== 'commit') return
-  await store.loadCommit(parsed.value.apiPath)
+  store.subscribeCommit(parsed.value.apiPath)
 }
 
-onMounted(load)
-watch(() => route.path, load)
+onMounted(subscribe)
+watch(() => route.path, subscribe)
+onUnmounted(() => store.unsubscribePage())
 </script>
 
 <template>

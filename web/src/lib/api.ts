@@ -85,6 +85,13 @@ export type ArtifactResponse = {
   content: string
 }
 
+export type APIEvent<T = unknown> =
+  | { type: 'snapshot'; resource: string; data: T }
+  | { type: 'replace'; resource: string; data: T }
+  | { type: 'append'; resource: string; offset: number; text: string }
+  | { type: 'remove'; resource: string }
+  | { type: 'error'; resource: string; message: string }
+
 export type CommitStatusView = {
   repo_dir: string
   commit: string

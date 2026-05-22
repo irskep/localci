@@ -24,6 +24,7 @@ type Runner struct {
 	Env               []string
 	Stdout            io.Writer
 	Stderr            io.Writer
+	Events            *EventNotifier
 	InactivityTimeout time.Duration
 	TerminateGrace    time.Duration
 	PollInterval      time.Duration
@@ -147,6 +148,17 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task, reser
 	if err := writeTaskRecord(record); err != nil {
 		return TaskRecord{}, err
 	}
+	entry := QueueEntry{
+		RepoDir:  req.RepoDir,
+		RepoID:   normalizeRepoDir(req.RepoDir),
+		Commit:   req.Commit,
+		TaskName: task.Name,
+		TaskKey:  sanitizeTaskName(task.Name),
+		Attempt:  attempt,
+	}
+	if r.Events != nil {
+		r.Events.EntryChanged(entry)
+	}
 
 	cmd := exec.CommandContext(ctx, r.miseBin(), "run", task.Name)
 	cmd.Dir = req.RepoDir
@@ -156,7 +168,11 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task, reser
 		"LOCALCI_CACHE_DIR="+record.SharedCacheDir,
 	)
 
-	logWriters, err := newTaskLogWriters(record.OutputDir, r.stdout())
+	logWriters, err := newTaskLogWriters(record.OutputDir, r.stdout(), func(offset int64, text string) {
+		if r.Events != nil {
+			r.Events.ArtifactAppended(entry, "combined.log", offset, text)
+		}
+	})
 	if err != nil {
 		return TaskRecord{}, err
 	}
@@ -205,6 +221,9 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task, reser
 
 	if err := writeTaskRecord(record); err != nil {
 		return TaskRecord{}, err
+	}
+	if r.Events != nil {
+		r.Events.EntryChanged(entry)
 	}
 
 	return record, runErr
@@ -470,18 +489,41 @@ type taskLogWriters struct {
 	writer       io.Writer
 }
 
-func newTaskLogWriters(outputDir string, stdout io.Writer) (*taskLogWriters, error) {
+func newTaskLogWriters(outputDir string, stdout io.Writer, publishAppend func(offset int64, text string)) (*taskLogWriters, error) {
 	combinedFile, err := os.Create(filepath.Join(outputDir, "combined.log"))
 	if err != nil {
 		return nil, fmt.Errorf("create combined log: %w", err)
 	}
 
+	combinedWriter := io.Writer(combinedFile)
+	if publishAppend != nil {
+		combinedWriter = &appendPublishingWriter{
+			writer:        combinedFile,
+			publishAppend: publishAppend,
+		}
+	}
+
 	return &taskLogWriters{
 		combinedFile: combinedFile,
-		writer:       io.MultiWriter(combinedFile, stdout),
+		writer:       io.MultiWriter(combinedWriter, stdout),
 	}, nil
 }
 
 func (w *taskLogWriters) Close() {
 	_ = w.combinedFile.Close()
+}
+
+type appendPublishingWriter struct {
+	writer        io.Writer
+	offset        int64
+	publishAppend func(offset int64, text string)
+}
+
+func (w *appendPublishingWriter) Write(p []byte) (int, error) {
+	n, err := w.writer.Write(p)
+	if n > 0 {
+		w.publishAppend(w.offset, string(p[:n]))
+		w.offset += int64(n)
+	}
+	return n, err
 }
