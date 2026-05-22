@@ -47,7 +47,10 @@ go run ./cmd/localci wait "$@"
 
 [tasks.daemon-start]
 description = "Start the localci daemon"
-run = "go run ./cmd/localci start"
+run = """
+pnpm --dir web run build-only
+LOCALCI_WEB_DIR="{{config_root}}/web/dist" go run ./cmd/localci start
+"""
 
 [tasks.daemon-restart]
 description = "Restart the localci daemon"
