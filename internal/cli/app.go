@@ -54,6 +54,9 @@ func (a App) Run(args []string) error {
 		a.printUsage()
 		return nil
 	}
+	if len(args) == 2 && isHelpCommand(args[1]) {
+		return a.printCommandHelp(args[0])
+	}
 	if err := a.checkRequirements(); err != nil {
 		return err
 	}
@@ -208,6 +211,15 @@ func (a App) printUsage() {
 	fmt.Fprint(a.Stdout, usageText())
 }
 
+func (a App) printCommandHelp(command string) error {
+	text, ok := commandHelpText(command)
+	if !ok {
+		return fmt.Errorf("unknown command %q\n\n%s", command, usageText())
+	}
+	fmt.Fprint(a.Stdout, text)
+	return nil
+}
+
 func usageText() string {
 	return `localci is a local post-commit validation runner.
 
@@ -222,6 +234,22 @@ Usage:
   localci web [dir] [commit] [task]
   localci install-hooks [dir]
 `
+}
+
+func commandHelpText(command string) (string, bool) {
+	switch command {
+	case "install-hooks":
+		return `Usage:
+  localci install-hooks [dir]
+
+Install localci's Git post-commit hook entry for dir, defaulting to the
+current working directory. The hook uses modern Git hook.* config and runs:
+
+  mise run postcommit "$repo" "$commit"
+`, true
+	default:
+		return "", false
+	}
 }
 
 func usageError() error {

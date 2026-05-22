@@ -443,6 +443,36 @@ func TestAppRunSkipsRequirementsForHelp(t *testing.T) {
 	}
 }
 
+func TestAppRunInstallHooksHelpSkipsRequirementsCheck(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	called := false
+	app := App{
+		Stdout: &stdout,
+		Stderr: io.Discard,
+		Cwd:    "/repo",
+		CheckRequirements: func() error {
+			called = true
+			return nil
+		},
+	}
+
+	if err := app.Run([]string{"install-hooks", "--help"}); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if called {
+		t.Fatalf("requirements checker should not run for command help")
+	}
+	rendered := stdout.String()
+	if !strings.Contains(rendered, "Usage:\n  localci install-hooks [dir]") {
+		t.Fatalf("help missing usage: %s", rendered)
+	}
+	if !strings.Contains(rendered, "modern Git hook.* config") {
+		t.Fatalf("help missing behavior summary: %s", rendered)
+	}
+}
+
 func TestAppRunChecksRequirementsForCommands(t *testing.T) {
 	t.Parallel()
 
