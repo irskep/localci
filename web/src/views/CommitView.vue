@@ -52,11 +52,6 @@ watch(() => route.path, load)
         <template v-if="commit">
           /
           {{ summarizeCommit(commit) }}
-          <TaskSummaryLinks
-            :repo-path="parsed.repoPath"
-            :commit="commit.commit"
-            :tasks="commit.tasks"
-          />
         </template>
         <template v-if="formatAnnotations(commit?.annotations)">
           /
@@ -71,6 +66,12 @@ watch(() => route.path, load)
           </span>
         </template>
       </p>
+      <TaskSummaryLinks
+        v-if="commit"
+        :repo-path="parsed.repoPath"
+        :commit="commit.commit"
+        :tasks="commit.tasks"
+      />
     </section>
 
     <PMessage v-if="store.error" severity="error" :closable="false">{{ store.error }}</PMessage>

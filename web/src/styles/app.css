@@ -301,6 +301,7 @@ pre {
 .task-summary-links {
   display: grid;
   gap: var(--space-inline-xs);
+  margin-top: var(--space-inline-xs);
 }
 
 .task-summary-group {
@@ -308,6 +309,7 @@ pre {
   grid-template-columns: max-content minmax(0, 1fr);
   gap: var(--space-inline-sm);
   align-items: baseline;
+  min-width: 0;
 }
 
 .task-summary-items {
