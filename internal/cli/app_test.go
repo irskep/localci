@@ -471,6 +471,9 @@ func TestAppRunInstallHooksHelpSkipsRequirementsCheck(t *testing.T) {
 	if !strings.Contains(rendered, "modern Git hook.* config") {
 		t.Fatalf("help missing behavior summary: %s", rendered)
 	}
+	if !strings.Contains(rendered, `localci postcommit "$repo" "$commit"`) {
+		t.Fatalf("help missing installed command: %s", rendered)
+	}
 }
 
 func TestAppRunChecksRequirementsForCommands(t *testing.T) {

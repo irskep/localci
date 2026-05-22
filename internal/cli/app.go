@@ -245,7 +245,7 @@ func commandHelpText(command string) (string, bool) {
 Install localci's Git post-commit hook entry for dir, defaulting to the
 current working directory. The hook uses modern Git hook.* config and runs:
 
-  mise run postcommit "$repo" "$commit"
+  localci postcommit "$repo" "$commit"
 `, true
 	default:
 		return "", false
