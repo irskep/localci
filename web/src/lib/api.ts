@@ -155,3 +155,18 @@ export function formatDuration(durationMs: number): string {
 export function shortCommit(commit: string): string {
   return commit.length > 12 ? commit.slice(0, 12) : commit
 }
+
+export function formatAnnotations(annotations?: Record<string, string>): string {
+  return annotationEntries(annotations)
+    .map(({ key, value }) => `${key}: ${value}`)
+    .join(', ')
+}
+
+export function annotationEntries(
+  annotations?: Record<string, string>,
+): Array<{ key: string; value: string }> {
+  if (!annotations) return []
+  return Object.entries(annotations)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => ({ key, value }))
+}

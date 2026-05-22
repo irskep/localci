@@ -1,4 +1,5 @@
 #!/bin/sh
 set -eu
 
+mise run daemon-restart
 exec go run ./cmd/localci web "$@"

@@ -2,7 +2,7 @@
 import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-import { shortCommit, summarizeCommit } from '@/lib/api'
+import { annotationEntries, shortCommit, summarizeCommit } from '@/lib/api'
 import { commitURL, parseRepoRoute } from '@/lib/routes'
 import { useLocalciStore } from '@/stores/localci'
 
@@ -49,8 +49,18 @@ watch(() => route.path, load)
         <PColumn header="Summary">
           <template #body="{ data }">{{ summarizeCommit(data) }}</template>
         </PColumn>
-        <PColumn header="Branch">
-          <template #body="{ data }">{{ data.annotations?.['git.branch'] ?? '' }}</template>
+        <PColumn header="Attributes">
+          <template #body="{ data }">
+            <span class="attribute-list">
+              <span
+                v-for="attribute in annotationEntries(data.annotations)"
+                :key="attribute.key"
+                class="attribute-pill"
+              >
+                {{ attribute.key }}: {{ attribute.value }}
+              </span>
+            </span>
+          </template>
         </PColumn>
         <PColumn header="Tasks">
           <template #body="{ data }">{{ data.tasks.length }}</template>

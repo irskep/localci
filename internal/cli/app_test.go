@@ -235,7 +235,7 @@ func TestParseAnnotationArgs(t *testing.T) {
 	t.Parallel()
 
 	annotations, remaining, err := parseAnnotationArgs([]string{
-		"--annotation", "git.branch=main",
+		"--annotation", "branch=main",
 		"--annotation=ci.source=manual",
 		"/repo",
 		"abc123",
@@ -244,8 +244,8 @@ func TestParseAnnotationArgs(t *testing.T) {
 		t.Fatalf("parseAnnotationArgs returned error: %v", err)
 	}
 
-	if got, want := annotations["git.branch"], "main"; got != want {
-		t.Fatalf("git.branch = %q, want %q", got, want)
+	if got, want := annotations["branch"], "main"; got != want {
+		t.Fatalf("branch = %q, want %q", got, want)
 	}
 	if got, want := annotations["ci.source"], "manual"; got != want {
 		t.Fatalf("ci.source = %q, want %q", got, want)

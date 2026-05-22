@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 
-import { shortCommit } from '@/lib/api'
+import { annotationEntries, shortCommit } from '@/lib/api'
 import type { CommitSummary, QueueEntry } from '@/lib/api'
 import { commitURL, taskURL } from '@/lib/routes'
 import { useLocalciStore } from '@/stores/localci'
@@ -66,8 +66,18 @@ onMounted(() => {
                 </template>
               </PColumn>
               <PColumn field="summary" header="Result" />
-              <PColumn header="Branch">
-                <template #body="{ data }">{{ data.annotations?.['git.branch'] ?? '' }}</template>
+              <PColumn header="Attributes">
+                <template #body="{ data }">
+                  <span class="attribute-list">
+                    <span
+                      v-for="attribute in annotationEntries(data.annotations)"
+                      :key="attribute.key"
+                      class="attribute-pill"
+                    >
+                      {{ attribute.key }}: {{ attribute.value }}
+                    </span>
+                  </span>
+                </template>
               </PColumn>
               <PColumn header="Updated">
                 <template #body="{ data }">{{ activityTime(data) }}</template>

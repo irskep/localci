@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const AnnotationGitBranch = "git.branch"
+const AnnotationBranch = "branch"
 
 func GitAnnotations(ctx context.Context, repoDir string) map[string]string {
 	branch := currentGitBranch(ctx, repoDir)
@@ -16,7 +16,7 @@ func GitAnnotations(ctx context.Context, repoDir string) map[string]string {
 		return nil
 	}
 	return map[string]string{
-		AnnotationGitBranch: branch,
+		AnnotationBranch: branch,
 	}
 }
 

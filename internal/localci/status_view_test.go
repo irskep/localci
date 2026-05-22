@@ -16,7 +16,7 @@ func TestBuildCommitStatusView(t *testing.T) {
 		RepoDir: "/repo",
 		Commit:  "abc123",
 		Annotations: map[string]string{
-			"git.branch": "main",
+			"branch": "main",
 		},
 	}
 
@@ -61,8 +61,8 @@ func TestBuildCommitStatusView(t *testing.T) {
 	if len(view.Tasks) != 4 {
 		t.Fatalf("len(view.Tasks) = %d, want 4", len(view.Tasks))
 	}
-	if got, want := view.Annotations["git.branch"], "main"; got != want {
-		t.Fatalf("git.branch annotation = %q, want %q", got, want)
+	if got, want := view.Annotations["branch"], "main"; got != want {
+		t.Fatalf("branch annotation = %q, want %q", got, want)
 	}
 
 	statuses := map[string]ExecutionStatus{}

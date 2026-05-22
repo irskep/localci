@@ -2,7 +2,14 @@
 import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-import { formatDuration, shortCommit, statusSeverity, summarizeCommit } from '@/lib/api'
+import {
+  annotationEntries,
+  formatAnnotations,
+  formatDuration,
+  shortCommit,
+  statusSeverity,
+  summarizeCommit,
+} from '@/lib/api'
 import { parseRepoRoute, taskURL } from '@/lib/routes'
 import { useLocalciStore } from '@/stores/localci'
 
@@ -29,8 +36,17 @@ watch(() => route.path, load)
       <p class="page-subtitle">
         {{ store.currentCommit?.repo.repo_name }}
         <template v-if="commit"> / {{ summarizeCommit(commit) }}</template>
-        <template v-if="commit?.annotations?.['git.branch']">
-          / {{ commit.annotations['git.branch'] }}
+        <template v-if="formatAnnotations(commit?.annotations)">
+          /
+          <span class="attribute-list">
+            <span
+              v-for="attribute in annotationEntries(commit?.annotations)"
+              :key="attribute.key"
+              class="attribute-pill"
+            >
+              {{ attribute.key }}: {{ attribute.value }}
+            </span>
+          </span>
         </template>
       </p>
     </section>

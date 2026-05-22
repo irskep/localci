@@ -1,6 +1,30 @@
 :root {
-  color: #1f2523;
-  background: #f5f3ed;
+  --color-bg: #f5f3ed;
+  --color-bg-elevated: rgba(255, 255, 255, 0.78);
+  --color-bg-overlay: rgba(245, 243, 237, 0.92);
+  --color-bg-soft: #fffdf8;
+  --color-bg-accent: #e9ddbf;
+  --color-bg-attribute: #fff8e8;
+  --color-bg-code: #141918;
+  --color-bg-glow-start: rgba(255, 255, 255, 0.72);
+  --color-bg-glow-end: rgba(255, 255, 255, 0);
+  --color-text: #1f2523;
+  --color-text-strong: #141918;
+  --color-text-heading: #27302d;
+  --color-text-muted: #66706d;
+  --color-text-subtle: #65706c;
+  --color-text-attribute: #43504b;
+  --color-text-code: #dce8df;
+  --color-link: #225c63;
+  --color-border: #ded9cd;
+  --color-border-soft: #d8d1c1;
+  --color-border-attribute: #cfc6b4;
+  --radius-panel: 8px;
+  --radius-control: 6px;
+  --radius-pill: 999px;
+
+  color: var(--color-text);
+  background: var(--color-bg);
   font-family: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -14,11 +38,12 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0)), #f5f3ed;
+  background:
+    linear-gradient(180deg, var(--color-bg-glow-start), var(--color-bg-glow-end)), var(--color-bg);
 }
 
 a {
-  color: #225c63;
+  color: var(--color-link);
   text-decoration: none;
 }
 
@@ -39,8 +64,8 @@ pre {
   position: sticky;
   top: 0;
   z-index: 10;
-  border-bottom: 1px solid #ded9cd;
-  background: rgba(245, 243, 237, 0.92);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-overlay);
   backdrop-filter: blur(16px);
 }
 
@@ -58,7 +83,7 @@ pre {
   display: inline-flex;
   align-items: center;
   gap: 0.65rem;
-  color: #1f2523;
+  color: var(--color-text);
   font-size: 1.18rem;
   font-weight: 750;
 }
@@ -68,9 +93,9 @@ pre {
   width: 1.9rem;
   height: 1.9rem;
   place-items: center;
-  border: 1px solid #1f2523;
-  border-radius: 6px;
-  background: #e9ddbf;
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-accent);
   font-size: 0.9rem;
 }
 
@@ -93,7 +118,7 @@ pre {
 }
 
 .eyebrow {
-  color: #65706c;
+  color: var(--color-text-subtle);
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -102,14 +127,14 @@ pre {
 
 .page-title {
   margin: 0;
-  color: #141918;
+  color: var(--color-text-strong);
   font-size: clamp(1.9rem, 3vw, 3rem);
   line-height: 1.05;
 }
 
 .page-subtitle {
   margin: 0;
-  color: #66706d;
+  color: var(--color-text-muted);
 }
 
 .section-grid {
@@ -125,9 +150,9 @@ pre {
 }
 
 .panel {
-  border: 1px solid #ded9cd;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-bg-elevated);
 }
 
 .panel-header {
@@ -140,7 +165,7 @@ pre {
 
 .panel-title {
   margin: 0;
-  color: #27302d;
+  color: var(--color-text-heading);
   font-size: 1rem;
 }
 
@@ -155,7 +180,27 @@ pre {
 }
 
 .muted {
-  color: #66706d;
+  color: var(--color-text-muted);
+}
+
+.attribute-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  vertical-align: middle;
+}
+
+.attribute-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border-attribute);
+  border-radius: var(--radius-pill);
+  padding: 0.12rem 0.5rem;
+  background: var(--color-bg-attribute);
+  color: var(--color-text-attribute);
+  font-size: 0.78rem;
+  font-weight: 650;
+  white-space: nowrap;
 }
 
 .log-view {
@@ -163,10 +208,10 @@ pre {
   overflow: auto;
   margin: 0;
   padding: 1rem;
-  border: 1px solid #d8d1c1;
-  border-radius: 8px;
-  background: #141918;
-  color: #dce8df;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-panel);
+  background: var(--color-bg-code);
+  color: var(--color-text-code);
   font-size: 0.84rem;
   line-height: 1.55;
   white-space: pre-wrap;
@@ -174,7 +219,7 @@ pre {
 
 .empty-state {
   padding: 1.5rem;
-  color: #66706d;
+  color: var(--color-text-muted);
 }
 
 .loading-state {
@@ -182,7 +227,7 @@ pre {
   align-items: center;
   gap: 0.85rem;
   padding: 1rem 0;
-  color: #66706d;
+  color: var(--color-text-muted);
 }
 
 .attempt-list {
@@ -199,9 +244,9 @@ pre {
   justify-content: space-between;
   gap: 1rem;
   padding: 0.65rem 0.75rem;
-  border: 1px solid #ded9cd;
-  border-radius: 6px;
-  background: #fffdf8;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-soft);
 }
 
 .artifact-list {
