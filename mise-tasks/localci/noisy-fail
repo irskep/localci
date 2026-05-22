@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+: "${LOCALCI_TASK_OUTPUT_DIR:?}"
+: "${LOCALCI_TASK_CACHE_DIR:?}"
+: "${LOCALCI_CACHE_DIR:?}"
+
+mkdir -p "$LOCALCI_TASK_OUTPUT_DIR" "$LOCALCI_TASK_CACHE_DIR" "$LOCALCI_CACHE_DIR"
+
+line=1
+while [ "$line" -le 1000 ]; do
+  printf 'intentional noisy failure line %04d\n' "$line"
+  line=$((line + 1))
+done
+
+exit 1

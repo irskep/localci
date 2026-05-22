@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+: "${LOCALCI_TASK_OUTPUT_DIR:?}"
+: "${LOCALCI_TASK_CACHE_DIR:?}"
+: "${LOCALCI_CACHE_DIR:?}"
+
+mkdir -p "$LOCALCI_TASK_OUTPUT_DIR" "$LOCALCI_TASK_CACHE_DIR" "$LOCALCI_CACHE_DIR"
+
+second=1
+while [ "$second" -le 60 ]; do
+  printf 'intentional slow stream second %02d\n' "$second"
+  sleep 1
+  second=$((second + 1))
+done
+
+exit 0
