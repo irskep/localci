@@ -14,12 +14,18 @@ import type {
 import { getJSON, postJSON } from '@/lib/api'
 import { taskURL } from '@/lib/routes'
 
+type RequestState<T> =
+  | { state: 'idle' }
+  | { state: 'loading'; key: string; previous: T | null }
+  | { state: 'loaded'; key: string; data: T }
+  | { state: 'error'; key: string; message: string; previous: T | null }
+
 export const useLocalciStore = defineStore('localci', () => {
   const home = ref<HomeResponse | null>(null)
   const queue = ref<QueueResponse | null>(null)
   const currentRepo = ref<RepoResponse | null>(null)
   const currentCommit = ref<CommitResponse | null>(null)
-  const currentTask = ref<TaskResponse | null>(null)
+  const taskRequest = ref<RequestState<TaskResponse>>({ state: 'idle' })
   const artifactList = ref<ArtifactListResponse | null>(null)
   const currentArtifact = ref<ArtifactResponse | null>(null)
   const loading = ref(false)
@@ -35,6 +41,17 @@ export const useLocalciStore = defineStore('localci', () => {
     () => queue.value?.pending.length ?? home.value?.queue.pending.length ?? 0,
   )
   const activeEntry = computed(() => queue.value?.active ?? home.value?.queue.active)
+  const currentTask = computed(() => {
+    switch (taskRequest.value.state) {
+      case 'loaded':
+        return taskRequest.value.data
+      case 'loading':
+      case 'error':
+        return taskRequest.value.previous
+      default:
+        return null
+    }
+  })
 
   async function load<T>(operation: () => Promise<T>): Promise<T | null> {
     loading.value = true
@@ -83,12 +100,49 @@ export const useLocalciStore = defineStore('localci', () => {
     commitLoaded.value = true
   }
 
+  function taskResponseFor(apiPath: string): TaskResponse | null {
+    const request = taskRequest.value
+    if (request.state === 'loaded' && request.key === apiPath) return request.data
+    if ((request.state === 'loading' || request.state === 'error') && request.key === apiPath) {
+      return request.previous
+    }
+    return null
+  }
+
+  function taskErrorFor(apiPath: string): string {
+    const request = taskRequest.value
+    if (request.state === 'error' && request.key === apiPath) return request.message
+    return ''
+  }
+
+  function taskLoadingFor(apiPath: string): boolean {
+    const request = taskRequest.value
+    return request.state === 'loading' && request.key === apiPath
+  }
+
   async function loadTask(apiPath: string): Promise<void> {
     taskLoaded.value = false
-    currentTask.value = null
-    const result = await load(() => getJSON<TaskResponse>(apiPath))
-    if (result) currentTask.value = result
-    taskLoaded.value = true
+    const previous = taskResponseFor(apiPath)
+    taskRequest.value = { state: 'loading', key: apiPath, previous }
+    loading.value = true
+    error.value = ''
+    try {
+      const result = await getJSON<TaskResponse>(apiPath)
+      if (taskRequest.value.state === 'loading' && taskRequest.value.key === apiPath) {
+        taskRequest.value = { state: 'loaded', key: apiPath, data: result }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      error.value = message
+      if (taskRequest.value.state === 'loading' && taskRequest.value.key === apiPath) {
+        taskRequest.value = { state: 'error', key: apiPath, message, previous }
+      }
+    } finally {
+      if (taskRequest.value.state !== 'loading' || taskRequest.value.key === apiPath) {
+        loading.value = false
+        taskLoaded.value = true
+      }
+    }
   }
 
   async function loadArtifactList(apiPath: string): Promise<void> {
@@ -138,6 +192,9 @@ export const useLocalciStore = defineStore('localci', () => {
     queueCount,
     repoLoaded,
     retryTask,
+    taskErrorFor,
     taskLoaded,
+    taskLoadingFor,
+    taskResponseFor,
   }
 })

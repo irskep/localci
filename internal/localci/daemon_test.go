@@ -73,6 +73,33 @@ func TestProcessAliveInvalidPID(t *testing.T) {
 	}
 }
 
+func TestDaemonManagerReadAliveStateRequiresResponsiveDaemon(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := Paths{Root: root}
+	if err := os.MkdirAll(paths.DaemonRoot(), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := writeJSONFile(paths.DaemonStatePath(), DaemonState{
+		PID:         os.Getpid(),
+		StartedAt:   time.Now().UTC(),
+		HTTPAddress: "127.0.0.1:1",
+		HTTPBaseURL: "http://127.0.0.1:1",
+	}); err != nil {
+		t.Fatalf("writeJSONFile returned error: %v", err)
+	}
+
+	manager := DaemonManager{Paths: paths}
+	_, alive, err := manager.readAliveState()
+	if err != nil {
+		t.Fatalf("readAliveState returned error: %v", err)
+	}
+	if alive {
+		t.Fatalf("readAliveState returned alive for an unresponsive daemon")
+	}
+}
+
 func TestWaitForHTTPReady(t *testing.T) {
 	t.Parallel()
 

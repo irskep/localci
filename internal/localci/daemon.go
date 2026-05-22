@@ -288,8 +288,35 @@ func (m DaemonManager) readAliveState() (DaemonState, bool, error) {
 	if !alive {
 		return state, false, nil
 	}
+	ready, err := m.daemonReady(state)
+	if err != nil {
+		return DaemonState{}, false, err
+	}
+	if !ready {
+		return state, false, nil
+	}
 
 	return state, true, nil
+}
+
+func (m DaemonManager) daemonReady(state DaemonState) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	pingState, err := DaemonClient{Paths: m.Paths}.Ping(ctx)
+	if err != nil {
+		return false, nil
+	}
+	if pingState.PID != state.PID {
+		return false, nil
+	}
+	if err := waitForHTTPReady(ctx, pingState.HTTPBaseURL); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			return false, nil
+		}
+		return false, nil
+	}
+	return true, nil
 }
 
 func (m DaemonManager) executablePath() string {

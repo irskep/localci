@@ -114,6 +114,11 @@ func (c DaemonClient) call(ctx context.Context, req DaemonRequest) (DaemonRespon
 		return DaemonResponse{}, err
 	}
 	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := conn.SetDeadline(deadline); err != nil {
+			return DaemonResponse{}, err
+		}
+	}
 
 	if err := json.NewEncoder(conn).Encode(req); err != nil {
 		return DaemonResponse{}, err

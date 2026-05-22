@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
@@ -18,8 +18,13 @@ const route = useRoute()
 const router = useRouter()
 const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
-const task = computed(() => store.currentTask?.task)
+const taskResponse = computed(() => store.taskResponseFor(parsed.value.apiPath))
+const task = computed(() => taskResponse.value?.task)
 const taskName = computed(() => task.value?.name ?? parsed.value.taskName ?? 'Task')
+const shouldRefresh = computed(
+  () => task.value?.status === 'queued' || task.value?.status === 'running',
+)
+let refreshTimer: ReturnType<typeof window.setInterval> | undefined
 
 async function load(): Promise<void> {
   if (parsed.value.kind !== 'task' && parsed.value.kind !== 'attempt') return
@@ -37,8 +42,28 @@ async function retry(): Promise<void> {
   if (route.path !== result.url) await router.push(result.url)
 }
 
+function stopRefresh(): void {
+  if (!refreshTimer) return
+  window.clearInterval(refreshTimer)
+  refreshTimer = undefined
+}
+
+function syncRefresh(): void {
+  if (!shouldRefresh.value || (parsed.value.kind !== 'task' && parsed.value.kind !== 'attempt')) {
+    stopRefresh()
+    return
+  }
+  if (refreshTimer) return
+  refreshTimer = window.setInterval(() => {
+    void load()
+  }, 1000)
+}
+
 onMounted(load)
 watch(() => route.path, load)
+watch(shouldRefresh, syncRefresh)
+watch(() => parsed.value.kind, syncRefresh)
+onUnmounted(stopRefresh)
 </script>
 
 <template>
@@ -48,7 +73,7 @@ watch(() => route.path, load)
         { label: 'Home', to: '/' },
         { label: 'Repo', to: '/repo' },
         {
-          label: store.currentTask?.repo.repo_path ?? parsed.repoPath,
+          label: taskResponse?.repo.repo_path ?? parsed.repoPath,
           to: repoPathURL(parsed.repoPath),
         },
         {
@@ -72,13 +97,15 @@ watch(() => route.path, load)
       <span class="eyebrow">Task</span>
       <h1 class="page-title">{{ taskName }}</h1>
       <p class="page-subtitle">
-        {{ store.currentTask?.repo.repo_path }}
+        {{ taskResponse?.repo.repo_path }}
         <template v-if="parsed.commit"> / {{ parsed.commit }}</template>
       </p>
     </section>
 
-    <PMessage v-if="store.error" severity="error" :closable="false">{{ store.error }}</PMessage>
-    <div v-if="store.loading && !task" class="loading-state">
+    <PMessage v-if="store.taskErrorFor(parsed.apiPath)" severity="error" :closable="false">{{
+      store.taskErrorFor(parsed.apiPath)
+    }}</PMessage>
+    <div v-if="store.taskLoadingFor(parsed.apiPath) && !task" class="loading-state">
       <PProgressSpinner style="width: 1.5rem; height: 1.5rem" />
       <span>Loading task</span>
     </div>
@@ -151,13 +178,11 @@ watch(() => route.path, load)
             <h2 class="panel-title">Primary Log</h2>
             <div class="task-log-meta">
               <PTag :severity="statusSeverity(task.status)" :value="task.status" />
-              <span class="muted mono">{{
-                store.currentTask?.primary_artifact || 'combined.log'
-              }}</span>
+              <span class="muted mono">{{ taskResponse?.primary_artifact || 'combined.log' }}</span>
             </div>
           </div>
           <pre class="task-log-view">{{
-            store.currentTask?.primary_log || 'No primary log content.'
+            taskResponse?.primary_log || 'No primary log content.'
           }}</pre>
         </div>
       </section>
