@@ -4,12 +4,20 @@ import { useRoute } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import { attemptURL, commitURL, parseRepoRoute, repoPathURL, taskURL } from '@/lib/routes'
+import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
 
 const route = useRoute()
 const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
 const taskName = computed(() => store.currentArtifact?.task ?? parsed.value.taskName ?? 'Task')
+const title = computed(() => {
+  const artifact =
+    parsed.value.artifactPath ?? store.currentArtifact?.artifact.display_name ?? 'Artifact'
+  return `${artifact} - ${taskName.value}`
+})
+
+useDocumentTitle(title)
 
 function subscribe(): void {
   if (parsed.value.kind !== 'artifact') return
@@ -59,10 +67,13 @@ onUnmounted(() => store.unsubscribeArtifact())
       <p class="page-subtitle">
         {{ store.currentArtifact?.repo.repo_path }} / {{ parsed.taskName }} / attempt
         {{ parsed.attempt }}
+        <template v-if="store.error && store.currentArtifact"> / {{ store.error }}</template>
       </p>
     </section>
 
-    <PMessage v-if="store.error" severity="error" :closable="false">{{ store.error }}</PMessage>
+    <PMessage v-if="store.error && !store.currentArtifact" severity="error" :closable="false">{{
+      store.error
+    }}</PMessage>
     <div v-if="store.loading && !store.currentArtifact" class="loading-state">
       <PProgressSpinner style="width: 1.5rem; height: 1.5rem" />
       <span>Loading artifact</span>

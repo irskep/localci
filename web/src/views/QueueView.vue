@@ -5,11 +5,14 @@ import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import { shortCommit } from '@/lib/api'
 import type { QueueEntry } from '@/lib/api'
 import { taskURL } from '@/lib/routes'
+import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
 
 const store = useLocalciStore()
 const pending = computed(() => store.queue?.pending ?? [])
 const active = computed(() => store.queue?.active)
+
+useDocumentTitle('Queue')
 
 function taskLabel(entry: QueueEntry): string {
   return `${entry.repo.repo_path} / ${shortCommit(entry.commit)}`

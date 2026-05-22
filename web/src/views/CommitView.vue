@@ -13,6 +13,7 @@ import {
   summarizeCommit,
 } from '@/lib/api'
 import { parseRepoRoute, repoPathURL, taskURL } from '@/lib/routes'
+import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
 
 const route = useRoute()
@@ -20,6 +21,13 @@ const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
 const commit = computed(() => store.currentCommit?.commit)
 const tasks = computed(() => commit.value?.tasks ?? [])
+const title = computed(() => {
+  const commitLabel = parsed.value.commit ? shortCommit(parsed.value.commit) : 'Commit'
+  const repoLabel = store.currentCommit?.repo.repo_path ?? parsed.value.repoPath
+  return repoLabel ? `${repoLabel} ${commitLabel}` : commitLabel
+})
+
+useDocumentTitle(title)
 
 function subscribe(): void {
   if (parsed.value.kind !== 'commit') return

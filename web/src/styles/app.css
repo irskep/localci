@@ -69,54 +69,7 @@ pre {
   height: 100vh;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-width: 0;
-}
-
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-overlay);
-  backdrop-filter: blur(16px);
-}
-
-.topbar-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  width: 100%;
-  min-width: 0;
-  padding: 0.85rem 1rem;
-}
-
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.65rem;
-  min-width: 0;
-  color: var(--color-text);
-  font-size: 1.18rem;
-  font-weight: 750;
-}
-
-.brand-mark {
-  display: grid;
-  width: 1.9rem;
-  height: 1.9rem;
-  place-items: center;
-  border: 1px solid var(--color-text);
-  border-radius: var(--radius-control);
-  background: var(--color-bg-accent);
-  font-size: 0.9rem;
-}
-
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  grid-template-rows: minmax(0, 1fr);
   min-width: 0;
 }
 
@@ -133,13 +86,16 @@ pre {
 }
 
 .task-page {
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
   min-height: 0;
   padding-bottom: 0;
   overflow: hidden;
 }
 
 .artifact-page {
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  align-content: stretch;
   min-height: 0;
   padding-bottom: 0;
   overflow: hidden;
@@ -221,8 +177,10 @@ pre {
   grid-template-columns: 320px minmax(0, 1fr);
   gap: 1rem;
   align-items: stretch;
+  align-self: stretch;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -270,7 +228,7 @@ pre {
   justify-content: space-between;
   gap: 1rem;
   min-width: 0;
-  padding: 1rem 1.1rem 0;
+  padding: 1rem 1.1rem;
 }
 
 .panel-title {
@@ -425,21 +383,22 @@ pre {
   list-style: none;
 }
 
-.artifact-list a {
+.artifact-list li {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+}
+
+.artifact-list a {
+  min-width: 0;
   padding: 0.5rem 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 860px) {
   .section-grid,
   .task-layout {
     grid-template-columns: 1fr;
-  }
-
-  .topbar-inner {
-    align-items: flex-start;
-    flex-direction: column;
   }
 }

@@ -33,6 +33,14 @@ type RequestState<T> =
   | { state: 'loaded'; key: string; data: T }
   | { state: 'error'; key: string; message: string; previous: T | null }
 
+type EventStream = {
+  key: string
+  socket: WebSocket | null
+  reconnectTimer: number | null
+  reconnectAttempts: number
+  stopped: boolean
+}
+
 export const useLocalciStore = defineStore('localci', () => {
   const home = ref<HomeResponse | null>(null)
   const queue = ref<QueueResponse | null>(null)
@@ -49,12 +57,9 @@ export const useLocalciStore = defineStore('localci', () => {
   const commitLoaded = ref(false)
   const taskLoaded = ref(false)
   const artifactLoaded = ref(false)
-  let taskSocket: WebSocket | null = null
-  let taskSocketKey = ''
-  let artifactSocket: WebSocket | null = null
-  let artifactSocketKey = ''
-  let pageSocket: WebSocket | null = null
-  let pageSocketKey = ''
+  let taskStream: EventStream | null = null
+  let artifactStream: EventStream | null = null
+  let pageStream: EventStream | null = null
 
   const queueCount = computed(
     () => queue.value?.pending.length ?? home.value?.queue.pending.length ?? 0,
@@ -160,40 +165,39 @@ export const useLocalciStore = defineStore('localci', () => {
     validateData: (value: unknown) => T,
     apply: (data: T) => void,
   ): void {
-    if (pageSocket && pageSocketKey === apiPath) return
+    if (pageStream && pageStream.key === apiPath) return
     unsubscribePage()
-    pageSocketKey = apiPath
     loading.value = true
     error.value = ''
-    pageSocket = openEventSocket(apiPath)
-    pageSocket.addEventListener('message', (message) => {
-      if (pageSocketKey !== apiPath) return
-      try {
-        const event = parseAPIEvent(JSON.parse(message.data as string) as unknown, validateData)
-        if (event.type === 'snapshot' || event.type === 'replace') {
-          apply(event.data)
+    pageStream = openReconnectingEventStream(apiPath, {
+      onMessage(message) {
+        try {
+          const event = parseAPIEvent(JSON.parse(message.data as string) as unknown, validateData)
+          if (event.type === 'snapshot' || event.type === 'replace') {
+            apply(event.data)
+            loading.value = false
+          }
+          if (event.type === 'error') {
+            error.value = event.message
+            loading.value = false
+          }
+        } catch (err) {
+          error.value = err instanceof Error ? err.message : String(err)
           loading.value = false
         }
-        if (event.type === 'error') {
-          error.value = event.message
-          loading.value = false
-        }
-      } catch (err) {
-        error.value = err instanceof Error ? err.message : String(err)
+      },
+      onDisconnect() {
         loading.value = false
-      }
-    })
-    pageSocket.addEventListener('error', () => {
-      if (pageSocketKey !== apiPath) return
-      error.value = 'Event stream disconnected'
-      loading.value = false
+      },
+      onReconnect() {
+        if (error.value === 'Reconnecting to daemon') error.value = ''
+      },
     })
   }
 
   function unsubscribePage(): void {
-    if (pageSocket) pageSocket.close()
-    pageSocket = null
-    pageSocketKey = ''
+    closeEventStream(pageStream)
+    pageStream = null
   }
 
   function taskResponseFor(apiPath: string): TaskResponse | null {
@@ -242,70 +246,71 @@ export const useLocalciStore = defineStore('localci', () => {
   }
 
   function subscribeTask(apiPath: string): void {
-    if (taskSocket && taskSocketKey === apiPath) return
+    if (taskStream && taskStream.key === apiPath) return
     unsubscribeTask()
-    taskSocketKey = apiPath
     const previous = taskResponseFor(apiPath)
     taskRequest.value = { state: 'loading', key: apiPath, previous }
-    taskSocket = openEventSocket(apiPath)
-    taskSocket.addEventListener('message', (message) => {
-      if (taskSocketKey !== apiPath) return
-      let event: APIEvent<TaskResponse>
-      try {
-        event = parseAPIEvent(JSON.parse(message.data as string) as unknown, parseTaskResponse)
-      } catch (err) {
-        error.value = err instanceof Error ? err.message : String(err)
-        return
-      }
-      if (event.type === 'snapshot' || event.type === 'replace') {
-        taskRequest.value = { state: 'loaded', key: apiPath, data: event.data }
-        taskLoaded.value = true
-        return
-      }
-      if (event.type === 'append') {
-        const current = taskResponseFor(apiPath)
-        if (!current || current.primary_artifact !== 'combined.log') return
-        if (current.primary_log.length === event.offset) {
-          taskRequest.value = {
-            state: 'loaded',
-            key: apiPath,
-            data: {
-              ...current,
-              primary_log: current.primary_log + event.text,
-            },
-          }
+    taskStream = openReconnectingEventStream(apiPath, {
+      onMessage(message) {
+        let event: APIEvent<TaskResponse>
+        try {
+          event = parseAPIEvent(JSON.parse(message.data as string) as unknown, parseTaskResponse)
+        } catch (err) {
+          error.value = err instanceof Error ? err.message : String(err)
+          return
+        }
+        if (event.type === 'snapshot' || event.type === 'replace') {
+          taskRequest.value = { state: 'loaded', key: apiPath, data: event.data }
           taskLoaded.value = true
           return
         }
-        void loadTask(apiPath)
-        return
-      }
-      if (event.type === 'error') {
+        if (event.type === 'append') {
+          const current = taskResponseFor(apiPath)
+          if (!current || current.primary_artifact !== 'combined.log') return
+          if (current.primary_log.length === event.offset) {
+            taskRequest.value = {
+              state: 'loaded',
+              key: apiPath,
+              data: {
+                ...current,
+                primary_log: current.primary_log + event.text,
+              },
+            }
+            taskLoaded.value = true
+            return
+          }
+          void loadTask(apiPath)
+          return
+        }
+        if (event.type === 'error') {
+          taskRequest.value = {
+            state: 'error',
+            key: apiPath,
+            message: event.message,
+            previous: taskResponseFor(apiPath),
+          }
+          error.value = event.message
+        }
+      },
+      onDisconnect() {
+        const previous = taskResponseFor(apiPath)
         taskRequest.value = {
           state: 'error',
           key: apiPath,
-          message: event.message,
-          previous: taskResponseFor(apiPath),
+          message: 'Reconnecting to daemon',
+          previous,
         }
-        error.value = event.message
-      }
-    })
-    taskSocket.addEventListener('error', () => {
-      if (taskSocketKey !== apiPath) return
-      const previous = taskResponseFor(apiPath)
-      taskRequest.value = {
-        state: 'error',
-        key: apiPath,
-        message: 'Task event stream disconnected',
-        previous,
-      }
+      },
+      onReconnect() {
+        const previous = taskResponseFor(apiPath)
+        if (previous) taskRequest.value = { state: 'loaded', key: apiPath, data: previous }
+      },
     })
   }
 
   function unsubscribeTask(): void {
-    if (taskSocket) taskSocket.close()
-    taskSocket = null
-    taskSocketKey = ''
+    closeEventStream(taskStream)
+    taskStream = null
   }
 
   async function loadArtifactList(apiPath: string): Promise<void> {
@@ -322,50 +327,54 @@ export const useLocalciStore = defineStore('localci', () => {
   }
 
   function subscribeArtifact(apiPath: string): void {
-    if (artifactSocket && artifactSocketKey === apiPath) return
+    if (artifactStream && artifactStream.key === apiPath) return
     unsubscribeArtifact()
-    artifactSocketKey = apiPath
     artifactLoaded.value = false
     currentArtifact.value = null
-    artifactSocket = openEventSocket(apiPath)
-    artifactSocket.addEventListener('message', (message) => {
-      if (artifactSocketKey !== apiPath) return
-      let event: APIEvent<ArtifactResponse>
-      try {
-        event = parseAPIEvent(JSON.parse(message.data as string) as unknown, parseArtifactResponse)
-      } catch (err) {
-        error.value = err instanceof Error ? err.message : String(err)
-        return
-      }
-      if (event.type === 'snapshot' || event.type === 'replace') {
-        currentArtifact.value = event.data
-        artifactLoaded.value = true
-        return
-      }
-      if (event.type === 'append' && currentArtifact.value) {
-        const currentLength = currentArtifact.value.content.length
-        if (currentLength === event.offset) {
-          currentArtifact.value = {
-            ...currentArtifact.value,
-            content: currentArtifact.value.content + event.text,
-          }
+    artifactStream = openReconnectingEventStream(apiPath, {
+      onMessage(message) {
+        let event: APIEvent<ArtifactResponse>
+        try {
+          event = parseAPIEvent(
+            JSON.parse(message.data as string) as unknown,
+            parseArtifactResponse,
+          )
+        } catch (err) {
+          error.value = err instanceof Error ? err.message : String(err)
           return
         }
-        void loadArtifact(apiPath)
-      }
-      if (event.type === 'error') {
-        error.value = event.message
-      }
-    })
-    artifactSocket.addEventListener('error', () => {
-      if (artifactSocketKey === apiPath) error.value = 'Artifact event stream disconnected'
+        if (event.type === 'snapshot' || event.type === 'replace') {
+          currentArtifact.value = event.data
+          artifactLoaded.value = true
+          return
+        }
+        if (event.type === 'append' && currentArtifact.value) {
+          const currentLength = currentArtifact.value.content.length
+          if (currentLength === event.offset) {
+            currentArtifact.value = {
+              ...currentArtifact.value,
+              content: currentArtifact.value.content + event.text,
+            }
+            return
+          }
+          void loadArtifact(apiPath)
+        }
+        if (event.type === 'error') {
+          error.value = event.message
+        }
+      },
+      onDisconnect() {
+        error.value = currentArtifact.value ? 'Reconnecting to daemon' : error.value
+      },
+      onReconnect() {
+        if (error.value === 'Reconnecting to daemon') error.value = ''
+      },
     })
   }
 
   function unsubscribeArtifact(): void {
-    if (artifactSocket) artifactSocket.close()
-    artifactSocket = null
-    artifactSocketKey = ''
+    closeEventStream(artifactStream)
+    artifactStream = null
   }
 
   async function retryTask(
@@ -422,4 +431,76 @@ function openEventSocket(apiPath: string): WebSocket {
   const url = new URL(`${apiPath}/events`, window.location.href)
   url.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return new WebSocket(url)
+}
+
+function openReconnectingEventStream(
+  apiPath: string,
+  handlers: {
+    onMessage: (message: MessageEvent) => void
+    onDisconnect?: () => void
+    onReconnect?: () => void
+  },
+): EventStream {
+  const stream: EventStream = {
+    key: apiPath,
+    socket: null,
+    reconnectTimer: null,
+    reconnectAttempts: 0,
+    stopped: false,
+  }
+
+  const connect = (): void => {
+    if (stream.stopped) return
+    let socket: WebSocket
+    try {
+      socket = openEventSocket(apiPath)
+    } catch {
+      scheduleReconnect(stream, connect, handlers.onDisconnect)
+      return
+    }
+    stream.socket = socket
+
+    socket.addEventListener('open', () => {
+      if (stream.stopped || stream.socket !== socket) return
+      stream.reconnectAttempts = 0
+      handlers.onReconnect?.()
+    })
+    socket.addEventListener('message', (message) => {
+      if (stream.stopped || stream.socket !== socket) return
+      handlers.onMessage(message)
+    })
+    socket.addEventListener('close', () => {
+      if (stream.stopped || stream.socket !== socket) return
+      scheduleReconnect(stream, connect, handlers.onDisconnect)
+    })
+    socket.addEventListener('error', () => {
+      if (stream.stopped || stream.socket !== socket) return
+      socket.close()
+    })
+  }
+
+  connect()
+  return stream
+}
+
+function scheduleReconnect(
+  stream: EventStream,
+  connect: () => void,
+  onDisconnect?: () => void,
+): void {
+  if (stream.stopped || stream.reconnectTimer !== null) return
+  onDisconnect?.()
+  const delay = Math.min(5000, 250 * 2 ** stream.reconnectAttempts)
+  stream.reconnectAttempts += 1
+  stream.reconnectTimer = window.setTimeout(() => {
+    stream.reconnectTimer = null
+    connect()
+  }, delay)
+}
+
+function closeEventStream(stream: EventStream | null): void {
+  if (!stream) return
+  stream.stopped = true
+  if (stream.reconnectTimer !== null) window.clearTimeout(stream.reconnectTimer)
+  stream.socket?.close()
 }

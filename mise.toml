@@ -16,6 +16,10 @@ pnpm = "11.2.2"
 description = "Build the localci binary"
 run = "go build -o ./bin/localci ./cmd/localci"
 
+[tasks.web-build]
+description = "Build the Vue UI"
+run = "pnpm --dir web run build-only"
+
 [tasks.run]
 description = "Run localci"
 usage = '''
@@ -48,17 +52,13 @@ go run ./cmd/localci wait "$@"
 
 [tasks.daemon-start]
 description = "Start the localci daemon"
-run = """
-pnpm --dir web run build-only
-LOCALCI_WEB_DIR="{{config_root}}/web/dist" go run ./cmd/localci start
-"""
+depends = ["//:web-build"]
+run = 'LOCALCI_WEB_DIR="{{config_root}}/web/dist" go run ./cmd/localci start'
 
 [tasks.daemon-restart]
 description = "Restart the localci daemon"
-run = """
-pnpm --dir web run build-only
-LOCALCI_WEB_DIR="{{config_root}}/web/dist" go run ./cmd/localci restart
-"""
+depends = ["//:web-build"]
+run = 'LOCALCI_WEB_DIR="{{config_root}}/web/dist" go run ./cmd/localci restart'
 
 [tasks.daemon-stop]
 description = "Stop the localci daemon"

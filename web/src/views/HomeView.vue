@@ -6,6 +6,7 @@ import TaskSummaryLinks from '@/components/TaskSummaryLinks.vue'
 import { annotationEntries, shortCommit, summarizeCommit } from '@/lib/api'
 import type { CommitSummary, QueueEntry } from '@/lib/api'
 import { commitURL, taskURL } from '@/lib/routes'
+import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
 
 const store = useLocalciStore()
@@ -14,6 +15,8 @@ const recentRows = computed(() => store.home?.recent_commits ?? [])
 const repoRows = computed(() => store.home?.repos ?? [])
 const queueRows = computed(() => store.home?.queue.pending ?? [])
 const active = computed(() => store.home?.queue.active)
+
+useDocumentTitle('Overview')
 
 function queueLabel(entry: QueueEntry): string {
   return `${entry.repo.repo_path} / ${shortCommit(entry.commit)} / ${entry.task}`

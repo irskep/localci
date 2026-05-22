@@ -11,6 +11,7 @@ import {
   repoPathURL,
   taskURL,
 } from '@/lib/routes'
+import { useDocumentTitle } from '@/lib/title'
 import { formatDuration, statusSeverity } from '@/lib/api'
 import { useLocalciStore } from '@/stores/localci'
 
@@ -20,7 +21,14 @@ const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
 const taskResponse = computed(() => store.taskResponseFor(parsed.value.apiPath))
 const task = computed(() => taskResponse.value?.task)
+const taskError = computed(() => store.taskErrorFor(parsed.value.apiPath))
 const taskName = computed(() => task.value?.name ?? parsed.value.taskName ?? 'Task')
+const title = computed(() => {
+  const commitLabel = parsed.value.commit ? parsed.value.commit.slice(0, 12) : ''
+  return commitLabel ? `${taskName.value} ${commitLabel}` : taskName.value
+})
+
+useDocumentTitle(title)
 
 function subscribe(): void {
   if (parsed.value.kind !== 'task' && parsed.value.kind !== 'attempt') return
@@ -70,17 +78,8 @@ onUnmounted(() => store.unsubscribeTask())
       ]"
     />
 
-    <section class="page-header">
-      <span class="eyebrow">Task</span>
-      <h1 class="page-title">{{ taskName }}</h1>
-      <p class="page-subtitle">
-        {{ taskResponse?.repo.repo_path }}
-        <template v-if="parsed.commit"> / {{ parsed.commit }}</template>
-      </p>
-    </section>
-
-    <PMessage v-if="store.taskErrorFor(parsed.apiPath)" severity="error" :closable="false">{{
-      store.taskErrorFor(parsed.apiPath)
+    <PMessage v-if="taskError && !task" severity="error" :closable="false">{{
+      taskError
     }}</PMessage>
     <div v-if="store.taskLoadingFor(parsed.apiPath) && !task" class="loading-state">
       <PProgressSpinner style="width: 1.5rem; height: 1.5rem" />
@@ -92,22 +91,8 @@ onUnmounted(() => store.unsubscribeTask())
         <aside class="task-sidebar">
           <div class="panel">
             <div class="panel-header">
-              <h2 class="panel-title">Latest</h2>
-              <PButton label="Retry" size="small" icon="pi pi-refresh" @click="retry" />
-            </div>
-            <div class="panel-body">
-              <p>
-                <PTag :severity="statusSeverity(task.status)" :value="task.status" />
-              </p>
-              <p>Attempt {{ task.attempt }} of {{ task.attempt_count }}</p>
-              <p v-if="task.duration_ms > 0">{{ formatDuration(task.duration_ms) }}</p>
-              <p v-if="task.failure">{{ task.failure }}</p>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-header">
               <h2 class="panel-title">Attempts</h2>
+              <PButton label="Retry" size="small" icon="pi pi-refresh" @click="retry" />
             </div>
             <ul class="attempt-list">
               <li v-for="attempt in task.attempts" :key="attempt.attempt">
@@ -154,6 +139,7 @@ onUnmounted(() => store.unsubscribeTask())
           <div class="panel-header">
             <h2 class="panel-title">Primary Log</h2>
             <div class="task-log-meta">
+              <PTag v-if="taskError" severity="warn" :value="taskError" />
               <PTag :severity="statusSeverity(task.status)" :value="task.status" />
               <span class="muted mono">{{ taskResponse?.primary_artifact || 'combined.log' }}</span>
             </div>

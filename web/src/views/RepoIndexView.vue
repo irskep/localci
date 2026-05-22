@@ -2,10 +2,13 @@
 import { computed, onMounted, onUnmounted } from 'vue'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
 
 const store = useLocalciStore()
 const repos = computed(() => store.home?.repos ?? [])
+
+useDocumentTitle('Repos')
 
 onMounted(() => {
   store.subscribeHome()

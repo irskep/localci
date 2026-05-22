@@ -194,10 +194,7 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read snapshot returned error: %v", err)
 	}
-	var event APIEvent
-	if err := json.Unmarshal(data, &event); err != nil {
-		t.Fatalf("Unmarshal snapshot returned error: %v", err)
-	}
+	event := unmarshalAPIEvent(t, data)
 	if event.Type != EventTypeSnapshot {
 		t.Fatalf("event type = %q, want snapshot", event.Type)
 	}
@@ -205,9 +202,7 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read task snapshot returned error: %v", err)
 	}
-	if err := json.Unmarshal(data, &event); err != nil {
-		t.Fatalf("Unmarshal task snapshot returned error: %v", err)
-	}
+	event = unmarshalAPIEvent(t, data)
 	if event.Type != EventTypeSnapshot {
 		t.Fatalf("task event type = %q, want snapshot", event.Type)
 	}
@@ -222,9 +217,7 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read append returned error: %v", err)
 	}
-	if err := json.Unmarshal(data, &event); err != nil {
-		t.Fatalf("Unmarshal append returned error: %v", err)
-	}
+	event = unmarshalAPIEvent(t, data)
 	if event.Type != EventTypeAppend || event.Offset != 2 || event.Text != "++" {
 		t.Fatalf("append event = %#v", event)
 	}
@@ -232,10 +225,21 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read task append returned error: %v", err)
 	}
-	if err := json.Unmarshal(data, &event); err != nil {
-		t.Fatalf("Unmarshal task append returned error: %v", err)
+	event = unmarshalAPIEvent(t, data)
+	canonicalTaskResource, err := canonicalAPIResource(taskResource)
+	if err != nil {
+		t.Fatalf("canonicalAPIResource returned error: %v", err)
 	}
-	if event.Type != EventTypeAppend || event.Offset != 2 || event.Text != "++" || event.Resource != taskResource {
+	if event.Type != EventTypeAppend || event.Offset != 2 || event.Text != "++" || event.Resource != canonicalTaskResource {
 		t.Fatalf("task append event = %#v", event)
 	}
+}
+
+func unmarshalAPIEvent(t *testing.T, data []byte) APIEvent {
+	t.Helper()
+	var event APIEvent
+	if err := json.Unmarshal(data, &event); err != nil {
+		t.Fatalf("Unmarshal event returned error: %v", err)
+	}
+	return event
 }

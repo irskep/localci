@@ -6,12 +6,16 @@ import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import TaskSummaryLinks from '@/components/TaskSummaryLinks.vue'
 import { annotationEntries, shortCommit, summarizeCommit } from '@/lib/api'
 import { commitURL, parseRepoRoute } from '@/lib/routes'
+import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
 
 const route = useRoute()
 const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
 const commits = computed(() => store.currentRepo?.commits ?? [])
+const title = computed(() => store.currentRepo?.repo.repo_path ?? parsed.value.repoPath)
+
+useDocumentTitle(title)
 
 function subscribe(): void {
   if (parsed.value.kind !== 'repo') return
