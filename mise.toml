@@ -35,6 +35,16 @@ eval "set -- ${usage_args:-}"
 go run ./cmd/localci postcommit "$@"
 '''
 
+[tasks.wait]
+description = "Wait for a localci run"
+usage = '''
+arg "[args]" var=#true
+'''
+run = '''
+eval "set -- ${usage_args:-}"
+go run ./cmd/localci wait "$@"
+'''
+
 [tasks.daemon-start]
 description = "Start the localci daemon"
 run = "go run ./cmd/localci start"

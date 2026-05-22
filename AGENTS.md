@@ -5,3 +5,13 @@
 - Do not batch `git add` and `git commit` into parallel tool calls.
 - If a Git command fails with an `index.lock` error, stop and verify whether another Git process is active before retrying.
 - Avoid stash
+
+# Project Workflow
+
+- Use mise tasks for normal development and validation. Do not call `go run ./cmd/localci ...` directly when a mise task exists.
+- Use `mise run run -- <args>` for ad hoc localci CLI commands.
+- Use `mise run wait -- <commit>` to wait for daemon-run validation results.
+- Use `mise run self-check` to run localci against this repo directly with `invoke --wait`.
+- Use `mise run daemon-restart` when changing the web UI; it builds `web/dist` and restarts the daemon with `LOCALCI_WEB_DIR`.
+- Use `mise run web` to rebuild the web UI, restart the daemon, and open the current repo page.
+- Use `mise run check` for the basic local build/test check.
