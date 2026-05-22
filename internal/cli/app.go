@@ -567,7 +567,32 @@ func (a App) parseWebTarget(args []string) (commitTarget, error) {
 			RepoDir: defaultRepo,
 			Commit:  commit,
 		}, nil
-	case 2, 3:
+	case 2:
+		repo, err := a.tryResolveExistingRepoArg(args[0])
+		if err == nil {
+			commit, err := a.resolveCommitAlias(repo, args[1])
+			if err != nil {
+				return commitTarget{}, err
+			}
+			return commitTarget{
+				RepoDir: repo,
+				Commit:  commit,
+			}, nil
+		}
+		defaultRepo, defaultErr := a.resolveRepoArg(a.Cwd)
+		if defaultErr != nil {
+			return commitTarget{}, fmt.Errorf("resolve dir: %w", defaultErr)
+		}
+		commit, err := a.resolveCommitAlias(defaultRepo, args[0])
+		if err != nil {
+			return commitTarget{}, err
+		}
+		return commitTarget{
+			RepoDir: defaultRepo,
+			Commit:  commit,
+			Task:    strings.TrimSpace(args[1]),
+		}, nil
+	case 3:
 		return a.parseCommitTarget(args, "usage: localci web [dir] [commit] [task]")
 	default:
 		return commitTarget{}, fmt.Errorf("usage: localci web [dir] [commit] [task]")
@@ -654,16 +679,30 @@ func (a App) buildWebURL(baseURL string, spec commitTarget) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		root.Path = commitPath
+		if err := setEscapedURLPath(root, commitPath); err != nil {
+			return "", err
+		}
 	default:
 		taskPath, err := localci.TaskRoutePath(cfg.Root, spec.RepoDir, spec.Commit, spec.Task)
 		if err != nil {
 			return "", err
 		}
-		root.Path = taskPath
+		if err := setEscapedURLPath(root, taskPath); err != nil {
+			return "", err
+		}
 	}
 	root.RawQuery = ""
 	return root.String(), nil
+}
+
+func setEscapedURLPath(target *url.URL, escapedPath string) error {
+	decodedPath, err := url.PathUnescape(escapedPath)
+	if err != nil {
+		return err
+	}
+	target.Path = decodedPath
+	target.RawPath = escapedPath
+	return nil
 }
 
 func (a App) openURL(targetURL string) error {

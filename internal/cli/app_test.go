@@ -151,6 +151,39 @@ func TestParseWebTargetResolvesHeadAlias(t *testing.T) {
 	}
 }
 
+func TestParseWebTargetWithCommitAndTaskUsesCWD(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	app.HeadCommit = func(repo string) (string, error) {
+		if repo != repoDir {
+			t.Fatalf("repo = %q, want %q", repo, repoDir)
+		}
+		return "abc123", nil
+	}
+
+	got, err := app.parseWebTarget([]string{"HEAD", "//:localci:noisy-fail"})
+	if err != nil {
+		t.Fatalf("parseWebTarget returned error: %v", err)
+	}
+
+	if got.RepoDir != repoDir {
+		t.Fatalf("RepoDir = %q, want %q", got.RepoDir, repoDir)
+	}
+	if got.Commit != "abc123" {
+		t.Fatalf("Commit = %q, want %q", got.Commit, "abc123")
+	}
+	if got.Task != "//:localci:noisy-fail" {
+		t.Fatalf("Task = %q, want %q", got.Task, "//:localci:noisy-fail")
+	}
+}
+
 func TestParseCommitTargetRejectsPathsOutsideConfiguredRoot(t *testing.T) {
 	t.Parallel()
 
@@ -503,6 +536,25 @@ func TestBuildWebURLTask(t *testing.T) {
 	}
 
 	want := "http://127.0.0.1:4312/repo/repo/commit/abc123/task/localci:test"
+	if got != want {
+		t.Fatalf("buildWebURL = %q, want %q", got, want)
+	}
+}
+
+func TestBuildWebURLTaskWithSlashes(t *testing.T) {
+	t.Parallel()
+
+	app := testApp("/", "/repo")
+	got, err := app.buildWebURL("http://127.0.0.1:4312", commitTarget{
+		RepoDir: "/repo",
+		Commit:  "abc123",
+		Task:    "//:localci:noisy-fail",
+	})
+	if err != nil {
+		t.Fatalf("buildWebURL returned error: %v", err)
+	}
+
+	want := "http://127.0.0.1:4312/repo/repo/commit/abc123/task/%2F%2F:localci:noisy-fail"
 	if got != want {
 		t.Fatalf("buildWebURL = %q, want %q", got, want)
 	}

@@ -26,7 +26,7 @@ watch(() => route.path, load)
 </script>
 
 <template>
-  <main class="page">
+  <main class="page task-page">
     <section class="page-header">
       <span class="eyebrow">Task</span>
       <h1 class="page-title">{{ task?.short_name ?? parsed.taskName }}</h1>
@@ -43,23 +43,8 @@ watch(() => route.path, load)
     </div>
 
     <template v-if="task && parsed.commit && parsed.taskName">
-      <section class="section-grid">
-        <div class="stack">
-          <div class="panel">
-            <div class="panel-header">
-              <h2 class="panel-title">Primary Log</h2>
-              <PTag :severity="statusSeverity(task.status)" :value="task.status" />
-            </div>
-            <div style="padding: 1rem">
-              <p class="muted mono">{{ store.currentTask?.primary_artifact || 'combined.log' }}</p>
-              <pre class="log-view">{{
-                store.currentTask?.primary_log || 'No primary log content.'
-              }}</pre>
-            </div>
-          </div>
-        </div>
-
-        <aside class="stack">
+      <section class="task-layout">
+        <aside class="task-sidebar">
           <div class="panel">
             <div class="panel-header">
               <h2 class="panel-title">Latest</h2>
@@ -119,6 +104,21 @@ watch(() => route.path, load)
             <div v-else class="empty-state">No artifacts for this attempt.</div>
           </div>
         </aside>
+
+        <div class="task-log-panel panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Primary Log</h2>
+            <div class="task-log-meta">
+              <PTag :severity="statusSeverity(task.status)" :value="task.status" />
+              <span class="muted mono">{{
+                store.currentTask?.primary_artifact || 'combined.log'
+              }}</span>
+            </div>
+          </div>
+          <pre class="task-log-view">{{
+            store.currentTask?.primary_log || 'No primary log content.'
+          }}</pre>
+        </div>
       </section>
     </template>
   </main>
