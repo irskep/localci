@@ -233,6 +233,25 @@ export const useLocalciStore = defineStore('localci', () => {
       if (event.type === 'snapshot' || event.type === 'replace') {
         taskRequest.value = { state: 'loaded', key: apiPath, data: event.data }
         taskLoaded.value = true
+        return
+      }
+      if (event.type === 'append') {
+        const current = taskResponseFor(apiPath)
+        if (!current || current.primary_artifact !== 'combined.log') return
+        if (current.primary_log.length === event.offset) {
+          taskRequest.value = {
+            state: 'loaded',
+            key: apiPath,
+            data: {
+              ...current,
+              primary_log: current.primary_log + event.text,
+            },
+          }
+          taskLoaded.value = true
+          return
+        }
+        void loadTask(apiPath)
+        return
       }
       if (event.type === 'error') {
         taskRequest.value = {

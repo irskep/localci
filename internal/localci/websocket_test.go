@@ -183,6 +183,13 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
 
+	taskResource := "/api/repo/repo/commit/abc123/task/%2F%2F%3Alocalci%3Aslow-stream"
+	taskConn, _, err := websocket.Dial(context.Background(), "ws://"+listener.Addr().String()+taskResource+"/events", nil)
+	if err != nil {
+		t.Fatalf("Dial task returned error: %v", err)
+	}
+	defer taskConn.Close(websocket.StatusNormalClosure, "")
+
 	_, data, err := conn.Read(context.Background())
 	if err != nil {
 		t.Fatalf("Read snapshot returned error: %v", err)
@@ -193,6 +200,16 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 	}
 	if event.Type != EventTypeSnapshot {
 		t.Fatalf("event type = %q, want snapshot", event.Type)
+	}
+	_, data, err = taskConn.Read(context.Background())
+	if err != nil {
+		t.Fatalf("Read task snapshot returned error: %v", err)
+	}
+	if err := json.Unmarshal(data, &event); err != nil {
+		t.Fatalf("Unmarshal task snapshot returned error: %v", err)
+	}
+	if event.Type != EventTypeSnapshot {
+		t.Fatalf("task event type = %q, want snapshot", event.Type)
 	}
 
 	EventNotifier{Root: root, Hub: server.EventHub}.ArtifactAppended(QueueEntry{
@@ -210,5 +227,15 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 	}
 	if event.Type != EventTypeAppend || event.Offset != 2 || event.Text != "++" {
 		t.Fatalf("append event = %#v", event)
+	}
+	_, data, err = taskConn.Read(context.Background())
+	if err != nil {
+		t.Fatalf("Read task append returned error: %v", err)
+	}
+	if err := json.Unmarshal(data, &event); err != nil {
+		t.Fatalf("Unmarshal task append returned error: %v", err)
+	}
+	if event.Type != EventTypeAppend || event.Offset != 2 || event.Text != "++" || event.Resource != taskResource {
+		t.Fatalf("task append event = %#v", event)
 	}
 }

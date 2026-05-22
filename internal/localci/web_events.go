@@ -24,7 +24,7 @@ func (s WebServer) handleAPIEvents(w http.ResponseWriter, r *http.Request, segme
 		return
 	}
 
-	resource, err := canonicalAPIResource(strings.TrimSuffix(r.URL.EscapedPath(), "/events"))
+	resource, err := canonicalAPIResource(strings.TrimSuffix(requestEscapedPath(r), "/events"))
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return

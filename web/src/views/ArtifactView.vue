@@ -22,7 +22,7 @@ onUnmounted(() => store.unsubscribeArtifact())
 </script>
 
 <template>
-  <main class="page">
+  <main class="page artifact-page">
     <AppBreadcrumbs
       :items="[
         { label: 'Home', to: '/' },
@@ -68,6 +68,8 @@ onUnmounted(() => store.unsubscribeArtifact())
       <span>Loading artifact</span>
     </div>
 
-    <pre v-if="store.currentArtifact" class="log-view">{{ store.currentArtifact.content }}</pre>
+    <pre v-if="store.currentArtifact" class="log-view artifact-log-view">{{
+      store.currentArtifact.content
+    }}</pre>
   </main>
 </template>

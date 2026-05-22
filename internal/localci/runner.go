@@ -16,7 +16,10 @@ import (
 	"time"
 )
 
-const taskPrefix = "localci:"
+const (
+	combinedLogName = "combined.log"
+	taskPrefix      = "localci:"
+)
 
 type Runner struct {
 	Paths             Paths
@@ -170,7 +173,7 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task, reser
 
 	logWriters, err := newTaskLogWriters(record.OutputDir, r.stdout(), func(offset int64, text string) {
 		if r.Events != nil {
-			r.Events.ArtifactAppended(entry, "combined.log", offset, text)
+			r.Events.ArtifactAppended(entry, combinedLogName, offset, text)
 		}
 	})
 	if err != nil {
@@ -490,7 +493,7 @@ type taskLogWriters struct {
 }
 
 func newTaskLogWriters(outputDir string, stdout io.Writer, publishAppend func(offset int64, text string)) (*taskLogWriters, error) {
-	combinedFile, err := os.Create(filepath.Join(outputDir, "combined.log"))
+	combinedFile, err := os.Create(filepath.Join(outputDir, combinedLogName))
 	if err != nil {
 		return nil, fmt.Errorf("create combined log: %w", err)
 	}

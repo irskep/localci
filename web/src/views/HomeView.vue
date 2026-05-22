@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted } from 'vue'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import TaskSummaryLinks from '@/components/TaskSummaryLinks.vue'
-import { annotationEntries, shortCommit } from '@/lib/api'
+import { annotationEntries, shortCommit, summarizeCommit } from '@/lib/api'
 import type { CommitSummary, QueueEntry } from '@/lib/api'
 import { commitURL, taskURL } from '@/lib/routes'
 import { useLocalciStore } from '@/stores/localci'
@@ -70,8 +70,9 @@ onUnmounted(() => store.unsubscribePage())
                   </RouterLink>
                 </template>
               </PColumn>
-              <PColumn header="Result">
+              <PColumn header="Summary">
                 <template #body="{ data }">
+                  <div>{{ summarizeCommit(data) }}</div>
                   <TaskSummaryLinks
                     :repo-path="data.repo.repo_path"
                     :commit="data.commit"

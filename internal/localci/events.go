@@ -125,12 +125,18 @@ func (n EventNotifier) ArtifactAppended(entry QueueEntry, artifact string, offse
 	if n.Hub == nil {
 		return
 	}
-	_, _, _, attempt := n.entryResources(entry)
+	_, _, task, attempt := n.entryResources(entry)
 	if attempt == "" {
 		return
 	}
 	resource := path.Join(attempt, "artifact", artifact)
 	n.Hub.PublishAppend(resource, offset, text)
+	if artifact == combinedLogName {
+		if task != "" {
+			n.Hub.PublishAppend(task, offset, text)
+		}
+		n.Hub.PublishAppend(attempt, offset, text)
+	}
 }
 
 func (n EventNotifier) entryResources(entry QueueEntry) (string, string, string, string) {

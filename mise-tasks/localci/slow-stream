@@ -8,10 +8,10 @@ set -eu
 mkdir -p "$LOCALCI_TASK_OUTPUT_DIR" "$LOCALCI_TASK_CACHE_DIR" "$LOCALCI_CACHE_DIR"
 
 second=1
-while [ "$second" -le 60 ]; do
+while [ "$second" -le 180 ]; do
   line=1
   while [ "$line" -le 10 ]; do
-    printf 'intentional slow stream second %02d line %02d\n' "$second" "$line"
+    printf '%s intentional slow stream second %03d line %02d\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$second" "$line"
     line=$((line + 1))
   done
   sleep 1

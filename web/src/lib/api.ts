@@ -142,15 +142,21 @@ export async function postJSON<T>(path: string): Promise<T> {
 
 export function summarizeCommit(commit: { tasks: Array<{ status: string }> }): string {
   const total = commit.tasks.length
-  const failed = commit.tasks.filter((task) => task.status === 'failed').length
+  const failed = commit.tasks.filter(
+    (task) => task.status === 'failed' || task.status === 'timed-out',
+  ).length
   const running = commit.tasks.filter((task) => task.status === 'running').length
   const queued = commit.tasks.filter((task) => task.status === 'queued').length
+  const notRun = commit.tasks.filter((task) => task.status === 'not-run').length
   const passed = commit.tasks.filter((task) => task.status === 'succeeded').length
 
-  if (running > 0) return `${running} running, ${passed}/${total} passed`
-  if (queued > 0) return `${queued} queued, ${passed}/${total} passed`
-  if (failed > 0) return `${failed} failed, ${passed}/${total} passed`
-  return `${passed}/${total} passed`
+  const parts: string[] = []
+  if (failed > 0) parts.push(`${failed} failed`)
+  if (running > 0) parts.push(`${running} running`)
+  if (queued > 0) parts.push(`${queued} queued`)
+  if (notRun > 0) parts.push(`${notRun} not run`)
+  parts.push(`${passed}/${total} passed`)
+  return parts.join(', ')
 }
 
 export function statusSeverity(

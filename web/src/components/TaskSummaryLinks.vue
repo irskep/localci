@@ -17,7 +17,15 @@ const groups = computed(() => [
   },
   {
     label: 'running',
-    tasks: props.tasks.filter((task) => task.status === 'running' || task.status === 'queued'),
+    tasks: props.tasks.filter((task) => task.status === 'running'),
+  },
+  {
+    label: 'queued',
+    tasks: props.tasks.filter((task) => task.status === 'queued'),
+  },
+  {
+    label: 'not run',
+    tasks: props.tasks.filter((task) => task.status === 'not-run'),
   },
   {
     label: 'passed',

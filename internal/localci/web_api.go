@@ -103,7 +103,8 @@ type apiRetryResponse struct {
 }
 
 func (s WebServer) handleAPI(w http.ResponseWriter, r *http.Request) {
-	segments, err := splitEscapedPath(r.URL.EscapedPath())
+	escapedPath := requestEscapedPath(r)
+	segments, err := splitEscapedPath(escapedPath)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
@@ -758,6 +759,19 @@ func splitEscapedPath(escapedPath string) ([]string, error) {
 		segments = append(segments, decoded)
 	}
 	return segments, nil
+}
+
+func requestEscapedPath(r *http.Request) string {
+	if r.URL.RawPath != "" {
+		return r.URL.RawPath
+	}
+	if r.RequestURI != "" {
+		path, _, _ := strings.Cut(r.RequestURI, "?")
+		if path != "" {
+			return path
+		}
+	}
+	return r.URL.EscapedPath()
 }
 
 func indexOfSegment(segments []string, target string) int {
