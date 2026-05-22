@@ -4,9 +4,7 @@ import (
 	"errors"
 	"html/template"
 	"net/http"
-	"os"
 	"path"
-	"strings"
 )
 
 func (s WebServer) handleQueuePage(w http.ResponseWriter, r *http.Request) {
@@ -156,11 +154,7 @@ func (s WebServer) renderArtifactPath(w http.ResponseWriter, repoDir string, com
 		http.Error(w, "artifact not found", http.StatusNotFound)
 		return
 	}
-	if !strings.HasPrefix(artifact.Path, task.OutputDir+string(os.PathSeparator)) && artifact.Path != task.OutputDir {
-		http.Error(w, "artifact path is outside task output", http.StatusBadRequest)
-		return
-	}
-	data, err := os.ReadFile(artifact.Path)
+	data, err := readTaskArtifact(task, artifact.DisplayName)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return

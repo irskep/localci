@@ -93,3 +93,21 @@ func TestBuildCommitStatusView(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveArtifactPathRejectsSymlinkEscape(t *testing.T) {
+	t.Parallel()
+
+	outputDir := t.TempDir()
+	outsideDir := t.TempDir()
+	outsideFile := filepath.Join(outsideDir, "secret.txt")
+	if err := os.WriteFile(outsideFile, []byte("secret"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	if err := os.Symlink(outsideFile, filepath.Join(outputDir, "leak.txt")); err != nil {
+		t.Fatalf("Symlink returned error: %v", err)
+	}
+
+	if _, err := resolveArtifactPath(outputDir, "leak.txt"); err == nil {
+		t.Fatalf("resolveArtifactPath returned nil error, want symlink escape error")
+	}
+}

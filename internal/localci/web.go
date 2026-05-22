@@ -243,9 +243,8 @@ func (s WebServer) handleArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	outputDir := s.Paths.TaskOutputDir(repoDir, commit, taskName)
-	cleanOutputDir := filepath.Clean(outputDir)
 	cleanPath := filepath.Clean(path)
-	if !strings.HasPrefix(cleanPath, cleanOutputDir+string(os.PathSeparator)) && cleanPath != cleanOutputDir {
+	if err := verifyPathUnderDir(outputDir, cleanPath); err != nil {
 		http.Error(w, "artifact path is outside task output", http.StatusBadRequest)
 		return
 	}

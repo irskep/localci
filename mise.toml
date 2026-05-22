@@ -9,6 +9,7 @@ config_roots = ["web"]
 [tools]
 "aqua:terrastruct/d2" = "0.7.1"
 go = "1.26.3"
+node = "24.11.0"
 pnpm = "11.2.2"
 
 [tasks.build]

@@ -44,7 +44,7 @@ type TaskStatusView struct {
 type ArtifactView struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
-	Path        string `json:"path"`
+	Path        string `json:"-"`
 }
 
 type TaskAttemptView struct {
@@ -359,9 +359,59 @@ func LoadPrimaryLog(task TaskStatusView) (string, string) {
 	if !ok {
 		return "", ""
 	}
-	data, err := os.ReadFile(artifact.Path)
+	data, err := readTaskArtifact(task, artifact.DisplayName)
 	if err != nil {
 		return artifact.DisplayName, ""
 	}
 	return artifact.DisplayName, string(data)
+}
+
+func readTaskArtifact(task TaskStatusView, displayName string) ([]byte, error) {
+	path, err := resolveArtifactPath(task.OutputDir, displayName)
+	if err != nil {
+		return nil, err
+	}
+	return os.ReadFile(path)
+}
+
+func resolveArtifactPath(outputDir string, displayName string) (string, error) {
+	if outputDir == "" {
+		return "", errors.New("task output dir is required")
+	}
+	if filepath.IsAbs(displayName) {
+		return "", errors.New("artifact path must be relative")
+	}
+
+	cleanName := filepath.Clean(displayName)
+	if cleanName == "." || cleanName == ".." || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) {
+		return "", errors.New("artifact path is outside task output")
+	}
+
+	outputDir = filepath.Clean(outputDir)
+	candidate := filepath.Join(outputDir, cleanName)
+	if err := verifyPathUnderDir(outputDir, candidate); err != nil {
+		return "", err
+	}
+	return candidate, nil
+}
+
+func verifyPathUnderDir(dir string, candidate string) error {
+	dir = filepath.Clean(dir)
+	candidate = filepath.Clean(candidate)
+	realOutputDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return err
+	}
+	realCandidate, err := filepath.EvalSymlinks(candidate)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(realOutputDir, realCandidate)
+	if err != nil {
+		return err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return errors.New("artifact path is outside task output")
+	}
+	return nil
 }

@@ -122,3 +122,58 @@ func TestQueueStoreActiveMarker(t *testing.T) {
 		t.Fatalf("IsTaskActive after clear returned true, want false")
 	}
 }
+
+func TestQueueStoreClaimNextMarksActiveAndRemovesPendingAtomically(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	store := QueueStore{
+		Paths: Paths{Root: root},
+		Now: func() time.Time {
+			return time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+		},
+	}
+
+	entry, err := store.Enqueue("/repo", "abc123", "localci:test")
+	if err != nil {
+		t.Fatalf("Enqueue returned error: %v", err)
+	}
+
+	claimed, didClaim, err := store.ClaimNext()
+	if err != nil {
+		t.Fatalf("ClaimNext returned error: %v", err)
+	}
+	if !didClaim {
+		t.Fatalf("ClaimNext didClaim = false, want true")
+	}
+	if claimed.TaskName != entry.TaskName || claimed.Attempt != entry.Attempt {
+		t.Fatalf("claimed entry = %#v, want %#v", claimed, entry)
+	}
+
+	entries, err := store.List()
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("len(entries) = %d, want 0", len(entries))
+	}
+
+	active, err := store.ReadActive()
+	if err != nil {
+		t.Fatalf("ReadActive returned error: %v", err)
+	}
+	if active.TaskName != entry.TaskName {
+		t.Fatalf("active task = %#v, want %#v", active, entry)
+	}
+
+	claimedAgain, didClaim, err := store.ClaimNext()
+	if err != nil {
+		t.Fatalf("ClaimNext with active returned error: %v", err)
+	}
+	if didClaim {
+		t.Fatalf("ClaimNext with active didClaim = true, want false")
+	}
+	if claimedAgain.TaskName != entry.TaskName {
+		t.Fatalf("claimed active = %#v, want active task", claimedAgain)
+	}
+}

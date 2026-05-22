@@ -122,22 +122,257 @@ export type ArtifactView = {
   display_name: string
 }
 
-export async function getJSON<T>(path: string): Promise<T> {
+type Validator<T> = (value: unknown) => T
+
+export async function getJSON<T>(path: string, validate?: Validator<T>): Promise<T> {
   const response = await fetch(path)
   if (!response.ok) {
     const message = await response.text()
     throw new Error(message || `request failed with ${response.status}`)
   }
-  return (await response.json()) as T
+  const data = (await response.json()) as unknown
+  return validate ? validate(data) : (data as T)
 }
 
-export async function postJSON<T>(path: string): Promise<T> {
+export async function postJSON<T>(path: string, validate?: Validator<T>): Promise<T> {
   const response = await fetch(path, { method: 'POST' })
   if (!response.ok) {
     const message = await response.text()
     throw new Error(message || `request failed with ${response.status}`)
   }
-  return (await response.json()) as T
+  const data = (await response.json()) as unknown
+  return validate ? validate(data) : (data as T)
+}
+
+export function parseAPIEvent<T>(value: unknown, validateData: Validator<T>): APIEvent<T> {
+  const event = asObject(value, 'event')
+  const type = asString(event.type, 'event.type')
+  const resource = asString(event.resource, 'event.resource')
+  switch (type) {
+    case 'snapshot':
+    case 'replace':
+      return { type, resource, data: validateData(event.data) }
+    case 'append':
+      return {
+        type,
+        resource,
+        offset: asNumber(event.offset, 'event.offset'),
+        text: asString(event.text, 'event.text'),
+      }
+    case 'remove':
+      return { type, resource }
+    case 'error':
+      return { type, resource, message: asString(event.message, 'event.message') }
+    default:
+      throw new Error(`unsupported event type: ${type}`)
+  }
+}
+
+export function parseHomeResponse(value: unknown): HomeResponse {
+  const data = asObject(value, 'home')
+  return {
+    repos: asArray(data.repos, 'home.repos').map(parseRepoSummary),
+    recent_commits: asArray(data.recent_commits, 'home.recent_commits').map(parseCommitSummary),
+    queue: parseQueueResponse(data.queue),
+  }
+}
+
+export function parseQueueResponse(value: unknown): QueueResponse {
+  const data = asObject(value, 'queue')
+  return {
+    active: data.active === undefined ? undefined : parseQueueEntry(data.active),
+    pending: asArray(data.pending, 'queue.pending').map(parseQueueEntry),
+  }
+}
+
+export function parseRepoResponse(value: unknown): RepoResponse {
+  const data = asObject(value, 'repo response')
+  return {
+    repo: parseRepoSummary(data.repo),
+    commits: asArray(data.commits, 'repo.commits').map(parseCommitSummary),
+  }
+}
+
+export function parseCommitResponse(value: unknown): CommitResponse {
+  const data = asObject(value, 'commit response')
+  return {
+    repo: parseRepoSummary(data.repo),
+    commit: parseCommitStatusView(data.commit),
+  }
+}
+
+export function parseTaskResponse(value: unknown): TaskResponse {
+  const data = asObject(value, 'task response')
+  return {
+    repo: parseRepoSummary(data.repo),
+    commit: asString(data.commit, 'task.commit'),
+    task: parseTaskStatusView(data.task),
+    selected_attempt: asNumber(data.selected_attempt, 'task.selected_attempt'),
+    is_live: asBoolean(data.is_live, 'task.is_live'),
+    primary_artifact: asString(data.primary_artifact, 'task.primary_artifact'),
+    primary_log: asString(data.primary_log, 'task.primary_log'),
+  }
+}
+
+export function parseRetryResponse(value: unknown): RetryResponse {
+  const data = asObject(value, 'retry response')
+  return {
+    repo: parseRepoSummary(data.repo),
+    commit: asString(data.commit, 'retry.commit'),
+    task: asString(data.task, 'retry.task'),
+    attempt: asNumber(data.attempt, 'retry.attempt'),
+    url: asString(data.url, 'retry.url'),
+    enqueued: asBoolean(data.enqueued, 'retry.enqueued'),
+  }
+}
+
+export function parseArtifactListResponse(value: unknown): ArtifactListResponse {
+  const data = asObject(value, 'artifact list')
+  return {
+    repo: parseRepoSummary(data.repo),
+    commit: asString(data.commit, 'artifact_list.commit'),
+    task: asString(data.task, 'artifact_list.task'),
+    attempt: asNumber(data.attempt, 'artifact_list.attempt'),
+    artifacts: asArray(data.artifacts, 'artifact_list.artifacts').map(parseArtifactView),
+  }
+}
+
+export function parseArtifactResponse(value: unknown): ArtifactResponse {
+  const data = asObject(value, 'artifact response')
+  return {
+    repo: parseRepoSummary(data.repo),
+    commit: asString(data.commit, 'artifact.commit'),
+    task: asString(data.task, 'artifact.task'),
+    attempt: asNumber(data.attempt, 'artifact.attempt'),
+    artifact: parseArtifactView(data.artifact),
+    content: asString(data.content, 'artifact.content'),
+  }
+}
+
+function parseRepoSummary(value: unknown): RepoSummary {
+  const data = asObject(value, 'repo')
+  return {
+    repo_dir: asString(data.repo_dir, 'repo.repo_dir'),
+    repo_path: asString(data.repo_path, 'repo.repo_path'),
+  }
+}
+
+function parseQueueEntry(value: unknown): QueueEntry {
+  const data = asObject(value, 'queue entry')
+  return {
+    repo: parseRepoSummary(data.repo),
+    commit: asString(data.commit, 'queue.commit'),
+    task: asString(data.task, 'queue.task'),
+    attempt: asNumber(data.attempt, 'queue.attempt'),
+  }
+}
+
+function parseCommitSummary(value: unknown): CommitSummary {
+  const data = asObject(value, 'commit summary')
+  return {
+    repo: parseRepoSummary(data.repo),
+    commit: asString(data.commit, 'commit.commit'),
+    annotations: parseOptionalStringRecord(data.annotations, 'commit.annotations'),
+    tasks: asArray(data.tasks, 'commit.tasks').map(parseTaskSummary),
+    activity_at: asString(data.activity_at, 'commit.activity_at'),
+  }
+}
+
+function parseTaskSummary(value: unknown): TaskSummary {
+  const data = asObject(value, 'task summary')
+  return {
+    name: asString(data.name, 'task.name'),
+    short_name: asString(data.short_name, 'task.short_name'),
+    attempt: asNumber(data.attempt, 'task.attempt'),
+    attempt_count: asNumber(data.attempt_count, 'task.attempt_count'),
+    status: asString(data.status, 'task.status'),
+    duration_ms: asNumber(data.duration_ms, 'task.duration_ms'),
+    failure: asString(data.failure, 'task.failure'),
+  }
+}
+
+function parseCommitStatusView(value: unknown): CommitStatusView {
+  const data = asObject(value, 'commit status')
+  return {
+    repo_dir: asString(data.repo_dir, 'commit_status.repo_dir'),
+    commit: asString(data.commit, 'commit_status.commit'),
+    annotations: parseOptionalStringRecord(data.annotations, 'commit_status.annotations'),
+    tasks: asArray(data.tasks, 'commit_status.tasks').map(parseTaskStatusView),
+  }
+}
+
+function parseTaskStatusView(value: unknown): TaskStatusView {
+  const data = asObject(value, 'task status')
+  return {
+    name: asString(data.name, 'task_status.name'),
+    short_name: asString(data.short_name, 'task_status.short_name'),
+    attempt: asNumber(data.attempt, 'task_status.attempt'),
+    attempt_count: asNumber(data.attempt_count, 'task_status.attempt_count'),
+    status: asString(data.status, 'task_status.status'),
+    failure: asString(data.failure, 'task_status.failure'),
+    duration_ms: asNumber(data.duration_ms, 'task_status.duration_ms'),
+    artifacts: asArray(data.artifacts, 'task_status.artifacts').map(parseArtifactView),
+    attempts: asArray(data.attempts, 'task_status.attempts').map(parseTaskAttemptView),
+  }
+}
+
+function parseTaskAttemptView(value: unknown): TaskAttemptView {
+  const data = asObject(value, 'task attempt')
+  return {
+    attempt: asNumber(data.attempt, 'task_attempt.attempt'),
+    status: asString(data.status, 'task_attempt.status'),
+    failure: asString(data.failure, 'task_attempt.failure'),
+    duration_ms: asNumber(data.duration_ms, 'task_attempt.duration_ms'),
+  }
+}
+
+function parseArtifactView(value: unknown): ArtifactView {
+  const data = asObject(value, 'artifact')
+  return {
+    display_name: asString(data.display_name, 'artifact.display_name'),
+  }
+}
+
+function parseOptionalStringRecord(
+  value: unknown,
+  name: string,
+): Record<string, string> | undefined {
+  if (value === undefined || value === null) return undefined
+  const data = asObject(value, name)
+  const result: Record<string, string> = {}
+  for (const [key, entry] of Object.entries(data)) {
+    result[key] = asString(entry, `${name}.${key}`)
+  }
+  return result
+}
+
+function asObject(value: unknown, name: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(`${name} must be an object`)
+  }
+  return value as Record<string, unknown>
+}
+
+function asArray(value: unknown, name: string): unknown[] {
+  if (!Array.isArray(value)) throw new Error(`${name} must be an array`)
+  return value
+}
+
+function asString(value: unknown, name: string): string {
+  if (typeof value !== 'string') throw new Error(`${name} must be a string`)
+  return value
+}
+
+function asNumber(value: unknown, name: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`${name} must be a finite number`)
+  }
+  return value
+}
+
+function asBoolean(value: unknown, name: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`${name} must be a boolean`)
+  return value
 }
 
 export function summarizeCommit(commit: { tasks: Array<{ status: string }> }): string {

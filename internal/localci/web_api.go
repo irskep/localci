@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -484,7 +483,7 @@ func (s WebServer) handleAPIArtifact(w http.ResponseWriter, repoDir string, comm
 		writeAPIError(w, http.StatusNotFound, fmt.Errorf("artifact not found"))
 		return
 	}
-	data, err := os.ReadFile(artifact.Path)
+	data, err := readTaskArtifact(task, artifact.DisplayName)
 	if err != nil {
 		writeAPIError(w, http.StatusNotFound, err)
 		return

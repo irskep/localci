@@ -20,29 +20,20 @@ type RunNextResult struct {
 }
 
 func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
-	active, err := s.Queue.ReadActive()
-	if err == nil {
-		return RunNextResult{
-			DidWork: false,
-			Entry:   active.QueueEntry,
-		}, nil
-	}
-	if err != nil && !errors.Is(err, ErrRecordNotFound) {
-		return RunNextResult{}, err
-	}
-
-	entries, err := s.Queue.List()
+	entry, claimed, err := s.Queue.ClaimNext()
 	if err != nil {
 		return RunNextResult{}, err
 	}
-	if len(entries) == 0 {
+	if !claimed && entry.TaskName != "" {
+		return RunNextResult{
+			DidWork: false,
+			Entry:   entry,
+		}, nil
+	}
+	if !claimed {
 		return RunNextResult{}, nil
 	}
 
-	entry := entries[0]
-	if _, err := s.Queue.MarkActive(entry); err != nil {
-		return RunNextResult{}, err
-	}
 	defer func() {
 		_ = s.Queue.ClearActive()
 		if s.Events != nil {
@@ -53,9 +44,6 @@ func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
 		s.Events.EntryChanged(entry)
 	}
 
-	if err := s.Queue.Remove(entry); err != nil {
-		return RunNextResult{}, err
-	}
 	if s.Events != nil {
 		s.Events.QueueChanged()
 	}

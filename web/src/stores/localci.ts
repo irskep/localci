@@ -12,7 +12,19 @@ import type {
   RetryResponse,
   TaskResponse,
 } from '@/lib/api'
-import { getJSON, postJSON } from '@/lib/api'
+import {
+  getJSON,
+  parseAPIEvent,
+  parseArtifactListResponse,
+  parseArtifactResponse,
+  parseCommitResponse,
+  parseHomeResponse,
+  parseQueueResponse,
+  parseRepoResponse,
+  parseRetryResponse,
+  parseTaskResponse,
+  postJSON,
+} from '@/lib/api'
 import { taskURL } from '@/lib/routes'
 
 type RequestState<T> =
@@ -75,7 +87,7 @@ export const useLocalciStore = defineStore('localci', () => {
 
   async function loadHome(): Promise<void> {
     homeLoaded.value = false
-    const result = await load(() => getJSON<HomeResponse>('/api'))
+    const result = await load(() => getJSON('/api', parseHomeResponse))
     if (result) {
       home.value = result
       queue.value = result.queue
@@ -85,7 +97,7 @@ export const useLocalciStore = defineStore('localci', () => {
 
   function subscribeHome(): void {
     homeLoaded.value = false
-    subscribePage<HomeResponse>('/api', (data) => {
+    subscribePage('/api', parseHomeResponse, (data) => {
       home.value = data
       queue.value = data.queue
       homeLoaded.value = true
@@ -95,7 +107,7 @@ export const useLocalciStore = defineStore('localci', () => {
   async function loadQueue(): Promise<void> {
     queueLoaded.value = false
     queue.value = null
-    const result = await load(() => getJSON<QueueResponse>('/api/queue'))
+    const result = await load(() => getJSON('/api/queue', parseQueueResponse))
     if (result) queue.value = result
     queueLoaded.value = true
   }
@@ -103,7 +115,7 @@ export const useLocalciStore = defineStore('localci', () => {
   function subscribeQueue(): void {
     queueLoaded.value = false
     queue.value = null
-    subscribePage<QueueResponse>('/api/queue', (data) => {
+    subscribePage('/api/queue', parseQueueResponse, (data) => {
       queue.value = data
       queueLoaded.value = true
     })
@@ -112,7 +124,7 @@ export const useLocalciStore = defineStore('localci', () => {
   async function loadRepo(apiPath: string): Promise<void> {
     repoLoaded.value = false
     currentRepo.value = null
-    const result = await load(() => getJSON<RepoResponse>(apiPath))
+    const result = await load(() => getJSON(apiPath, parseRepoResponse))
     if (result) currentRepo.value = result
     repoLoaded.value = true
   }
@@ -120,7 +132,7 @@ export const useLocalciStore = defineStore('localci', () => {
   function subscribeRepo(apiPath: string): void {
     repoLoaded.value = false
     currentRepo.value = null
-    subscribePage<RepoResponse>(apiPath, (data) => {
+    subscribePage(apiPath, parseRepoResponse, (data) => {
       currentRepo.value = data
       repoLoaded.value = true
     })
@@ -129,7 +141,7 @@ export const useLocalciStore = defineStore('localci', () => {
   async function loadCommit(apiPath: string): Promise<void> {
     commitLoaded.value = false
     currentCommit.value = null
-    const result = await load(() => getJSON<CommitResponse>(apiPath))
+    const result = await load(() => getJSON(apiPath, parseCommitResponse))
     if (result) currentCommit.value = result
     commitLoaded.value = true
   }
@@ -137,13 +149,17 @@ export const useLocalciStore = defineStore('localci', () => {
   function subscribeCommit(apiPath: string): void {
     commitLoaded.value = false
     currentCommit.value = null
-    subscribePage<CommitResponse>(apiPath, (data) => {
+    subscribePage(apiPath, parseCommitResponse, (data) => {
       currentCommit.value = data
       commitLoaded.value = true
     })
   }
 
-  function subscribePage<T>(apiPath: string, apply: (data: T) => void): void {
+  function subscribePage<T>(
+    apiPath: string,
+    validateData: (value: unknown) => T,
+    apply: (data: T) => void,
+  ): void {
     if (pageSocket && pageSocketKey === apiPath) return
     unsubscribePage()
     pageSocketKey = apiPath
@@ -152,13 +168,18 @@ export const useLocalciStore = defineStore('localci', () => {
     pageSocket = openEventSocket(apiPath)
     pageSocket.addEventListener('message', (message) => {
       if (pageSocketKey !== apiPath) return
-      const event = JSON.parse(message.data as string) as APIEvent<T>
-      if (event.type === 'snapshot' || event.type === 'replace') {
-        apply(event.data)
-        loading.value = false
-      }
-      if (event.type === 'error') {
-        error.value = event.message
+      try {
+        const event = parseAPIEvent(JSON.parse(message.data as string) as unknown, validateData)
+        if (event.type === 'snapshot' || event.type === 'replace') {
+          apply(event.data)
+          loading.value = false
+        }
+        if (event.type === 'error') {
+          error.value = event.message
+          loading.value = false
+        }
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : String(err)
         loading.value = false
       }
     })
@@ -202,7 +223,7 @@ export const useLocalciStore = defineStore('localci', () => {
     loading.value = true
     error.value = ''
     try {
-      const result = await getJSON<TaskResponse>(apiPath)
+      const result = await getJSON(apiPath, parseTaskResponse)
       if (taskRequest.value.state === 'loading' && taskRequest.value.key === apiPath) {
         taskRequest.value = { state: 'loaded', key: apiPath, data: result }
       }
@@ -229,7 +250,13 @@ export const useLocalciStore = defineStore('localci', () => {
     taskSocket = openEventSocket(apiPath)
     taskSocket.addEventListener('message', (message) => {
       if (taskSocketKey !== apiPath) return
-      const event = JSON.parse(message.data as string) as APIEvent<TaskResponse>
+      let event: APIEvent<TaskResponse>
+      try {
+        event = parseAPIEvent(JSON.parse(message.data as string) as unknown, parseTaskResponse)
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : String(err)
+        return
+      }
       if (event.type === 'snapshot' || event.type === 'replace') {
         taskRequest.value = { state: 'loaded', key: apiPath, data: event.data }
         taskLoaded.value = true
@@ -282,14 +309,14 @@ export const useLocalciStore = defineStore('localci', () => {
   }
 
   async function loadArtifactList(apiPath: string): Promise<void> {
-    const result = await load(() => getJSON<ArtifactListResponse>(apiPath))
+    const result = await load(() => getJSON(apiPath, parseArtifactListResponse))
     if (result) artifactList.value = result
   }
 
   async function loadArtifact(apiPath: string): Promise<void> {
     artifactLoaded.value = false
     currentArtifact.value = null
-    const result = await load(() => getJSON<ArtifactResponse>(apiPath))
+    const result = await load(() => getJSON(apiPath, parseArtifactResponse))
     if (result) currentArtifact.value = result
     artifactLoaded.value = true
   }
@@ -303,7 +330,13 @@ export const useLocalciStore = defineStore('localci', () => {
     artifactSocket = openEventSocket(apiPath)
     artifactSocket.addEventListener('message', (message) => {
       if (artifactSocketKey !== apiPath) return
-      const event = JSON.parse(message.data as string) as APIEvent<ArtifactResponse>
+      let event: APIEvent<ArtifactResponse>
+      try {
+        event = parseAPIEvent(JSON.parse(message.data as string) as unknown, parseArtifactResponse)
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : String(err)
+        return
+      }
       if (event.type === 'snapshot' || event.type === 'replace') {
         currentArtifact.value = event.data
         artifactLoaded.value = true
@@ -341,7 +374,7 @@ export const useLocalciStore = defineStore('localci', () => {
     taskName: string,
   ): Promise<RetryResponse | null> {
     const retryPath = `/api${taskURL(repoPath, commit, taskName)}/retry`
-    return await load(() => postJSON<RetryResponse>(retryPath))
+    return await load(() => postJSON(retryPath, parseRetryResponse))
   }
 
   return {

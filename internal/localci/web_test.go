@@ -343,6 +343,21 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("unexpected artifacts: %#v", artifactList.Artifacts)
 	}
 
+	resp, err = http.Get(baseURL + "/api/repo/team/repo/commit/" + commit + "/task/" + taskPath + "/attempt/2/artifact")
+	if err != nil {
+		t.Fatalf("GET artifact index for raw JSON returned error: %v", err)
+	}
+	var rawArtifactList struct {
+		Artifacts []map[string]any `json:"artifacts"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rawArtifactList); err != nil {
+		t.Fatalf("Decode raw artifact list returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if _, ok := rawArtifactList.Artifacts[0]["path"]; ok {
+		t.Fatalf("artifact API leaked internal path: %#v", rawArtifactList.Artifacts[0])
+	}
+
 	resp, err = http.Get(baseURL + "/api/repo/team/repo/commit/" + commit + "/task/" + taskPath + "/attempt/2/artifact/combined.log")
 	if err != nil {
 		t.Fatalf("GET artifact returned error: %v", err)

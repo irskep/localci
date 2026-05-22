@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -280,7 +279,7 @@ func (s WebServer) apiArtifactSnapshot(repoDir string, commit string, taskName s
 	if !ok {
 		return apiArtifactResponse{}, fmt.Errorf("artifact not found")
 	}
-	data, err := os.ReadFile(artifact.Path)
+	data, err := readTaskArtifact(task, artifact.DisplayName)
 	if err != nil {
 		return apiArtifactResponse{}, err
 	}
