@@ -9,7 +9,11 @@ mkdir -p "$LOCALCI_TASK_OUTPUT_DIR" "$LOCALCI_TASK_CACHE_DIR" "$LOCALCI_CACHE_DI
 
 second=1
 while [ "$second" -le 60 ]; do
-  printf 'intentional slow stream second %02d\n' "$second"
+  line=1
+  while [ "$line" -le 10 ]; do
+    printf 'intentional slow stream second %02d line %02d\n' "$second" "$line"
+    line=$((line + 1))
+  done
   sleep 1
   second=$((second + 1))
 done

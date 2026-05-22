@@ -3,6 +3,7 @@ import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import TaskSummaryLinks from '@/components/TaskSummaryLinks.vue'
 import {
   annotationEntries,
   formatAnnotations,
@@ -48,7 +49,15 @@ watch(() => route.path, load)
       <h1 class="page-title mono">{{ parsed.commit ? shortCommit(parsed.commit) : '' }}</h1>
       <p class="page-subtitle">
         {{ store.currentCommit?.repo.repo_path }}
-        <template v-if="commit"> / {{ summarizeCommit(commit) }}</template>
+        <template v-if="commit">
+          /
+          {{ summarizeCommit(commit) }}
+          <TaskSummaryLinks
+            :repo-path="parsed.repoPath"
+            :commit="commit.commit"
+            :tasks="commit.tasks"
+          />
+        </template>
         <template v-if="formatAnnotations(commit?.annotations)">
           /
           <span class="attribute-list">

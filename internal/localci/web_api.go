@@ -1,6 +1,7 @@
 package localci
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,9 +24,18 @@ type apiCommitSummary struct {
 	Repo        apiRepoSummary    `json:"repo"`
 	Commit      string            `json:"commit"`
 	Annotations map[string]string `json:"annotations,omitempty"`
-	Summary     string            `json:"summary"`
-	TaskCount   int               `json:"task_count"`
+	Tasks       []apiTaskSummary  `json:"tasks"`
 	ActivityAt  time.Time         `json:"activity_at"`
+}
+
+type apiTaskSummary struct {
+	Name                 string          `json:"name"`
+	ShortName            string          `json:"short_name"`
+	Attempt              int             `json:"attempt"`
+	AttemptCount         int             `json:"attempt_count"`
+	Status               ExecutionStatus `json:"status"`
+	DurationMilliseconds int64           `json:"duration_ms"`
+	Failure              string          `json:"failure"`
 }
 
 type apiQueueEntry struct {
@@ -47,7 +57,7 @@ type apiHomeResponse struct {
 
 type apiRepoResponse struct {
 	Repo    apiRepoSummary     `json:"repo"`
-	Commits []CommitStatusView `json:"commits"`
+	Commits []apiCommitSummary `json:"commits"`
 }
 
 type apiCommitResponse struct {
@@ -125,7 +135,7 @@ func (s WebServer) handleAPIHome(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	views, err := s.buildHomeTaskViews(repos)
+	views, err := s.buildHomeCommitSummaries(repos)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
@@ -145,16 +155,7 @@ func (s WebServer) handleAPIHome(w http.ResponseWriter, _ *http.Request) {
 	for _, repo := range repos {
 		resp.Repos = append(resp.Repos, s.apiRepoSummary(repo.RepoDir))
 	}
-	for _, view := range views {
-		resp.RecentCommits = append(resp.RecentCommits, apiCommitSummary{
-			Repo:        s.apiRepoSummary(view.RepoDir),
-			Commit:      view.Commit,
-			Annotations: cloneAnnotations(view.Annotations),
-			Summary:     commitSummaryText(view),
-			TaskCount:   len(view.Tasks),
-			ActivityAt:  s.commitActivityAt(view),
-		})
-	}
+	resp.RecentCommits = append(resp.RecentCommits, views...)
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -290,7 +291,7 @@ func (s WebServer) handleAPIRepo(w http.ResponseWriter, repoDir string) {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	views, err := s.buildRepoCommitViews(repoDir, commits)
+	views, err := s.buildRepoCommitSummaries(repoDir, commits)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
@@ -311,7 +312,7 @@ func (s WebServer) handleAPIRepoCommitIndex(w http.ResponseWriter, repoDir strin
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	views, err := s.buildRepoCommitViews(repoDir, commits)
+	views, err := s.buildRepoCommitSummaries(repoDir, commits)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
@@ -535,24 +536,96 @@ func (s WebServer) apiRepoSummary(repoDir string) apiRepoSummary {
 	}
 }
 
-func (s WebServer) commitActivityAt(view CommitStatusView) time.Time {
-	var latest time.Time
-	for _, task := range view.Tasks {
-		for _, attempt := range task.Attempts {
-			if attempt.Attempt > 0 && task.Attempt == attempt.Attempt {
-				if !latest.IsZero() {
-					break
-				}
-			}
+func (s WebServer) buildHomeCommitSummaries(repos []RepoHistory) ([]apiCommitSummary, error) {
+	views := []apiCommitSummary{}
+	for _, repo := range repos {
+		commitViews, err := s.buildRepoCommitSummaries(repo.RepoDir, repo.Commits)
+		if err != nil {
+			return nil, err
+		}
+		views = append(views, commitViews...)
+	}
+	return views, nil
+}
+
+func (s WebServer) buildRepoCommitSummaries(repoDir string, commits []RunRecord) ([]apiCommitSummary, error) {
+	tasks, err := s.discoverTasks(repoDir)
+	if err != nil {
+		return nil, err
+	}
+
+	queue, err := s.Queue.List()
+	if err != nil {
+		return nil, err
+	}
+
+	active, err := s.Queue.ReadActive()
+	if err != nil && !errors.Is(err, ErrRecordNotFound) {
+		return nil, err
+	}
+	var activePtr *ActiveTask
+	if err == nil {
+		activePtr = &active
+	}
+
+	views := make([]apiCommitSummary, 0, len(commits))
+	for _, commit := range commits {
+		views = append(views, s.buildCommitSummary(repoDir, commit, tasks, queue, activePtr))
+	}
+	return views, nil
+}
+
+func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered []Task, queued []QueueEntry, active *ActiveTask) apiCommitSummary {
+	records := map[string]TaskRecord{}
+	for _, record := range run.TaskResults {
+		records[record.Name] = record
+	}
+
+	queuedSet := map[string]bool{}
+	for _, entry := range queued {
+		if entry.RepoDir == repoDir && entry.Commit == run.Commit {
+			queuedSet[entry.TaskName] = true
 		}
 	}
 
-	reader := StatusReader{Paths: s.Paths}
-	status, err := reader.ReadCommit(view.RepoDir, view.Commit)
-	if err == nil {
-		return runActivityAt(status.Run)
+	tasks := make([]apiTaskSummary, 0, len(discovered))
+	for _, task := range discovered {
+		summary := apiTaskSummary{
+			Name:      task.Name,
+			ShortName: trimTaskPrefix(task.Name),
+			Status:    ExecutionStatusNotRun,
+		}
+		if record, ok := records[task.Name]; ok {
+			summary.Attempt = record.Attempt
+			summary.Status = executionStatusFromTaskRecord(record)
+			summary.DurationMilliseconds = record.DurationMilliseconds
+			summary.Failure = record.Failure
+			if record.Attempt > 0 {
+				summary.AttemptCount = record.Attempt
+			}
+		}
+		if active != nil && active.RepoDir == repoDir && active.Commit == run.Commit && active.TaskName == task.Name {
+			summary.Status = ExecutionStatusRunning
+		} else if queuedSet[task.Name] {
+			summary.Status = ExecutionStatusQueued
+		}
+		tasks = append(tasks, summary)
 	}
-	return latest
+
+	return apiCommitSummary{
+		Repo:        s.apiRepoSummary(repoDir),
+		Commit:      run.Commit,
+		Annotations: cloneAnnotations(run.Annotations),
+		Tasks:       tasks,
+		ActivityAt:  runActivityAt(run),
+	}
+}
+
+func (s WebServer) discoverTasks(repoDir string) ([]Task, error) {
+	if s.DiscoverTasks == nil {
+		return nil, fmt.Errorf("task discovery is not configured")
+	}
+	return s.DiscoverTasks(context.Background(), repoDir)
 }
 
 func (s WebServer) selectedTaskStatus(repoDir string, commit string, taskName string, selectedAttempt int) (TaskStatusView, error) {

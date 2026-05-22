@@ -24,14 +24,23 @@ export type CommitSummary = {
   repo: RepoSummary
   commit: string
   annotations?: Record<string, string>
-  summary: string
-  task_count: number
+  tasks: TaskSummary[]
   activity_at: string
+}
+
+export type TaskSummary = {
+  name: string
+  short_name: string
+  attempt: number
+  attempt_count: number
+  status: string
+  duration_ms: number
+  failure: string
 }
 
 export type RepoResponse = {
   repo: RepoSummary
-  commits: CommitStatusView[]
+  commits: CommitSummary[]
 }
 
 export type CommitResponse = {
@@ -114,7 +123,7 @@ export async function postJSON<T>(path: string): Promise<T> {
   return (await response.json()) as T
 }
 
-export function summarizeCommit(commit: CommitStatusView): string {
+export function summarizeCommit(commit: { tasks: Array<{ status: string }> }): string {
   const total = commit.tasks.length
   const failed = commit.tasks.filter((task) => task.status === 'failed').length
   const running = commit.tasks.filter((task) => task.status === 'running').length

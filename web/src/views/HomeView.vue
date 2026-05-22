@@ -2,6 +2,7 @@
 import { computed, onMounted } from 'vue'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import TaskSummaryLinks from '@/components/TaskSummaryLinks.vue'
 import { annotationEntries, shortCommit } from '@/lib/api'
 import type { CommitSummary, QueueEntry } from '@/lib/api'
 import { commitURL, taskURL } from '@/lib/routes'
@@ -68,7 +69,15 @@ onMounted(() => {
                   </RouterLink>
                 </template>
               </PColumn>
-              <PColumn field="summary" header="Result" />
+              <PColumn header="Result">
+                <template #body="{ data }">
+                  <TaskSummaryLinks
+                    :repo-path="data.repo.repo_path"
+                    :commit="data.commit"
+                    :tasks="data.tasks"
+                  />
+                </template>
+              </PColumn>
               <PColumn header="Attributes">
                 <template #body="{ data }">
                   <span class="attribute-list">

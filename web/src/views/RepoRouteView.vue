@@ -3,6 +3,7 @@ import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import TaskSummaryLinks from '@/components/TaskSummaryLinks.vue'
 import { annotationEntries, shortCommit, summarizeCommit } from '@/lib/api'
 import { commitURL, parseRepoRoute } from '@/lib/routes'
 import { useLocalciStore } from '@/stores/localci'
@@ -56,7 +57,14 @@ watch(() => route.path, load)
           </template>
         </PColumn>
         <PColumn header="Summary">
-          <template #body="{ data }">{{ summarizeCommit(data) }}</template>
+          <template #body="{ data }">
+            <div>{{ summarizeCommit(data) }}</div>
+            <TaskSummaryLinks
+              :repo-path="parsed.repoPath"
+              :commit="data.commit"
+              :tasks="data.tasks"
+            />
+          </template>
         </PColumn>
         <PColumn header="Attributes">
           <template #body="{ data }">

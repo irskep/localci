@@ -345,11 +345,7 @@ func (s WebServer) buildStatusView(repoDir string, commit string) (CommitStatusV
 	if repoDir == "" || commit == "" {
 		return CommitStatusView{}, fmt.Errorf("repo and commit are required")
 	}
-	if s.DiscoverTasks == nil {
-		return CommitStatusView{}, fmt.Errorf("task discovery is not configured")
-	}
-
-	tasks, err := s.DiscoverTasks(context.Background(), repoDir)
+	tasks, err := s.discoverTasks(repoDir)
 	if err != nil {
 		return CommitStatusView{}, err
 	}

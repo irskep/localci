@@ -22,6 +22,9 @@
   --radius-panel: 8px;
   --radius-control: 6px;
   --radius-pill: 999px;
+  --space-inline-xs: 0.25rem;
+  --space-inline-sm: 0.35rem;
+  --space-inline-md: 0.65rem;
 
   color: var(--color-text);
   background: var(--color-bg);
@@ -291,8 +294,31 @@ pre {
 .attribute-list {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: var(--space-inline-sm);
   vertical-align: middle;
+}
+
+.task-summary-links {
+  display: grid;
+  gap: var(--space-inline-xs);
+}
+
+.task-summary-group {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-inline-sm);
+  align-items: baseline;
+}
+
+.task-summary-items {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-inline-sm);
+}
+
+.task-summary-items a:not(:last-child)::after {
+  color: var(--color-text-muted);
+  content: ',';
 }
 
 .attribute-pill {
