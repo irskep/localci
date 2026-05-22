@@ -5,5 +5,5 @@ minimumReleaseAgeExclude:
   - node-releases
   - semver
 
-onlyBuiltDependencies:
-  - esbuild
+allowBuilds:
+  esbuild: true
