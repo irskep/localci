@@ -102,33 +102,75 @@ func (m DaemonManager) Stop() error {
 	}
 
 	client := DaemonClient{Paths: m.Paths}
+	sentSignal := false
 	if err := client.Shutdown(context.Background()); err != nil {
-		process, findErr := os.FindProcess(state.PID)
-		if findErr != nil {
-			return findErr
-		}
-		if signalErr := process.Signal(syscall.SIGTERM); signalErr != nil && !errors.Is(signalErr, os.ErrProcessDone) {
+		if signalErr := signalProcess(state.PID, syscall.SIGTERM); signalErr != nil {
 			return signalErr
 		}
+		sentSignal = true
 	}
 
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		alive, err := processAlive(state.PID)
-		if err != nil {
+	if stopped, err := waitForProcessExit(state.PID, 5*time.Second); err != nil {
+		return err
+	} else if stopped {
+		return m.clearState()
+	}
+
+	if !sentSignal {
+		if err := signalProcess(state.PID, syscall.SIGTERM); err != nil {
 			return err
 		}
-		if !alive {
-			if removeErr := os.Remove(m.Paths.DaemonStatePath()); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-				return removeErr
-			}
-			_ = os.Remove(m.Paths.DaemonSocketPath())
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
+	}
+	if stopped, err := waitForProcessExit(state.PID, 2*time.Second); err != nil {
+		return err
+	} else if stopped {
+		return m.clearState()
+	}
+
+	if err := signalProcess(state.PID, syscall.SIGKILL); err != nil {
+		return err
+	}
+	if stopped, err := waitForProcessExit(state.PID, 2*time.Second); err != nil {
+		return err
+	} else if stopped {
+		return m.clearState()
 	}
 
 	return fmt.Errorf("timed out waiting for daemon pid %d to stop", state.PID)
+}
+
+func (m DaemonManager) clearState() error {
+	if removeErr := os.Remove(m.Paths.DaemonStatePath()); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+		return removeErr
+	}
+	_ = os.Remove(m.Paths.DaemonSocketPath())
+	return nil
+}
+
+func waitForProcessExit(pid int, timeout time.Duration) (bool, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		alive, err := processAlive(pid)
+		if err != nil {
+			return false, err
+		}
+		if !alive {
+			return true, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false, nil
+}
+
+func signalProcess(pid int, signal syscall.Signal) error {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	if err := process.Signal(signal); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return err
+	}
+	return nil
 }
 
 func (m DaemonManager) Run(ctx context.Context) error {
