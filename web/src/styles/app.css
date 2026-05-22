@@ -169,6 +169,10 @@ pre {
   font-size: 1rem;
 }
 
+.panel-body {
+  padding: 1.5rem;
+}
+
 .mono {
   font-family: 'SFMono-Regular', 'Cascadia Code', 'Liberation Mono', monospace;
 }

@@ -19,6 +19,10 @@ onMounted(async () => {
     </section>
 
     <PMessage v-if="store.error" severity="error" :closable="false">{{ store.error }}</PMessage>
+    <div v-if="store.loading && !store.home" class="loading-state">
+      <PProgressSpinner style="width: 1.5rem; height: 1.5rem" />
+      <span>Loading repos</span>
+    </div>
     <PDataTable v-if="repos.length > 0" :value="repos" size="small" class="panel">
       <PColumn header="Name">
         <template #body="{ data }">
@@ -27,6 +31,8 @@ onMounted(async () => {
       </PColumn>
       <PColumn field="repo_path" header="Path" />
     </PDataTable>
-    <div v-else class="panel empty-state">No repos have localci history yet.</div>
+    <div v-else-if="store.homeLoaded && !store.error" class="panel empty-state">
+      No repos have localci history yet.
+    </div>
   </main>
 </template>

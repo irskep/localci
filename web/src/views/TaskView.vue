@@ -65,7 +65,7 @@ watch(() => route.path, load)
               <h2 class="panel-title">Latest</h2>
               <PButton label="Retry" size="small" icon="pi pi-refresh" @click="retry" />
             </div>
-            <div class="empty-state">
+            <div class="panel-body">
               <p>
                 <PTag :severity="statusSeverity(task.status)" :value="task.status" />
               </p>

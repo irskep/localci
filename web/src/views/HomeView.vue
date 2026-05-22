@@ -91,7 +91,7 @@ onMounted(() => {
             <div class="panel-header">
               <h2 class="panel-title">Active Now</h2>
             </div>
-            <div v-if="active" class="empty-state">
+            <div v-if="active" class="panel-body">
               <RouterLink :to="taskURL(active.repo.repo_path, active.commit, active.task)">
                 {{ queueLabel(active) }}
               </RouterLink>

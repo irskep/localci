@@ -66,7 +66,9 @@ watch(() => route.path, load)
           <template #body="{ data }">{{ data.tasks.length }}</template>
         </PColumn>
       </PDataTable>
-      <div v-else class="empty-state">No commits recorded for this repo.</div>
+      <div v-else-if="store.repoLoaded && !store.error" class="empty-state">
+        No commits recorded for this repo.
+      </div>
     </div>
   </main>
 </template>

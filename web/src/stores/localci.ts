@@ -23,6 +23,12 @@ export const useLocalciStore = defineStore('localci', () => {
   const currentArtifact = ref<ArtifactResponse | null>(null)
   const loading = ref(false)
   const error = ref('')
+  const homeLoaded = ref(false)
+  const queueLoaded = ref(false)
+  const repoLoaded = ref(false)
+  const commitLoaded = ref(false)
+  const taskLoaded = ref(false)
+  const artifactLoaded = ref(false)
 
   const queueCount = computed(
     () => queue.value?.pending.length ?? home.value?.queue.pending.length ?? 0,
@@ -43,31 +49,45 @@ export const useLocalciStore = defineStore('localci', () => {
   }
 
   async function loadHome(): Promise<void> {
+    homeLoaded.value = false
     const result = await load(() => getJSON<HomeResponse>('/api'))
     if (result) {
       home.value = result
       queue.value = result.queue
     }
+    homeLoaded.value = true
   }
 
   async function loadQueue(): Promise<void> {
+    queueLoaded.value = false
+    queue.value = null
     const result = await load(() => getJSON<QueueResponse>('/api/queue'))
     if (result) queue.value = result
+    queueLoaded.value = true
   }
 
   async function loadRepo(apiPath: string): Promise<void> {
+    repoLoaded.value = false
+    currentRepo.value = null
     const result = await load(() => getJSON<RepoResponse>(apiPath))
     if (result) currentRepo.value = result
+    repoLoaded.value = true
   }
 
   async function loadCommit(apiPath: string): Promise<void> {
+    commitLoaded.value = false
+    currentCommit.value = null
     const result = await load(() => getJSON<CommitResponse>(apiPath))
     if (result) currentCommit.value = result
+    commitLoaded.value = true
   }
 
   async function loadTask(apiPath: string): Promise<void> {
+    taskLoaded.value = false
+    currentTask.value = null
     const result = await load(() => getJSON<TaskResponse>(apiPath))
     if (result) currentTask.value = result
+    taskLoaded.value = true
   }
 
   async function loadArtifactList(apiPath: string): Promise<void> {
@@ -76,8 +96,11 @@ export const useLocalciStore = defineStore('localci', () => {
   }
 
   async function loadArtifact(apiPath: string): Promise<void> {
+    artifactLoaded.value = false
+    currentArtifact.value = null
     const result = await load(() => getJSON<ArtifactResponse>(apiPath))
     if (result) currentArtifact.value = result
+    artifactLoaded.value = true
   }
 
   async function retryTask(repoPath: string, commit: string, taskName: string): Promise<void> {
@@ -94,7 +117,10 @@ export const useLocalciStore = defineStore('localci', () => {
     currentRepo,
     currentTask,
     error,
+    artifactLoaded,
+    commitLoaded,
     home,
+    homeLoaded,
     loadArtifact,
     loadArtifactList,
     loadCommit,
@@ -104,7 +130,10 @@ export const useLocalciStore = defineStore('localci', () => {
     loadTask,
     loading,
     queue,
+    queueLoaded,
     queueCount,
+    repoLoaded,
     retryTask,
+    taskLoaded,
   }
 })

@@ -40,13 +40,13 @@ onMounted(() => {
         <div class="panel-header">
           <h2 class="panel-title">Active</h2>
         </div>
-        <div v-if="active" class="empty-state">
+        <div v-if="active" class="panel-body">
           <PTag severity="info" value="running" />
           <RouterLink :to="taskURL(active.repo.repo_path, active.commit, active.task)">
             {{ taskLabel(active) }} / {{ active.task }}
           </RouterLink>
         </div>
-        <div v-else class="empty-state">No active task.</div>
+        <div v-else-if="store.queueLoaded && !store.error" class="empty-state">No active task.</div>
       </div>
 
       <div class="panel">
@@ -79,7 +79,7 @@ onMounted(() => {
             </template>
           </PColumn>
         </PDataTable>
-        <div v-else class="empty-state">Queue is idle.</div>
+        <div v-else-if="store.queueLoaded && !store.error" class="empty-state">Queue is idle.</div>
       </div>
     </section>
   </main>
