@@ -17,11 +17,23 @@ run = "go build -o ./bin/localci ./cmd/localci"
 
 [tasks.run]
 description = "Run localci"
-run = "go run ./cmd/localci {{arg(name='args', var=true)}}"
+usage = '''
+arg "[args]" var=#true
+'''
+run = '''
+eval "set -- ${usage_args:-}"
+go run ./cmd/localci "$@"
+'''
 
 [tasks.postcommit]
 description = "Run localci postcommit"
-run = "go run ./cmd/localci postcommit {{arg(name='args', var=true)}}"
+usage = '''
+arg "[args]" var=#true
+'''
+run = '''
+eval "set -- ${usage_args:-}"
+go run ./cmd/localci postcommit "$@"
+'''
 
 [tasks.daemon-start]
 description = "Start the localci daemon"
@@ -52,7 +64,7 @@ run = "gofmt -w ./cmd ./internal"
 
 [tasks.check]
 description = "Run formatting check, tests, and build"
-depends = ["fmt", "test", "build"]
+depends = ["//:fmt", "//:test", "//:build"]
 
 [tasks.self-check]
 description = "Run localci against this repo and wait for the result"
