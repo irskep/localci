@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import {
@@ -15,6 +15,7 @@ import { formatDuration, statusSeverity } from '@/lib/api'
 import { useLocalciStore } from '@/stores/localci'
 
 const route = useRoute()
+const router = useRouter()
 const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
 const task = computed(() => store.currentTask?.task)
@@ -27,7 +28,13 @@ async function load(): Promise<void> {
 
 async function retry(): Promise<void> {
   if (!parsed.value.commit || !parsed.value.taskName) return
-  await store.retryTask(parsed.value.repoPath, parsed.value.commit, parsed.value.taskName)
+  const result = await store.retryTask(
+    parsed.value.repoPath,
+    parsed.value.commit,
+    parsed.value.taskName,
+  )
+  if (!result?.url) return
+  if (route.path !== result.url) await router.push(result.url)
 }
 
 onMounted(load)

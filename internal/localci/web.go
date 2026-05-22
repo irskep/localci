@@ -285,19 +285,24 @@ func (s WebServer) handleRetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	active, err := s.Queue.IsTaskActive(repoDir, commit, taskName)
-	if err != nil {
+	active, err := s.Queue.ReadActive()
+	if err != nil && !errors.Is(err, ErrRecordNotFound) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if !active {
-		if _, err := s.Queue.Enqueue(repoDir, commit, taskName); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+	var entry QueueEntry
+	if err == nil && active.RepoDir == repoDir && active.Commit == commit && active.TaskName == taskName {
+		entry = active.QueueEntry
+	} else {
+		var enqueueErr error
+		entry, enqueueErr = s.Queue.Enqueue(repoDir, commit, taskName)
+		if enqueueErr != nil {
+			http.Error(w, enqueueErr.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 
-	http.Redirect(w, r, taskPageURL(repoDir, commit, taskName), http.StatusSeeOther)
+	http.Redirect(w, r, taskAttemptPageURL(repoDir, commit, taskName, entry.Attempt), http.StatusSeeOther)
 }
 
 func (s WebServer) handleStatusWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -723,6 +728,23 @@ func parseAttemptQuery(raw string) int {
 
 func applySelectedAttempt(paths Paths, repoDir string, commit string, task TaskStatusView, selectedAttempt int) TaskStatusView {
 	if selectedAttempt <= 0 || task.AttemptCount <= 1 {
+		return task
+	}
+
+	for _, attempt := range task.Attempts {
+		if attempt.Attempt != selectedAttempt {
+			continue
+		}
+		if attempt.Status != ExecutionStatusQueued && attempt.Status != ExecutionStatusRunning {
+			break
+		}
+		task.Attempt = attempt.Attempt
+		task.Status = attempt.Status
+		task.DurationMilliseconds = attempt.DurationMilliseconds
+		task.Failure = attempt.Failure
+		task.OutputDir = paths.TaskAttemptDir(repoDir, commit, task.Name, attempt.Attempt)
+		task.OutputFiles = outputFilesOrNil(task.OutputDir)
+		task.Artifacts = buildArtifactViews(task.OutputDir, task.OutputFiles)
 		return task
 	}
 

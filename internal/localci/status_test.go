@@ -102,3 +102,56 @@ func TestStatusReaderReadCommitMissingRun(t *testing.T) {
 		t.Fatalf("error = %v, want ErrRecordNotFound", err)
 	}
 }
+
+func TestBuildCommitStatusViewIncludesQueuedAttempt(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := Paths{Root: root}
+	repoDir := "/tmp/repo"
+	commit := "abc123"
+	req := InvokeRequest{
+		RepoDir: repoDir,
+		Commit:  commit,
+	}
+
+	record := newTaskRecord(paths, req, Task{Name: "localci:test"}, 2, time.Date(2026, 5, 20, 21, 0, 0, 0, time.UTC))
+	record.Status = TaskStatusFailed
+	record.FinishedAt = record.StartedAt.Add(time.Second)
+	record.DurationMilliseconds = durationMilliseconds(record.StartedAt, record.FinishedAt)
+	record.Failure = "exit"
+	if err := os.MkdirAll(record.OutputDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := writeTaskRecord(record); err != nil {
+		t.Fatalf("writeTaskRecord returned error: %v", err)
+	}
+
+	run := newRunRecord(req, record.StartedAt)
+	run.FinishedAt = record.FinishedAt
+	run.TaskResults = []TaskRecord{record}
+	run.RefreshSummary()
+	if err := writeRunRecord(paths, req, run); err != nil {
+		t.Fatalf("writeRunRecord returned error: %v", err)
+	}
+
+	view, err := BuildCommitStatusView(paths, repoDir, commit, []Task{{Name: "localci:test"}}, []QueueEntry{{
+		RepoDir:  repoDir,
+		RepoID:   normalizeRepoDir(repoDir),
+		Commit:   commit,
+		TaskName: "localci:test",
+		TaskKey:  sanitizeTaskName("localci:test"),
+		Attempt:  3,
+	}}, nil)
+	if err != nil {
+		t.Fatalf("BuildCommitStatusView returned error: %v", err)
+	}
+
+	task := view.Tasks[0]
+	if task.Status != ExecutionStatusQueued || task.Attempt != 3 || task.AttemptCount != 2 {
+		t.Fatalf("unexpected queued task view: %#v", task)
+	}
+	if task.Attempts[0].Attempt != 3 || task.Attempts[0].Status != ExecutionStatusQueued {
+		t.Fatalf("latest attempt = %#v, want queued attempt 3", task.Attempts[0])
+	}
+}

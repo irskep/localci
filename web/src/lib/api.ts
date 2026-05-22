@@ -7,6 +7,7 @@ export type QueueEntry = {
   repo: RepoSummary
   commit: string
   task: string
+  attempt: number
 }
 
 export type QueueResponse = {
@@ -56,6 +57,15 @@ export type TaskResponse = {
   is_live: boolean
   primary_artifact: string
   primary_log: string
+}
+
+export type RetryResponse = {
+  repo: RepoSummary
+  commit: string
+  task: string
+  attempt: number
+  url: string
+  enqueued: boolean
 }
 
 export type ArtifactListResponse = {

@@ -364,13 +364,16 @@ func TestWebServerAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST retry returned error: %v", err)
 	}
-	var retryResp map[string]any
+	var retryResp apiRetryResponse
 	if err := json.NewDecoder(resp.Body).Decode(&retryResp); err != nil {
 		t.Fatalf("Decode retry returned error: %v", err)
 	}
 	_ = resp.Body.Close()
-	if retryResp["enqueued"] != true {
+	if !retryResp.Enqueued || retryResp.Attempt != 3 {
 		t.Fatalf("retry response = %#v, want enqueued=true", retryResp)
+	}
+	if retryResp.URL != "/repo/team/repo/commit/abc123/task/localci:test/attempt/3" {
+		t.Fatalf("retry URL = %q, want attempt route", retryResp.URL)
 	}
 }
 

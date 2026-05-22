@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,7 @@ type QueueEntry struct {
 	Commit     string    `json:"commit"`
 	TaskName   string    `json:"task_name"`
 	TaskKey    string    `json:"task_key"`
+	Attempt    int       `json:"attempt"`
 	EnqueuedAt time.Time `json:"enqueued_at"`
 }
 
@@ -27,14 +29,24 @@ type ActiveTask struct {
 	StartedAt time.Time `json:"started_at"`
 }
 
+var queueMutationMu sync.Mutex
+
 func (s QueueStore) Enqueue(repoDir string, commit string, taskName string) (QueueEntry, error) {
+	queueMutationMu.Lock()
+	defer queueMutationMu.Unlock()
+
 	enqueuedAt := s.now()
+	attempt, err := s.NextAttempt(repoDir, commit, taskName)
+	if err != nil {
+		return QueueEntry{}, err
+	}
 	entry := QueueEntry{
 		RepoDir:    repoDir,
 		RepoID:     normalizeRepoDir(repoDir),
 		Commit:     commit,
 		TaskName:   taskName,
 		TaskKey:    sanitizeTaskName(taskName),
+		Attempt:    attempt,
 		EnqueuedAt: enqueuedAt,
 	}
 
@@ -46,6 +58,33 @@ func (s QueueStore) Enqueue(repoDir string, commit string, taskName string) (Que
 	}
 
 	return entry, nil
+}
+
+func (s QueueStore) NextAttempt(repoDir string, commit string, taskName string) (int, error) {
+	attempt, err := nextTaskAttempt(s.Paths, repoDir, commit, taskName)
+	if err != nil {
+		return 0, err
+	}
+
+	entries, err := s.List()
+	if err != nil {
+		return 0, err
+	}
+	for _, entry := range entries {
+		if entry.RepoDir == repoDir && entry.Commit == commit && entry.TaskName == taskName && entry.Attempt >= attempt {
+			attempt = entry.Attempt + 1
+		}
+	}
+
+	active, err := s.ReadActive()
+	if err != nil && !errors.Is(err, ErrRecordNotFound) {
+		return 0, err
+	}
+	if err == nil && active.RepoDir == repoDir && active.Commit == commit && active.TaskName == taskName && active.Attempt >= attempt {
+		attempt = active.Attempt + 1
+	}
+
+	return attempt, nil
 }
 
 func (s QueueStore) List() ([]QueueEntry, error) {
@@ -85,6 +124,13 @@ func (s QueueStore) List() ([]QueueEntry, error) {
 }
 
 func (s QueueStore) MarkActive(entry QueueEntry) (ActiveTask, error) {
+	if entry.Attempt <= 0 {
+		attempt, err := s.NextAttempt(entry.RepoDir, entry.Commit, entry.TaskName)
+		if err != nil {
+			return ActiveTask{}, err
+		}
+		entry.Attempt = attempt
+	}
 	active := ActiveTask{
 		QueueEntry: entry,
 		StartedAt:  s.now(),

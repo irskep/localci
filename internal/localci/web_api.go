@@ -39,9 +39,10 @@ type apiTaskSummary struct {
 }
 
 type apiQueueEntry struct {
-	Repo   apiRepoSummary `json:"repo"`
-	Commit string         `json:"commit"`
-	Task   string         `json:"task"`
+	Repo    apiRepoSummary `json:"repo"`
+	Commit  string         `json:"commit"`
+	Task    string         `json:"task"`
+	Attempt int            `json:"attempt"`
 }
 
 type apiQueueResponse struct {
@@ -90,6 +91,15 @@ type apiArtifactResponse struct {
 	Attempt  int            `json:"attempt"`
 	Artifact ArtifactView   `json:"artifact"`
 	Content  string         `json:"content"`
+}
+
+type apiRetryResponse struct {
+	Repo     apiRepoSummary `json:"repo"`
+	Commit   string         `json:"commit"`
+	Task     string         `json:"task"`
+	Attempt  int            `json:"attempt"`
+	URL      string         `json:"url"`
+	Enqueued bool           `json:"enqueued"`
 }
 
 func (s WebServer) handleAPI(w http.ResponseWriter, r *http.Request) {
@@ -475,24 +485,37 @@ func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit 
 		return
 	}
 
-	active, err := s.Queue.IsTaskActive(repoDir, commit, taskName)
+	active, err := s.Queue.ReadActive()
+	if err != nil && !errorsIsRecordNotFound(err) {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	var entry QueueEntry
+	enqueued := true
+	if err == nil && active.RepoDir == repoDir && active.Commit == commit && active.TaskName == taskName {
+		entry = active.QueueEntry
+		enqueued = false
+	} else {
+		var enqueueErr error
+		entry, enqueueErr = s.Queue.Enqueue(repoDir, commit, taskName)
+		if enqueueErr != nil {
+			writeAPIError(w, http.StatusInternalServerError, enqueueErr)
+			return
+		}
+	}
+
+	route, err := AttemptRoutePath(s.configuredRepoRoot(), repoDir, commit, taskName, entry.Attempt)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	enqueued := false
-	if !active {
-		if _, err := s.Queue.Enqueue(repoDir, commit, taskName); err != nil {
-			writeAPIError(w, http.StatusInternalServerError, err)
-			return
-		}
-		enqueued = true
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"repo":     s.apiRepoSummary(repoDir),
-		"commit":   commit,
-		"task":     taskName,
-		"enqueued": enqueued,
+	writeJSON(w, http.StatusOK, apiRetryResponse{
+		Repo:     s.apiRepoSummary(repoDir),
+		Commit:   commit,
+		Task:     taskName,
+		Attempt:  entry.Attempt,
+		URL:      route,
+		Enqueued: enqueued,
 	})
 }
 
@@ -511,20 +534,21 @@ func (s WebServer) apiQueueResponse() (apiQueueResponse, error) {
 		Pending: make([]apiQueueEntry, 0, len(queueEntries)),
 	}
 	if err == nil {
-		activeEntry := s.apiQueueEntry(active.RepoDir, active.Commit, active.TaskName)
+		activeEntry := s.apiQueueEntry(active.QueueEntry)
 		resp.Active = &activeEntry
 	}
 	for _, entry := range queueEntries {
-		resp.Pending = append(resp.Pending, s.apiQueueEntry(entry.RepoDir, entry.Commit, entry.TaskName))
+		resp.Pending = append(resp.Pending, s.apiQueueEntry(entry))
 	}
 	return resp, nil
 }
 
-func (s WebServer) apiQueueEntry(repoDir string, commit string, taskName string) apiQueueEntry {
+func (s WebServer) apiQueueEntry(entry QueueEntry) apiQueueEntry {
 	return apiQueueEntry{
-		Repo:   s.apiRepoSummary(repoDir),
-		Commit: commit,
-		Task:   taskName,
+		Repo:    s.apiRepoSummary(entry.RepoDir),
+		Commit:  entry.Commit,
+		Task:    entry.TaskName,
+		Attempt: entry.Attempt,
 	}
 }
 
@@ -581,10 +605,12 @@ func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered 
 		records[record.Name] = record
 	}
 
-	queuedSet := map[string]bool{}
+	queuedByTask := map[string]int{}
 	for _, entry := range queued {
 		if entry.RepoDir == repoDir && entry.Commit == run.Commit {
-			queuedSet[entry.TaskName] = true
+			if entry.Attempt > queuedByTask[entry.TaskName] {
+				queuedByTask[entry.TaskName] = entry.Attempt
+			}
 		}
 	}
 
@@ -606,8 +632,16 @@ func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered 
 		}
 		if active != nil && active.RepoDir == repoDir && active.Commit == run.Commit && active.TaskName == task.Name {
 			summary.Status = ExecutionStatusRunning
-		} else if queuedSet[task.Name] {
+			summary.Attempt = active.Attempt
+			if active.Attempt > summary.AttemptCount {
+				summary.AttemptCount = active.Attempt
+			}
+		} else if queuedAttempt := queuedByTask[task.Name]; queuedAttempt > 0 {
 			summary.Status = ExecutionStatusQueued
+			summary.Attempt = queuedAttempt
+			if queuedAttempt > summary.AttemptCount {
+				summary.AttemptCount = queuedAttempt
+			}
 		}
 		tasks = append(tasks, summary)
 	}

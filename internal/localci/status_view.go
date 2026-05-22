@@ -77,10 +77,10 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 		}
 	}
 
-	queuedSet := map[string]bool{}
+	queuedByTask := map[string][]QueueEntry{}
 	for _, entry := range queued {
 		if entry.RepoDir == repoDir && entry.Commit == commit {
-			queuedSet[entry.TaskName] = true
+			queuedByTask[entry.TaskName] = append(queuedByTask[entry.TaskName], entry)
 		}
 	}
 
@@ -92,6 +92,7 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 		if err != nil {
 			return CommitStatusView{}, err
 		}
+		attempts = mergeLiveAttemptViews(attempts, queuedByTask[task.Name], active, repoDir, commit, task.Name)
 
 		var artifacts []ArtifactView
 		var durationMilliseconds int64
@@ -106,8 +107,16 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 		}
 		if active != nil && active.RepoDir == repoDir && active.Commit == commit && active.TaskName == task.Name {
 			status = ExecutionStatusRunning
-		} else if queuedSet[task.Name] {
+			attempt = active.Attempt
+			outputDir = paths.TaskAttemptDir(repoDir, commit, task.Name, active.Attempt)
+			durationMilliseconds = 0
+			failure = ""
+		} else if queuedEntries := queuedByTask[task.Name]; len(queuedEntries) > 0 {
 			status = ExecutionStatusQueued
+			attempt = latestQueuedAttempt(queuedEntries)
+			outputDir = paths.TaskAttemptDir(repoDir, commit, task.Name, attempt)
+			durationMilliseconds = 0
+			failure = ""
 		}
 
 		outputFiles, err := listOutputFiles(outputDir)
@@ -138,6 +147,49 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 	})
 
 	return view, nil
+}
+
+func mergeLiveAttemptViews(existing []TaskAttemptView, queued []QueueEntry, active *ActiveTask, repoDir string, commit string, taskName string) []TaskAttemptView {
+	views := append([]TaskAttemptView{}, existing...)
+	if active != nil && active.RepoDir == repoDir && active.Commit == commit && active.TaskName == taskName && active.Attempt > 0 {
+		views = upsertAttemptView(views, TaskAttemptView{
+			Attempt: active.Attempt,
+			Status:  ExecutionStatusRunning,
+		})
+	}
+	for _, entry := range queued {
+		if entry.Attempt <= 0 {
+			continue
+		}
+		views = upsertAttemptView(views, TaskAttemptView{
+			Attempt: entry.Attempt,
+			Status:  ExecutionStatusQueued,
+		})
+	}
+	sort.Slice(views, func(i int, j int) bool {
+		return views[i].Attempt > views[j].Attempt
+	})
+	return views
+}
+
+func upsertAttemptView(views []TaskAttemptView, next TaskAttemptView) []TaskAttemptView {
+	for i, existing := range views {
+		if existing.Attempt == next.Attempt {
+			views[i] = next
+			return views
+		}
+	}
+	return append(views, next)
+}
+
+func latestQueuedAttempt(entries []QueueEntry) int {
+	latest := 0
+	for _, entry := range entries {
+		if entry.Attempt > latest {
+			latest = entry.Attempt
+		}
+	}
+	return latest
 }
 
 func executionStatusFromTaskRecord(record TaskRecord) ExecutionStatus {

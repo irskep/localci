@@ -60,7 +60,7 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 	}
 
 	for _, task := range tasks {
-		taskRecord, runErr := r.runTask(ctx, req, task)
+		taskRecord, runErr := r.runTask(ctx, req, task, 0)
 		record.TaskResults = append(record.TaskResults, taskRecord)
 		record.FinishedAt = r.now()
 		record.RefreshSummary()
@@ -120,11 +120,15 @@ var (
 	errTaskTimedOut = errors.New("task timed out")
 )
 
-func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task) (TaskRecord, error) {
+func (r Runner) runTask(ctx context.Context, req InvokeRequest, task Task, reservedAttempt int) (TaskRecord, error) {
 	startedAt := r.now()
-	attempt, err := nextTaskAttempt(r.Paths, req.RepoDir, req.Commit, task.Name)
-	if err != nil {
-		return TaskRecord{}, err
+	attempt := reservedAttempt
+	if attempt <= 0 {
+		nextAttempt, err := nextTaskAttempt(r.Paths, req.RepoDir, req.Commit, task.Name)
+		if err != nil {
+			return TaskRecord{}, err
+		}
+		attempt = nextAttempt
 	}
 	record := newTaskRecord(r.Paths, req, task, attempt, startedAt)
 

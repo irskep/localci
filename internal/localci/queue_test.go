@@ -46,6 +46,9 @@ func TestQueueStoreEnqueueListAndRemove(t *testing.T) {
 	if len(entries) != 3 {
 		t.Fatalf("len(entries) = %d, want 3", len(entries))
 	}
+	if entryA.Attempt != 1 || entryB.Attempt != 1 || entryC.Attempt != 1 {
+		t.Fatalf("unexpected attempts: %#v %#v %#v", entryA, entryB, entryC)
+	}
 	if entries[0].Commit != entryB.Commit || entries[1].Commit != entryC.Commit || entries[2].Commit != entryA.Commit {
 		t.Fatalf("unexpected queue order: %#v", entries)
 	}

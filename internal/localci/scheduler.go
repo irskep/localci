@@ -53,7 +53,7 @@ func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
 	taskRecord, runErr := s.Runner.runTask(ctx, InvokeRequest{
 		RepoDir: entry.RepoDir,
 		Commit:  entry.Commit,
-	}, Task{Name: entry.TaskName})
+	}, Task{Name: entry.TaskName}, entry.Attempt)
 
 	runRecord, writeErr := upsertTaskRecord(s.Runner.Paths, InvokeRequest{
 		RepoDir: entry.RepoDir,

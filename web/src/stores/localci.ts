@@ -8,6 +8,7 @@ import type {
   HomeResponse,
   QueueResponse,
   RepoResponse,
+  RetryResponse,
   TaskResponse,
 } from '@/lib/api'
 import { getJSON, postJSON } from '@/lib/api'
@@ -103,10 +104,13 @@ export const useLocalciStore = defineStore('localci', () => {
     artifactLoaded.value = true
   }
 
-  async function retryTask(repoPath: string, commit: string, taskName: string): Promise<void> {
+  async function retryTask(
+    repoPath: string,
+    commit: string,
+    taskName: string,
+  ): Promise<RetryResponse | null> {
     const retryPath = `/api${taskURL(repoPath, commit, taskName)}/retry`
-    const result = await load(() => postJSON<{ enqueued: boolean }>(retryPath))
-    if (result) await loadTask(`/api${taskURL(repoPath, commit, taskName)}`)
+    return await load(() => postJSON<RetryResponse>(retryPath))
   }
 
   return {
