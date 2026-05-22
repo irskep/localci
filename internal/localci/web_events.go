@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -23,9 +24,10 @@ func (s WebServer) handleAPIEvents(w http.ResponseWriter, r *http.Request, segme
 		return
 	}
 
-	resource := strings.TrimSuffix(r.URL.EscapedPath(), "/events")
-	if resource == "" {
-		resource = "/api"
+	resource, err := canonicalAPIResource(strings.TrimSuffix(r.URL.EscapedPath(), "/events"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err)
+		return
 	}
 
 	conn, err := websocket.Accept(w, r, nil)
@@ -74,6 +76,22 @@ func (s WebServer) writeResourceSnapshot(ctx context.Context, conn *websocket.Co
 		Resource: resource,
 		Data:     data,
 	})
+}
+
+func canonicalAPIResource(escapedPath string) (string, error) {
+	segments, err := splitEscapedPath(escapedPath)
+	if err != nil {
+		return "", err
+	}
+	if len(segments) == 0 {
+		return "/api", nil
+	}
+
+	escaped := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		escaped = append(escaped, url.PathEscape(segment))
+	}
+	return "/" + path.Join(escaped...), nil
 }
 
 func writeWebSocketJSON(ctx context.Context, conn *websocket.Conn, value any) error {

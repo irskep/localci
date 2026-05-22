@@ -124,7 +124,8 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 	commit := "abc123"
 	req := InvokeRequest{RepoDir: repoDir, Commit: commit}
 
-	task := newTaskRecord(paths, req, Task{Name: "localci:test"}, 1, time.Now().UTC())
+	taskName := "//:localci:slow-stream"
+	task := newTaskRecord(paths, req, Task{Name: taskName}, 1, time.Now().UTC())
 	task.Status = TaskStatusRunning
 	if err := os.MkdirAll(task.OutputDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll returned error: %v", err)
@@ -147,7 +148,7 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 		Paths: paths,
 		Queue: queue,
 		DiscoverTasks: func(context.Context, string) ([]Task, error) {
-			return []Task{{Name: "localci:test"}}, nil
+			return []Task{{Name: taskName}}, nil
 		},
 		RepoRoot: root,
 		EventHub: NewEventHub(),
@@ -175,7 +176,7 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 		<-errs
 	}()
 
-	resource := "/api/repo/repo/commit/abc123/task/localci:test/attempt/1/artifact/combined.log"
+	resource := "/api/repo/repo/commit/abc123/task/%2F%2F%3Alocalci%3Aslow-stream/attempt/1/artifact/combined.log"
 	conn, _, err := websocket.Dial(context.Background(), "ws://"+listener.Addr().String()+resource+"/events", nil)
 	if err != nil {
 		t.Fatalf("Dial returned error: %v", err)
@@ -194,7 +195,12 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 		t.Fatalf("event type = %q, want snapshot", event.Type)
 	}
 
-	server.EventHub.PublishAppend(resource, 2, "++")
+	EventNotifier{Root: root, Hub: server.EventHub}.ArtifactAppended(QueueEntry{
+		RepoDir:  repoDir,
+		Commit:   commit,
+		TaskName: taskName,
+		Attempt:  1,
+	}, "combined.log", 2, "++")
 	_, data, err = conn.Read(context.Background())
 	if err != nil {
 		t.Fatalf("Read append returned error: %v", err)
