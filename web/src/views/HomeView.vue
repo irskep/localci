@@ -15,7 +15,7 @@ const queueRows = computed(() => store.home?.queue.pending ?? [])
 const active = computed(() => store.home?.queue.active)
 
 function queueLabel(entry: QueueEntry): string {
-  return `${entry.repo.repo_name} / ${shortCommit(entry.commit)} / ${entry.task}`
+  return `${entry.repo.repo_path} / ${shortCommit(entry.commit)} / ${entry.task}`
 }
 
 function activityTime(entry: CommitSummary): string {
@@ -57,7 +57,7 @@ onMounted(() => {
               <PColumn header="Repo">
                 <template #body="{ data }">
                   <RouterLink :to="`/repo/${data.repo.repo_path}`">{{
-                    data.repo.repo_name
+                    data.repo.repo_path
                   }}</RouterLink>
                 </template>
               </PColumn>
@@ -130,7 +130,7 @@ onMounted(() => {
             <ul class="artifact-list">
               <li v-for="repo in repoRows" :key="repo.repo_path">
                 <i class="pi pi-folder" aria-hidden="true"></i>
-                <RouterLink :to="`/repo/${repo.repo_path}`">{{ repo.repo_name }}</RouterLink>
+                <RouterLink :to="`/repo/${repo.repo_path}`">{{ repo.repo_path }}</RouterLink>
               </li>
             </ul>
           </div>

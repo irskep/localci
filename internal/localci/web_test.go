@@ -223,9 +223,10 @@ func TestWebServerAPI(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
+	repoRoot := t.TempDir()
 	paths := Paths{Root: root}
 	queue := QueueStore{Paths: paths}
-	repoDir := "/repo"
+	repoDir := filepath.Join(repoRoot, "team", "repo")
 	commit := "abc123"
 	req := InvokeRequest{RepoDir: repoDir, Commit: commit}
 
@@ -255,7 +256,7 @@ func TestWebServerAPI(t *testing.T) {
 	server := WebServer{
 		Paths:    paths,
 		Queue:    queue,
-		RepoRoot: "/",
+		RepoRoot: repoRoot,
 		DiscoverTasks: func(context.Context, string) ([]Task, error) {
 			return []Task{{Name: "localci:test"}}, nil
 		},
@@ -292,14 +293,17 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("Decode home returned error: %v", err)
 	}
 	_ = resp.Body.Close()
-	if len(home.Repos) != 1 || home.Repos[0].RepoPath != "repo" {
+	if len(home.Repos) != 1 || home.Repos[0].RepoPath != "team/repo" {
 		t.Fatalf("unexpected home repos: %#v", home.Repos)
 	}
 	if len(home.RecentCommits) != 1 || home.RecentCommits[0].Commit != commit {
 		t.Fatalf("unexpected recent commits: %#v", home.RecentCommits)
 	}
+	if home.RecentCommits[0].Repo.RepoPath != "team/repo" {
+		t.Fatalf("unexpected recent commit repo: %#v", home.RecentCommits[0].Repo)
+	}
 
-	resp, err = http.Get(baseURL + "/api/repo/repo/commit/" + commit)
+	resp, err = http.Get(baseURL + "/api/repo/team/repo/commit/" + commit)
 	if err != nil {
 		t.Fatalf("GET commit api returned error: %v", err)
 	}
@@ -313,7 +317,7 @@ func TestWebServerAPI(t *testing.T) {
 	}
 
 	taskPath := url.PathEscape("localci:test")
-	resp, err = http.Get(baseURL + "/api/repo/repo/commit/" + commit + "/task/" + taskPath)
+	resp, err = http.Get(baseURL + "/api/repo/team/repo/commit/" + commit + "/task/" + taskPath)
 	if err != nil {
 		t.Fatalf("GET task api returned error: %v", err)
 	}
@@ -326,7 +330,7 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("unexpected primary log response: %#v", taskResp)
 	}
 
-	resp, err = http.Get(baseURL + "/api/repo/repo/commit/" + commit + "/task/" + taskPath + "/attempt/2/artifact")
+	resp, err = http.Get(baseURL + "/api/repo/team/repo/commit/" + commit + "/task/" + taskPath + "/attempt/2/artifact")
 	if err != nil {
 		t.Fatalf("GET artifact index returned error: %v", err)
 	}
@@ -339,7 +343,7 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("unexpected artifacts: %#v", artifactList.Artifacts)
 	}
 
-	resp, err = http.Get(baseURL + "/api/repo/repo/commit/" + commit + "/task/" + taskPath + "/attempt/2/artifact/combined.log")
+	resp, err = http.Get(baseURL + "/api/repo/team/repo/commit/" + commit + "/task/" + taskPath + "/attempt/2/artifact/combined.log")
 	if err != nil {
 		t.Fatalf("GET artifact returned error: %v", err)
 	}
@@ -352,7 +356,7 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("artifact content = %q, want %q", artifactResp.Content, "hello")
 	}
 
-	reqRetry, err := http.NewRequest(http.MethodPost, baseURL+"/api/repo/repo/commit/"+commit+"/task/"+taskPath+"/retry", nil)
+	reqRetry, err := http.NewRequest(http.MethodPost, baseURL+"/api/repo/team/repo/commit/"+commit+"/task/"+taskPath+"/retry", nil)
 	if err != nil {
 		t.Fatalf("NewRequest returned error: %v", err)
 	}

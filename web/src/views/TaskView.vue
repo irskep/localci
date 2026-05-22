@@ -41,7 +41,7 @@ watch(() => route.path, load)
         { label: 'Home', to: '/' },
         { label: 'Repo', to: '/repo' },
         {
-          label: store.currentTask?.repo.repo_name ?? parsed.repoPath,
+          label: store.currentTask?.repo.repo_path ?? parsed.repoPath,
           to: repoPathURL(parsed.repoPath),
         },
         {
@@ -65,7 +65,7 @@ watch(() => route.path, load)
       <span class="eyebrow">Task</span>
       <h1 class="page-title">{{ taskName }}</h1>
       <p class="page-subtitle">
-        {{ store.currentTask?.repo.repo_name }}
+        {{ store.currentTask?.repo.repo_path }}
         <template v-if="parsed.commit"> / {{ parsed.commit }}</template>
       </p>
     </section>

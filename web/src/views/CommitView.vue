@@ -36,7 +36,7 @@ watch(() => route.path, load)
         { label: 'Home', to: '/' },
         { label: 'Repo', to: '/repo' },
         {
-          label: store.currentCommit?.repo.repo_name ?? parsed.repoPath,
+          label: store.currentCommit?.repo.repo_path ?? parsed.repoPath,
           to: repoPathURL(parsed.repoPath),
         },
         { label: parsed.commit ? shortCommit(parsed.commit) : 'Commit' },
@@ -47,7 +47,7 @@ watch(() => route.path, load)
       <span class="eyebrow">Commit</span>
       <h1 class="page-title mono">{{ parsed.commit ? shortCommit(parsed.commit) : '' }}</h1>
       <p class="page-subtitle">
-        {{ store.currentCommit?.repo.repo_name }}
+        {{ store.currentCommit?.repo.repo_path }}
         <template v-if="commit"> / {{ summarizeCommit(commit) }}</template>
         <template v-if="formatAnnotations(commit?.annotations)">
           /

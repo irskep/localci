@@ -29,7 +29,7 @@ onMounted(async () => {
     <PDataTable v-if="repos.length > 0" :value="repos" size="small" class="panel">
       <PColumn header="Name">
         <template #body="{ data }">
-          <RouterLink :to="`/repo/${data.repo_path}`">{{ data.repo_name }}</RouterLink>
+          <RouterLink :to="`/repo/${data.repo_path}`">{{ data.repo_path }}</RouterLink>
         </template>
       </PColumn>
       <PColumn field="repo_path" header="Path" />

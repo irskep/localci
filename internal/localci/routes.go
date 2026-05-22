@@ -9,6 +9,26 @@ import (
 )
 
 func RouteRepoPath(root string, repoDir string) (string, error) {
+	rel, err := CanonicalRepoPath(root, repoDir)
+	if err != nil {
+		return "", err
+	}
+	if rel == "" {
+		return "", nil
+	}
+
+	segments := strings.Split(rel, "/")
+	escaped := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		if segment == "" || segment == "." {
+			continue
+		}
+		escaped = append(escaped, url.PathEscape(segment))
+	}
+	return strings.Join(escaped, "/"), nil
+}
+
+func CanonicalRepoPath(root string, repoDir string) (string, error) {
 	root = filepath.Clean(root)
 	repoDir = filepath.Clean(repoDir)
 
@@ -22,16 +42,7 @@ func RouteRepoPath(root string, repoDir string) (string, error) {
 	if rel == "." {
 		return "", nil
 	}
-
-	segments := strings.Split(filepath.ToSlash(rel), "/")
-	escaped := make([]string, 0, len(segments))
-	for _, segment := range segments {
-		if segment == "" || segment == "." {
-			continue
-		}
-		escaped = append(escaped, url.PathEscape(segment))
-	}
-	return strings.Join(escaped, "/"), nil
+	return filepath.ToSlash(rel), nil
 }
 
 func CommitRoutePath(root string, repoDir string, commit string) (string, error) {

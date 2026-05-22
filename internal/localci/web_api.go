@@ -17,7 +17,6 @@ import (
 type apiRepoSummary struct {
 	RepoDir  string `json:"repo_dir"`
 	RepoPath string `json:"repo_path"`
-	RepoName string `json:"repo_name"`
 }
 
 type apiCommitSummary struct {
@@ -529,10 +528,10 @@ func (s WebServer) apiQueueEntry(repoDir string, commit string, taskName string)
 }
 
 func (s WebServer) apiRepoSummary(repoDir string) apiRepoSummary {
+	repoPath := s.canonicalRepoPath(repoDir)
 	return apiRepoSummary{
 		RepoDir:  repoDir,
-		RepoPath: s.routeRepoPath(repoDir),
-		RepoName: repoLabel(repoDir),
+		RepoPath: repoPath,
 	}
 }
 
@@ -574,6 +573,14 @@ func (s WebServer) selectedTaskStatus(repoDir string, commit string, taskName st
 
 func (s WebServer) routeRepoPath(repoDir string) string {
 	repoPath, err := RouteRepoPath(s.configuredRepoRoot(), repoDir)
+	if err != nil {
+		return ""
+	}
+	return repoPath
+}
+
+func (s WebServer) canonicalRepoPath(repoDir string) string {
+	repoPath, err := CanonicalRepoPath(s.configuredRepoRoot(), repoDir)
 	if err != nil {
 		return ""
 	}

@@ -12,7 +12,7 @@ const pending = computed(() => store.queue?.pending ?? [])
 const active = computed(() => store.queue?.active)
 
 function taskLabel(entry: QueueEntry): string {
-  return `${entry.repo.repo_name} / ${shortCommit(entry.commit)}`
+  return `${entry.repo.repo_path} / ${shortCommit(entry.commit)}`
 }
 
 onMounted(() => {
@@ -63,7 +63,7 @@ onMounted(() => {
           <PColumn header="Repo">
             <template #body="{ data }">
               <RouterLink :to="`/repo/${data.repo.repo_path}`">{{
-                data.repo.repo_name
+                data.repo.repo_path
               }}</RouterLink>
             </template>
           </PColumn>

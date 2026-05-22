@@ -27,13 +27,13 @@ watch(() => route.path, load)
       :items="[
         { label: 'Home', to: '/' },
         { label: 'Repo', to: '/repo' },
-        { label: store.currentRepo?.repo.repo_name ?? parsed.repoPath },
+        { label: store.currentRepo?.repo.repo_path ?? parsed.repoPath },
       ]"
     />
 
     <section class="page-header">
       <span class="eyebrow">Repo</span>
-      <h1 class="page-title">{{ store.currentRepo?.repo.repo_name ?? parsed.repoPath }}</h1>
+      <h1 class="page-title">{{ store.currentRepo?.repo.repo_path ?? parsed.repoPath }}</h1>
       <p class="page-subtitle mono">{{ parsed.repoPath }}</p>
     </section>
 

@@ -1,7 +1,6 @@
 export type RepoSummary = {
   repo_dir: string
   repo_path: string
-  repo_name: string
 }
 
 export type QueueEntry = {

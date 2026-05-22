@@ -27,7 +27,7 @@ watch(() => route.path, load)
         { label: 'Home', to: '/' },
         { label: 'Repo', to: '/repo' },
         {
-          label: store.currentArtifact?.repo.repo_name ?? parsed.repoPath,
+          label: store.currentArtifact?.repo.repo_path ?? parsed.repoPath,
           to: repoPathURL(parsed.repoPath),
         },
         {
@@ -56,7 +56,7 @@ watch(() => route.path, load)
       <span class="eyebrow">Artifact</span>
       <h1 class="page-title">{{ parsed.artifactPath }}</h1>
       <p class="page-subtitle">
-        {{ store.currentArtifact?.repo.repo_name }} / {{ parsed.taskName }} / attempt
+        {{ store.currentArtifact?.repo.repo_path }} / {{ parsed.taskName }} / attempt
         {{ parsed.attempt }}
       </p>
     </section>
