@@ -131,7 +131,7 @@ func (r Runner) DiscoverTasks(ctx context.Context, repoDir string) ([]Task, erro
 	miseBin := r.miseBin()
 	cmd := exec.CommandContext(ctx, miseBin, "tasks", "--json", "--all")
 	cmd.Dir = repoDir
-	cmd.Env = r.env()
+	cmd.Env = r.envForDir(repoDir)
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -160,7 +160,7 @@ func (r Runner) DiscoverTasks(ctx context.Context, repoDir string) ([]Task, erro
 func (r Runner) Trust(ctx context.Context, workDir string) error {
 	cmd := exec.CommandContext(ctx, r.miseBin(), "trust")
 	cmd.Dir = workDir
-	cmd.Env = r.env()
+	cmd.Env = r.envForDir(workDir)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("mise trust: %w: %s", err, strings.TrimSpace(string(output)))
@@ -215,7 +215,7 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, workDir string, 
 
 	cmd := exec.CommandContext(ctx, r.miseBin(), "run", task.Name)
 	cmd.Dir = workDir
-	cmd.Env = append(r.env(),
+	cmd.Env = append(r.envForDir(workDir),
 		"LOCALCI_TASK_OUTPUT_DIR="+record.OutputDir,
 		"LOCALCI_TASK_CACHE_DIR="+record.TaskCacheDir,
 		"LOCALCI_CACHE_DIR="+record.SharedCacheDir,
@@ -475,6 +475,25 @@ func (r Runner) env() []string {
 		env = os.Environ()
 	}
 	return withEnvVar(env, "MISE_EXPERIMENTAL", "1")
+}
+
+func (r Runner) envForDir(dir string) []string {
+	env := r.env()
+	cleaned := env[:0]
+	for _, entry := range env {
+		key, _, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		if key == "PWD" || strings.HasPrefix(key, "__MISE_") {
+			continue
+		}
+		if strings.HasPrefix(key, "MISE_") && key != "MISE_EXPERIMENTAL" {
+			continue
+		}
+		cleaned = append(cleaned, entry)
+	}
+	return withEnvVar(cleaned, "PWD", dir)
 }
 
 func (r Runner) miseBin() string {
