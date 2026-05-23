@@ -33,7 +33,7 @@ Setup runs before validation tasks. Keep it deterministic and pinned.
 
 LocalCI discovers mise tasks in the `localci:` namespace. For simple shell checks, use script tasks:
 
-```sh title="Terminal"
+```sh
 mkdir -p mise-tasks/localci
 ```
 
@@ -52,7 +52,7 @@ Monorepo tasks work too. A task named `//web:localci:test` is discovered the sam
 
 ## Start the daemon
 
-```sh title="Terminal"
+```sh
 localci start
 ```
 
@@ -60,7 +60,7 @@ localci start
 
 From the repository root:
 
-```sh title="Terminal"
+```sh
 localci install-hooks
 ```
 
@@ -70,12 +70,12 @@ After each commit, the hook enqueues checks and prints commands for status and w
 
 Wait in the terminal:
 
-```sh title="Terminal"
+```sh
 localci wait
 ```
 
 Or open the web UI:
 
-```sh title="Terminal"
+```sh
 localci web
 ```

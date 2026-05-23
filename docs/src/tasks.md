@@ -7,7 +7,7 @@ LocalCI tasks are mise tasks. The only naming convention LocalCI adds is the
 
 LocalCI discovers tasks by running:
 
-```sh title="Terminal"
+```sh
 mise tasks --json --all
 ```
 
@@ -23,7 +23,7 @@ LocalCI runs `localci:setup` first when it exists. Use it for dependency install
 
 Each task runs through mise:
 
-```sh title="Terminal"
+```sh
 mise run <task-name>
 ```
 
