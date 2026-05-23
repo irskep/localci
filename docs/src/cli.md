@@ -34,6 +34,10 @@ Print status for a run.
 
 Open the web UI.
 
+## `localci tui [--repo dir] [--no-clone] [commit] [task]`
+
+Open the terminal UI. It uses the daemon's REST and websocket APIs, supports the same run, task, artifact, retry, and cancel workflows as the web UI, and defaults to the all-repos home view when no target is provided.
+
 ## `localci cancel [--no-clone]`
 
 Cancel queued and active work for the current repository's latest run.

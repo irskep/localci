@@ -30,6 +30,12 @@ Open the latest run for the current repository:
 localci web
 ```
 
+Open the terminal UI:
+
+```sh
+localci tui
+```
+
 Open a specific commit:
 
 ```sh
