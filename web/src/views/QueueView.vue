@@ -28,40 +28,26 @@ onUnmounted(() => store.unsubscribePage())
   <main class="page">
     <AppBreadcrumbs :items="[{ label: 'Home', to: '/' }, { label: 'Queue' }]" />
 
-    <section class="page-header">
-      <span class="eyebrow">Queue</span>
-      <h1 class="page-title">Scheduler state</h1>
-      <p class="page-subtitle">
-        The queue is task-level: one active task and ordered pending entries.
-      </p>
-    </section>
-
     <PMessage v-if="store.error" severity="error" :closable="false">{{ store.error }}</PMessage>
     <div v-if="store.loading && !store.queue" class="loading-state">
-      <PProgressSpinner style="width: 1.5rem; height: 1.5rem" />
+      <PProgressSpinner />
       <span>Loading queue</span>
     </div>
 
     <section v-if="store.queue" class="stack">
-      <div class="panel">
-        <div class="panel-header">
-          <h2 class="panel-title">Active</h2>
-        </div>
-        <div v-if="active" class="panel-body">
+      <PPanel header="Active">
+        <div v-if="active">
           <PTag severity="info" value="running" />
           <RouterLink :to="taskURL(active.repo.repo_path, active.commit, active.task)">
             {{ taskLabel(active) }} / {{ active.task }}
           </RouterLink>
         </div>
         <div v-else-if="store.queueLoaded && !store.error" class="empty-state">No active task.</div>
-      </div>
+      </PPanel>
 
-      <div class="panel">
-        <div class="panel-header">
-          <h2 class="panel-title">Pending</h2>
-        </div>
+      <PPanel header="Pending">
         <PDataTable v-if="pending.length > 0" :value="pending" size="small">
-          <PColumn header="#" style="width: 5rem">
+          <PColumn header="#">
             <template #body="{ index }">{{ index + 1 }}</template>
           </PColumn>
           <PColumn header="Repo">
@@ -87,7 +73,7 @@ onUnmounted(() => store.unsubscribePage())
           </PColumn>
         </PDataTable>
         <div v-else-if="store.queueLoaded && !store.error" class="empty-state">Queue is idle.</div>
-      </div>
+      </PPanel>
     </section>
   </main>
 </template>

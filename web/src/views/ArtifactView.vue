@@ -34,7 +34,6 @@ onUnmounted(() => store.unsubscribeArtifact())
     <AppBreadcrumbs
       :items="[
         { label: 'Home', to: '/' },
-        { label: 'Repo', to: '/repo' },
         {
           label: store.currentArtifact?.repo.repo_path ?? parsed.repoPath,
           to: repoPathURL(parsed.repoPath),
@@ -61,26 +60,37 @@ onUnmounted(() => store.unsubscribeArtifact())
       ]"
     />
 
-    <section class="page-header">
-      <span class="eyebrow">Artifact</span>
-      <h1 class="page-title">{{ parsed.artifactPath }}</h1>
-      <p class="page-subtitle">
-        {{ store.currentArtifact?.repo.repo_path }} / {{ parsed.taskName }} / attempt
-        {{ parsed.attempt }}
-        <template v-if="store.error && store.currentArtifact"> / {{ store.error }}</template>
-      </p>
-    </section>
-
     <PMessage v-if="store.error && !store.currentArtifact" severity="error" :closable="false">{{
       store.error
     }}</PMessage>
     <div v-if="store.loading && !store.currentArtifact" class="loading-state">
-      <PProgressSpinner style="width: 1.5rem; height: 1.5rem" />
+      <PProgressSpinner />
       <span>Loading artifact</span>
     </div>
 
-    <pre v-if="store.currentArtifact" class="log-view artifact-log-view">{{
+    <pre v-if="store.currentArtifact" class="artifact-log-view">{{
       store.currentArtifact.content
     }}</pre>
   </main>
 </template>
+
+<style scoped>
+.artifact-log-view {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  margin: 0;
+  padding: var(--app-space-5);
+  border: 1px solid var(--p-content-border-color);
+  border-bottom: 0;
+  border-radius: var(--p-content-border-radius) var(--p-content-border-radius) 0 0;
+  background: var(--p-surface-0);
+  color: var(--p-text-color);
+  font-size: var(--app-log-font-size);
+  line-height: var(--app-log-line-height);
+  white-space: pre-wrap;
+}
+</style>

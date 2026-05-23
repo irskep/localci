@@ -20,17 +20,12 @@ onUnmounted(() => store.unsubscribePage())
   <main class="page">
     <AppBreadcrumbs :items="[{ label: 'Home', to: '/' }, { label: 'Repo' }]" />
 
-    <section class="page-header">
-      <span class="eyebrow">Repo</span>
-      <h1 class="page-title">Tracked repositories</h1>
-    </section>
-
     <PMessage v-if="store.error" severity="error" :closable="false">{{ store.error }}</PMessage>
     <div v-if="store.loading && !store.home" class="loading-state">
-      <PProgressSpinner style="width: 1.5rem; height: 1.5rem" />
+      <PProgressSpinner />
       <span>Loading repos</span>
     </div>
-    <PDataTable v-if="repos.length > 0" :value="repos" size="small" class="panel">
+    <PDataTable v-if="repos.length > 0" :value="repos" size="small">
       <PColumn header="Name">
         <template #body="{ data }">
           <RouterLink :to="`/repo/${data.repo_path}`">{{ data.repo_path }}</RouterLink>
@@ -38,7 +33,7 @@ onUnmounted(() => store.unsubscribePage())
       </PColumn>
       <PColumn field="repo_path" header="Path" />
     </PDataTable>
-    <div v-else-if="store.homeLoaded && !store.error" class="panel empty-state">
+    <div v-else-if="store.homeLoaded && !store.error" class="empty-state">
       No repos have localci history yet.
     </div>
   </main>

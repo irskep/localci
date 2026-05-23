@@ -2,14 +2,14 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import Aura from '@primeuix/themes/aura'
+import Breadcrumb from 'primevue/breadcrumb'
 import Button from 'primevue/button'
-import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Message from 'primevue/message'
+import Panel from 'primevue/panel'
 import ProgressSpinner from 'primevue/progressspinner'
 import Tag from 'primevue/tag'
-import Toolbar from 'primevue/toolbar'
 
 import App from './App.vue'
 import router from './router'
@@ -28,13 +28,13 @@ app.use(PrimeVue, {
 })
 app.use(createPinia())
 app.use(router)
+app.component('PBreadcrumb', Breadcrumb)
 app.component('PButton', Button)
-app.component('PCard', Card)
 app.component('PColumn', Column)
 app.component('PDataTable', DataTable)
 app.component('PMessage', Message)
+app.component('PPanel', Panel)
 app.component('PProgressSpinner', ProgressSpinner)
 app.component('PTag', Tag)
-app.component('PToolbar', Toolbar)
 
 app.mount('#app')

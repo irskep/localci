@@ -59,3 +59,30 @@ const groups = computed(() => [
     </template>
   </span>
 </template>
+
+<style scoped>
+.task-summary-links {
+  display: grid;
+  gap: var(--app-space-1);
+  margin-top: var(--app-space-1);
+}
+
+.task-summary-group {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--app-space-2);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.task-summary-items {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--app-space-2);
+}
+
+.task-summary-items a:not(:last-child)::after {
+  color: var(--p-text-muted-color);
+  content: ',';
+}
+</style>

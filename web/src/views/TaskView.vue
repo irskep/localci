@@ -80,7 +80,6 @@ onUnmounted(() => store.unsubscribeTask())
     <AppBreadcrumbs
       :items="[
         { label: 'Home', to: '/' },
-        { label: 'Repo', to: '/repo' },
         {
           label: taskResponse?.repo.repo_path ?? parsed.repoPath,
           to: repoPathURL(parsed.repoPath),
@@ -106,16 +105,15 @@ onUnmounted(() => store.unsubscribeTask())
       taskError
     }}</PMessage>
     <div v-if="store.taskLoadingFor(parsed.apiPath) && !task" class="loading-state">
-      <PProgressSpinner style="width: 1.5rem; height: 1.5rem" />
+      <PProgressSpinner />
       <span>Loading task</span>
     </div>
 
     <template v-if="task && parsed.commit && parsed.taskName">
       <section class="task-layout">
         <aside class="task-sidebar">
-          <div class="panel">
-            <div class="panel-header">
-              <h2 class="panel-title">Attempts</h2>
+          <PPanel header="Attempts">
+            <template #icons>
               <div class="panel-actions">
                 <PButton
                   :label="canceling ? 'Canceling...' : 'Cancel'"
@@ -129,7 +127,7 @@ onUnmounted(() => store.unsubscribeTask())
                 />
                 <PButton label="Retry" size="small" icon="pi pi-refresh" @click="retry" />
               </div>
-            </div>
+            </template>
             <ul class="attempt-list">
               <li v-for="attempt in task.attempts" :key="attempt.attempt">
                 <RouterLink
@@ -146,12 +144,9 @@ onUnmounted(() => store.unsubscribeTask())
                 </RouterLink>
               </li>
             </ul>
-          </div>
+          </PPanel>
 
-          <div class="panel">
-            <div class="panel-header">
-              <h2 class="panel-title">Artifacts</h2>
-            </div>
+          <PPanel header="Artifacts">
             <ul v-if="task.artifacts.length > 0" class="artifact-list">
               <li v-for="artifact in task.artifacts" :key="artifact.display_name">
                 <i class="pi pi-file" aria-hidden="true"></i>
@@ -171,23 +166,148 @@ onUnmounted(() => store.unsubscribeTask())
               </li>
             </ul>
             <div v-else class="empty-state">No artifacts for this attempt.</div>
-          </div>
+          </PPanel>
         </aside>
 
-        <div class="task-log-panel panel">
-          <div class="panel-header">
-            <h2 class="panel-title">Primary Log</h2>
+        <PPanel header="Primary Log" class="task-log-panel">
+          <template #icons>
             <div class="task-log-meta">
               <PTag v-if="taskError" severity="warn" :value="taskError" />
               <PTag :severity="displayStatusSeverity(task)" :value="displayTaskStatus(task)" />
               <span class="muted mono">{{ taskResponse?.primary_artifact || 'combined.log' }}</span>
             </div>
-          </div>
+          </template>
           <pre class="task-log-view">{{
             taskResponse?.primary_log || 'No primary log content.'
           }}</pre>
-        </div>
+        </PPanel>
       </section>
     </template>
   </main>
 </template>
+
+<style scoped>
+.task-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: var(--app-space-5);
+  align-items: stretch;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.task-sidebar {
+  display: grid;
+  align-content: start;
+  gap: var(--app-space-5);
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.task-log-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+:global(.task-log-panel .p-panel-content-container),
+:global(.task-log-panel .p-panel-content-wrapper),
+:global(.task-log-panel .p-panel-content) {
+  min-height: 0;
+}
+
+:global(.task-log-panel .p-panel-content-container),
+:global(.task-log-panel .p-panel-content-wrapper) {
+  display: grid;
+}
+
+:global(.task-log-panel .p-panel-content) {
+  display: grid;
+  padding: 0;
+}
+
+.task-log-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--app-space-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--p-navigation-item-gap);
+}
+
+.attempt-list,
+.artifact-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attempt-list {
+  gap: var(--app-space-3);
+}
+
+.attempt-list a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-5);
+  padding: var(--app-item-padding);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: var(--p-content-border-radius);
+}
+
+.artifact-list {
+  gap: var(--app-space-3);
+}
+
+.artifact-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-3);
+  min-width: 0;
+}
+
+.artifact-list a {
+  min-width: 0;
+  padding: var(--app-space-3) 0;
+  overflow-wrap: anywhere;
+}
+
+.task-log-view {
+  overflow: auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: var(--app-space-5);
+  border-top: 1px solid var(--p-content-border-color);
+  background: var(--p-surface-0);
+  color: var(--p-text-color);
+  font-size: var(--app-log-font-size);
+  line-height: var(--app-log-line-height);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 860px) {
+  .task-layout {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
