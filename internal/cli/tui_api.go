@@ -114,6 +114,11 @@ type tuiCancelResponse struct {
 	Canceled bool           `json:"canceled"`
 }
 
+type tuiRevealArtifactResponse struct {
+	Path string `json:"path"`
+	OK   bool   `json:"ok"`
+}
+
 type tuiAPIEvent struct {
 	Type     string          `json:"type"`
 	Resource string          `json:"resource"`
@@ -318,5 +323,11 @@ func (c *tuiClient) retryTask(ctx context.Context, apiPath string) (tuiRetryResp
 func (c *tuiClient) cancelTask(ctx context.Context, apiPath string) (tuiCancelResponse, error) {
 	var resp tuiCancelResponse
 	err := c.post(ctx, strings.TrimRight(apiPath, "/")+"/cancel", &resp)
+	return resp, err
+}
+
+func (c *tuiClient) revealArtifact(ctx context.Context, apiPath string) (tuiRevealArtifactResponse, error) {
+	var resp tuiRevealArtifactResponse
+	err := c.post(ctx, strings.TrimRight(apiPath, "/")+"/reveal", &resp)
 	return resp, err
 }

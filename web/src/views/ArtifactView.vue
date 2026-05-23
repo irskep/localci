@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
@@ -10,6 +10,9 @@ import { useLocalciStore } from '@/stores/localci'
 const route = useRoute()
 const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
+const revealing = ref(false)
+const revealNotice = ref('')
+const canShowInFinder = computed(() => navigator.platform.toLowerCase().includes('mac'))
 const taskName = computed(() => store.currentArtifact?.task ?? parsed.value.taskName ?? 'Task')
 const title = computed(() => {
   const artifact =
@@ -22,6 +25,15 @@ useDocumentTitle(title)
 function subscribe(): void {
   if (parsed.value.kind !== 'artifact') return
   store.subscribeArtifact(parsed.value.apiPath)
+}
+
+async function showInFinder(): Promise<void> {
+  if (parsed.value.kind !== 'artifact' || revealing.value) return
+  revealing.value = true
+  revealNotice.value = ''
+  const result = await store.revealArtifact(parsed.value.apiPath)
+  if (result?.ok) revealNotice.value = 'Shown in Finder'
+  revealing.value = false
 }
 
 onMounted(subscribe)
@@ -68,13 +80,46 @@ onUnmounted(() => store.unsubscribeArtifact())
       <span>Loading artifact</span>
     </div>
 
-    <pre v-if="store.currentArtifact" class="artifact-log-view">{{
-      store.currentArtifact.content
-    }}</pre>
+    <template v-if="store.currentArtifact">
+      <div class="artifact-toolbar">
+        <span class="artifact-path mono">{{ store.currentArtifact.artifact.path }}</span>
+        <PButton
+          v-if="canShowInFinder"
+          label="Show in Finder"
+          icon="pi pi-folder-open"
+          size="small"
+          :loading="revealing"
+          @click="showInFinder"
+        />
+      </div>
+      <PMessage v-if="revealNotice" severity="success" :closable="false" class="artifact-notice">{{
+        revealNotice
+      }}</PMessage>
+      <pre class="artifact-log-view">{{ store.currentArtifact.content }}</pre>
+    </template>
   </main>
 </template>
 
 <style scoped>
+.artifact-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-3);
+  min-width: 0;
+}
+
+.artifact-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--p-text-muted-color);
+}
+
+.artifact-notice {
+  margin: 0;
+}
+
 .artifact-log-view {
   width: 100%;
   height: 100%;

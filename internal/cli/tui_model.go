@@ -102,6 +102,7 @@ type tuiKeyMap struct {
 	Artifacts key.Binding
 	Edit      key.Binding
 	OpenFile  key.Binding
+	Finder    key.Binding
 }
 
 func defaultTUIKeys() tuiKeyMap {
@@ -127,11 +128,12 @@ func defaultTUIKeys() tuiKeyMap {
 		Artifacts: key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "artifacts")),
 		Edit:      key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit artifact")),
 		OpenFile:  key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "open artifact")),
+		Finder:    key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "show in finder")),
 	}
 }
 
 func (k tuiKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Open, k.Back, k.PrevTab, k.NextTab, k.Edit, k.OpenFile, k.Help, k.Quit}
+	return []key.Binding{k.Open, k.Back, k.PrevTab, k.NextTab, k.Edit, k.OpenFile, k.Finder, k.Help, k.Quit}
 }
 
 func (k tuiKeyMap) FullHelp() [][]key.Binding {
@@ -139,7 +141,7 @@ func (k tuiKeyMap) FullHelp() [][]key.Binding {
 		{k.Open, k.Back, k.Quit, k.Help},
 		{k.Up, k.Down, k.PrevTab, k.NextTab, k.PageUp, k.PageDown, k.HomeKey, k.End},
 		{k.HomeView, k.Repos, k.Queue, k.Refresh},
-		{k.Retry, k.Cancel, k.Artifacts, k.Edit, k.OpenFile},
+		{k.Retry, k.Cancel, k.Artifacts, k.Edit, k.OpenFile, k.Finder},
 	}
 }
 
@@ -408,6 +410,8 @@ func (m tuiModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.editSelectedArtifact())
 	case key.Matches(msg, m.keys.OpenFile):
 		cmds = append(cmds, m.openSelectedArtifact())
+	case key.Matches(msg, m.keys.Finder):
+		cmds = append(cmds, m.revealSelectedArtifact())
 	case key.Matches(msg, m.keys.Retry):
 		if cmd := m.retrySelected(); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -596,6 +600,29 @@ func (m tuiModel) artifactListRoute() (tuiRoute, bool) {
 	return tuiArtifactListRoute(m.route, selectedAttempt(m.task)), true
 }
 
+func (m tuiModel) selectedArtifactRoute() (tuiRoute, bool) {
+	switch m.route.view {
+	case tuiViewTask:
+		if m.task == nil || len(m.task.Task.Artifacts) == 0 || m.cursor < 0 || m.cursor >= len(m.task.Task.Artifacts) {
+			return tuiRoute{}, false
+		}
+		route := tuiArtifactListRoute(m.route, selectedAttempt(m.task))
+		return tuiArtifactRoute(route, m.task.Task.Artifacts[m.cursor].DisplayName), true
+	case tuiViewArtifacts:
+		if m.artifacts == nil || len(m.artifacts.Artifacts) == 0 || m.cursor < 0 || m.cursor >= len(m.artifacts.Artifacts) {
+			return tuiRoute{}, false
+		}
+		return tuiArtifactRoute(m.route, m.artifacts.Artifacts[m.cursor].DisplayName), true
+	case tuiViewArtifact:
+		if m.route.apiPath == "" {
+			return tuiRoute{}, false
+		}
+		return m.route, true
+	default:
+		return tuiRoute{}, false
+	}
+}
+
 func (m tuiModel) retrySelected() tea.Cmd {
 	route, ok := m.actionTaskRoute()
 	if !ok {
@@ -660,6 +687,25 @@ func (m tuiModel) openSelectedArtifact() tea.Cmd {
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return tuiExternalCommandMsg{action: "open", path: path, err: err}
 	})
+}
+
+func (m tuiModel) revealSelectedArtifact() tea.Cmd {
+	route, ok := m.selectedArtifactRoute()
+	if !ok {
+		return func() tea.Msg {
+			return tuiActionMsg{err: fmt.Errorf("no artifact selected")}
+		}
+	}
+	return func() tea.Msg {
+		resp, err := m.client.revealArtifact(context.Background(), route.apiPath)
+		if err != nil {
+			return tuiActionMsg{err: err}
+		}
+		if resp.OK {
+			return tuiActionMsg{notice: "shown in Finder: " + resp.Path}
+		}
+		return tuiActionMsg{notice: "Finder did not report an artifact"}
+	}
 }
 
 func staticExternalCommandMsg(action string, path string, err error) tea.Cmd {

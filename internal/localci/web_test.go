@@ -255,12 +255,17 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("writeRunRecord returned error: %v", err)
 	}
 
+	var revealedPath string
 	server := WebServer{
 		Paths:    paths,
 		Queue:    queue,
 		RepoRoot: repoRoot,
 		DiscoverTasks: func(context.Context, string) ([]Task, error) {
 			return []Task{{Name: "localci:test"}}, nil
+		},
+		RevealArtifactInFinder: func(path string) error {
+			revealedPath = path
+			return nil
 		},
 	}
 
@@ -371,6 +376,23 @@ func TestWebServerAPI(t *testing.T) {
 	_ = resp.Body.Close()
 	if artifactResp.Content != "hello" {
 		t.Fatalf("artifact content = %q, want %q", artifactResp.Content, "hello")
+	}
+
+	reqReveal, err := http.NewRequest(http.MethodPost, baseURL+"/api/repo/team/repo/commit/"+commit+"/task/"+taskPath+"/attempt/2/artifact/combined.log/reveal", nil)
+	if err != nil {
+		t.Fatalf("NewRequest reveal returned error: %v", err)
+	}
+	resp, err = http.DefaultClient.Do(reqReveal)
+	if err != nil {
+		t.Fatalf("POST reveal returned error: %v", err)
+	}
+	var revealResp apiRevealArtifactResponse
+	if err := json.NewDecoder(resp.Body).Decode(&revealResp); err != nil {
+		t.Fatalf("Decode reveal returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if !revealResp.OK || revealResp.Path != artifactPath || revealedPath != artifactPath {
+		t.Fatalf("reveal response = %#v, revealed %q, want %q", revealResp, revealedPath, artifactPath)
 	}
 
 	reqRetry, err := http.NewRequest(http.MethodPost, baseURL+"/api/repo/team/repo/commit/"+commit+"/task/"+taskPath+"/retry", nil)

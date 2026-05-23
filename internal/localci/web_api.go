@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -90,6 +92,11 @@ type apiArtifactResponse struct {
 	Attempt  int            `json:"attempt"`
 	Artifact ArtifactView   `json:"artifact"`
 	Content  string         `json:"content"`
+}
+
+type apiRevealArtifactResponse struct {
+	Path string `json:"path"`
+	OK   bool   `json:"ok"`
 }
 
 type apiRetryResponse struct {
@@ -457,6 +464,18 @@ func (s WebServer) handleAPIAttemptRoutes(w http.ResponseWriter, r *http.Request
 		s.handleAPIArtifactIndex(w, repoDir, commit, taskName, attempt)
 		return
 	}
+	if segments[len(segments)-1] == "reveal" {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, http.MethodPost)
+			return
+		}
+		if len(segments) == 3 {
+			http.NotFound(w, r)
+			return
+		}
+		s.handleAPIRevealArtifact(w, repoDir, commit, taskName, attempt, path.Join(segments[2:len(segments)-1]...))
+		return
+	}
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w, http.MethodGet)
 		return
@@ -483,8 +502,8 @@ func (s WebServer) handleAPIArtifactIndex(w http.ResponseWriter, repoDir string,
 	})
 }
 
-func (s WebServer) handleAPIArtifact(w http.ResponseWriter, repoDir string, commit string, taskName string, attempt int, artifactPath string) {
-	task, err := s.selectedTaskStatus(repoDir, commit, taskName, attempt)
+func (s WebServer) handleAPIRevealArtifact(w http.ResponseWriter, repoDir string, commit string, taskName string, attempt int, artifactPath string) {
+	_, artifact, err := s.artifactForRoute(repoDir, commit, taskName, attempt, artifactPath)
 	if err != nil {
 		if errorsIsRecordNotFound(err) {
 			writeAPIError(w, http.StatusNotFound, err)
@@ -493,10 +512,25 @@ func (s WebServer) handleAPIArtifact(w http.ResponseWriter, repoDir string, comm
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
+	reveal := s.RevealArtifactInFinder
+	if reveal == nil {
+		reveal = defaultRevealArtifactInFinder
+	}
+	if err := reveal(artifact.Path); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, apiRevealArtifactResponse{Path: artifact.Path, OK: true})
+}
 
-	artifact, ok := findArtifactByDisplayName(task.Artifacts, artifactPath)
-	if !ok {
-		writeAPIError(w, http.StatusNotFound, fmt.Errorf("artifact not found"))
+func (s WebServer) handleAPIArtifact(w http.ResponseWriter, repoDir string, commit string, taskName string, attempt int, artifactPath string) {
+	task, artifact, err := s.artifactForRoute(repoDir, commit, taskName, attempt, artifactPath)
+	if err != nil {
+		if errorsIsRecordNotFound(err) {
+			writeAPIError(w, http.StatusNotFound, err)
+			return
+		}
+		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
 	data, err := readTextTaskArtifact(task, artifact.DisplayName)
@@ -516,6 +550,25 @@ func (s WebServer) handleAPIArtifact(w http.ResponseWriter, repoDir string, comm
 		Artifact: artifact,
 		Content:  string(data),
 	})
+}
+
+func (s WebServer) artifactForRoute(repoDir string, commit string, taskName string, attempt int, artifactPath string) (TaskStatusView, ArtifactView, error) {
+	task, err := s.selectedTaskStatus(repoDir, commit, taskName, attempt)
+	if err != nil {
+		return TaskStatusView{}, ArtifactView{}, err
+	}
+	artifact, ok := findArtifactByDisplayName(task.Artifacts, artifactPath)
+	if !ok {
+		return TaskStatusView{}, ArtifactView{}, ErrRecordNotFound
+	}
+	return task, artifact, nil
+}
+
+func defaultRevealArtifactInFinder(artifactPath string) error {
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("show in finder is only supported on macOS")
+	}
+	return exec.Command("open", "-R", artifactPath).Run()
 }
 
 func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit string, taskName string) {

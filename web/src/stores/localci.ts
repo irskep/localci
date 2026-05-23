@@ -9,6 +9,7 @@ import type {
   CommitResponse,
   HomeResponse,
   QueueResponse,
+  RevealArtifactResponse,
   RepoResponse,
   RetryResponse,
   TaskResponse,
@@ -22,6 +23,7 @@ import {
   parseCommitResponse,
   parseHomeResponse,
   parseQueueResponse,
+  parseRevealArtifactResponse,
   parseRepoResponse,
   parseRetryResponse,
   parseTaskResponse,
@@ -330,6 +332,12 @@ export const useLocalciStore = defineStore('localci', () => {
     artifactLoaded.value = true
   }
 
+  async function revealArtifact(apiPath: string): Promise<RevealArtifactResponse | null> {
+    return await load(() =>
+      postJSON(`${apiPath.replace(/\/$/, '')}/reveal`, parseRevealArtifactResponse),
+    )
+  }
+
   function subscribeArtifact(apiPath: string): void {
     if (artifactStream && artifactStream.key === apiPath) return
     unsubscribeArtifact()
@@ -423,6 +431,7 @@ export const useLocalciStore = defineStore('localci', () => {
     queue,
     queueLoaded,
     queueCount,
+    revealArtifact,
     repoLoaded,
     retryTask,
     subscribeCommit,

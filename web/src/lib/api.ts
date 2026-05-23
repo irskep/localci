@@ -94,6 +94,11 @@ export type ArtifactResponse = {
   content: string
 }
 
+export type RevealArtifactResponse = {
+  path: string
+  ok: boolean
+}
+
 export type APIEvent<T = unknown> =
   | { type: 'snapshot'; resource: string; data: T }
   | { type: 'replace'; resource: string; data: T }
@@ -268,6 +273,14 @@ export function parseArtifactResponse(value: unknown): ArtifactResponse {
     attempt: asNumber(data.attempt, 'artifact.attempt'),
     artifact: parseArtifactView(data.artifact),
     content: asString(data.content, 'artifact.content'),
+  }
+}
+
+export function parseRevealArtifactResponse(value: unknown): RevealArtifactResponse {
+  const data = asObject(value, 'reveal artifact response')
+  return {
+    path: asString(data.path, 'reveal_artifact.path'),
+    ok: asBoolean(data.ok, 'reveal_artifact.ok'),
   }
 }
 

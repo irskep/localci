@@ -17,14 +17,15 @@ import (
 )
 
 type WebServer struct {
-	Paths         Paths
-	Queue         QueueStore
-	DiscoverTasks func(context.Context, string) ([]Task, error)
-	AssetDir      string
-	RepoRoot      string
-	Events        *EventNotifier
-	EventHub      *EventHub
-	Shutdown      func()
+	Paths                  Paths
+	Queue                  QueueStore
+	DiscoverTasks          func(context.Context, string) ([]Task, error)
+	AssetDir               string
+	RepoRoot               string
+	Events                 *EventNotifier
+	EventHub               *EventHub
+	Shutdown               func()
+	RevealArtifactInFinder func(string) error
 }
 
 type HomePageView struct {
