@@ -326,7 +326,7 @@ func TestAppRunRecognizesInvokeUsage(t *testing.T) {
 		t.Fatalf("Run returned nil error, want usage error")
 	}
 
-	if got, want := err.Error(), "usage: localci invoke [--wait] [--annotation key=value] [dir] [commit]"; got != want {
+	if got, want := err.Error(), "usage: localci invoke [--wait] [--no-clone] [--annotation key=value] [dir] [commit]"; got != want {
 		t.Fatalf("error = %q, want %q", got, want)
 	}
 }
@@ -364,6 +364,129 @@ func TestParseInvokeTargetDefaultsToCWDAndHead(t *testing.T) {
 	}
 	if commit != "abc123" {
 		t.Fatalf("commit = %q, want %q", commit, "abc123")
+	}
+}
+
+func TestInvokeTargetResolvesExplicitHeadBeforeNoCloneLabel(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	app.HeadCommit = func(repo string) (string, error) {
+		if repo != repoDir {
+			t.Fatalf("repo = %q, want %q", repo, repoDir)
+		}
+		return "abc123", nil
+	}
+
+	repo, commit, err := app.parseInvokeTarget([]string{repoDir, "HEAD"})
+	if err != nil {
+		t.Fatalf("parseInvokeTarget returned error: %v", err)
+	}
+	commit, err = app.resolveCommitAlias(repo, commit)
+	if err != nil {
+		t.Fatalf("resolveCommitAlias returned error: %v", err)
+	}
+	if got, want := noCloneCommitLabel(commit), "abc123*"; got != want {
+		t.Fatalf("no-clone invoke commit = %q, want %q", got, want)
+	}
+}
+
+func TestNoCloneCommitLabel(t *testing.T) {
+	t.Parallel()
+
+	if got, want := noCloneCommitLabel("abc123"), "abc123*"; got != want {
+		t.Fatalf("noCloneCommitLabel = %q, want %q", got, want)
+	}
+	if got, want := noCloneCommitLabel("abc123*"), "abc123*"; got != want {
+		t.Fatalf("noCloneCommitLabel should not double suffix: %q", got)
+	}
+}
+
+func TestResolveCommitAliasSupportsNoCloneHead(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	app.HeadCommit = func(repo string) (string, error) {
+		if repo != repoDir {
+			t.Fatalf("repo = %q, want %q", repo, repoDir)
+		}
+		return "abc123", nil
+	}
+
+	got, err := app.resolveCommitAlias(repoDir, "HEAD*")
+	if err != nil {
+		t.Fatalf("resolveCommitAlias returned error: %v", err)
+	}
+	if got != "abc123*" {
+		t.Fatalf("commit = %q, want abc123*", got)
+	}
+}
+
+func TestParseStatusTargetNoCloneDefaultsToCurrentHead(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+
+	app := testApp(root, repoDir)
+	app.HeadCommit = func(repo string) (string, error) {
+		if repo != repoDir {
+			t.Fatalf("repo = %q, want %q", repo, repoDir)
+		}
+		return "abc123", nil
+	}
+
+	got, err := app.parseStatusTarget(nil, true, "usage")
+	if err != nil {
+		t.Fatalf("parseStatusTarget returned error: %v", err)
+	}
+	if got.RepoDir != repoDir || got.Commit != "abc123*" {
+		t.Fatalf("target = %#v, want repo %q commit abc123*", got, repoDir)
+	}
+}
+
+func TestParseStatusTargetNoClonePathDefaultsToPathHead(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	cwd := filepath.Join(root, "cwd")
+	repoDir := filepath.Join(root, "repo")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatalf("MkdirAll cwd returned error: %v", err)
+	}
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir repo returned error: %v", err)
+	}
+
+	app := testApp(root, cwd)
+	app.HeadCommit = func(repo string) (string, error) {
+		if repo != repoDir {
+			t.Fatalf("repo = %q, want %q", repo, repoDir)
+		}
+		return "def456", nil
+	}
+
+	got, err := app.parseStatusTarget([]string{"../repo"}, true, "usage")
+	if err != nil {
+		t.Fatalf("parseStatusTarget returned error: %v", err)
+	}
+	if got.RepoDir != repoDir || got.Commit != "def456*" {
+		t.Fatalf("target = %#v, want repo %q commit def456*", got, repoDir)
 	}
 }
 

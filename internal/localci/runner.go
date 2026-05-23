@@ -53,28 +53,32 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 		return RunRecord{}, fmt.Errorf("create commit root: %w", err)
 	}
 
-	clones := CloneManager{Paths: r.Paths, Now: r.Now}
-	info, err := clones.Prepare(ctx, req.RepoDir, req.Commit)
-	if err != nil {
+	workDir := req.RepoDir
+	if !req.NoClone {
+		clones := CloneManager{Paths: r.Paths, Now: r.Now}
+		info, err := clones.Prepare(ctx, req.RepoDir, req.Commit)
+		if err != nil {
+			_, run, recordErr := recordSetupFailure(r.Paths, req, err, r.now())
+			if recordErr != nil {
+				return RunRecord{}, recordErr
+			}
+			return run, nil
+		}
+		defer func() {
+			_ = clones.Cleanup(req.RepoDir, req.Commit)
+		}()
+		workDir = info.Worktree
+	}
+
+	if err := r.Trust(ctx, workDir); err != nil {
 		_, run, recordErr := recordSetupFailure(r.Paths, req, err, r.now())
 		if recordErr != nil {
 			return RunRecord{}, recordErr
 		}
 		return run, nil
 	}
-	defer func() {
-		_ = clones.Cleanup(req.RepoDir, req.Commit)
-	}()
 
-	if err := r.Trust(ctx, info.Worktree); err != nil {
-		_, run, recordErr := recordSetupFailure(r.Paths, req, err, r.now())
-		if recordErr != nil {
-			return RunRecord{}, recordErr
-		}
-		return run, nil
-	}
-
-	tasks, err := r.DiscoverTasks(ctx, info.Worktree)
+	tasks, err := r.DiscoverTasks(ctx, workDir)
 	if err != nil {
 		_, run, recordErr := recordSetupFailure(r.Paths, req, err, r.now())
 		if recordErr != nil {
@@ -91,7 +95,7 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 
 	setup, userTasks, hasSetup := splitSetupTask(tasks)
 	if hasSetup {
-		taskRecord, runErr := r.runTask(ctx, req, info.Worktree, setup, 0)
+		taskRecord, runErr := r.runTask(ctx, req, workDir, setup, 0)
 		record, err = upsertTaskRecord(r.Paths, req, taskRecord, r.now())
 		if err != nil {
 			return RunRecord{}, err
@@ -102,7 +106,7 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 	}
 
 	for _, task := range userTasks {
-		taskRecord, runErr := r.runTask(ctx, req, info.Worktree, task, 0)
+		taskRecord, runErr := r.runTask(ctx, req, workDir, task, 0)
 		record.TaskResults = append(record.TaskResults, taskRecord)
 		record.FinishedAt = r.now()
 		record.RefreshSummary()

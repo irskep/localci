@@ -183,6 +183,68 @@ exit 1
 	}
 }
 
+func TestInvokeNoCloneRunsInWorkingDirectory(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	initGitRepo(t, repoDir, "abc123")
+	rootDir := t.TempDir()
+	binDir := t.TempDir()
+	pwdFile := filepath.Join(rootDir, "pwd.txt")
+
+	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
+set -eu
+if [ "$1" = "trust" ]; then
+  exit 0
+fi
+if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--all" ]; then
+  printf '%s\n' '[{"name":"localci:pwd"}]'
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "localci:pwd" ]; then
+  pwd >"`+pwdFile+`"
+  exit 0
+fi
+exit 1
+`)
+
+	runner := Runner{
+		Paths:        Paths{Root: rootDir},
+		MiseBin:      filepath.Join(binDir, "mise"),
+		Env:          append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH")),
+		PollInterval: 10 * time.Millisecond,
+	}
+
+	result, err := runner.Invoke(context.Background(), InvokeRequest{
+		RepoDir: repoDir,
+		Commit:  "abc123*",
+		NoClone: true,
+	})
+	if err != nil {
+		t.Fatalf("Invoke returned error: %v", err)
+	}
+	if !result.Success() {
+		t.Fatalf("Invoke result should be successful: %#v", result.TaskResults)
+	}
+
+	pwdBytes, err := os.ReadFile(pwdFile)
+	if err != nil {
+		t.Fatalf("ReadFile(pwdFile) returned error: %v", err)
+	}
+	if got := strings.TrimSpace(string(pwdBytes)); got != repoDir {
+		t.Fatalf("task pwd = %q, want %q", got, repoDir)
+	}
+
+	runPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123*", "run.json")
+	if _, err := os.Stat(runPath); err != nil {
+		t.Fatalf("run metadata missing at %s: %v", runPath, err)
+	}
+	cloneDir := filepath.Join(rootDir, normalizeRepoDir(repoDir), "clones", "abc123*")
+	if _, err := os.Stat(cloneDir); !os.IsNotExist(err) {
+		t.Fatalf("clone dir should not exist for no-clone invoke, stat err = %v", err)
+	}
+}
+
 func writeExecutable(t *testing.T, path string, contents string) {
 	t.Helper()
 

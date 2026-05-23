@@ -146,7 +146,9 @@ func (a App) runPostcommit(args []string) error {
 }
 
 func (a App) runStatus(args []string) error {
-	spec, err := a.parseCommitTarget(args, "usage: localci status [dir] <commit> [task]")
+	noClone := false
+	args = filterFlag(args, "--no-clone", &noClone)
+	spec, err := a.parseStatusTarget(args, noClone, "usage: localci status [--no-clone] [dir] <commit> [task]")
 	if err != nil {
 		return err
 	}
@@ -189,9 +191,21 @@ func (a App) runStatus(args []string) error {
 }
 
 func (a App) runWeb(args []string) error {
+	noClone := false
+	args = filterFlag(args, "--no-clone", &noClone)
 	spec, err := a.parseWebTarget(args)
 	if err != nil {
 		return err
+	}
+	if noClone {
+		if spec.Commit == "" {
+			commit, err := a.headCommit(spec.RepoDir)
+			if err != nil {
+				return err
+			}
+			spec.Commit = commit
+		}
+		spec.Commit = noCloneCommitLabel(spec.Commit)
 	}
 
 	runner, err := a.newRunner()
@@ -229,12 +243,12 @@ Usage:
   localci restart
   localci stop
   localci postcommit [--annotation key=value] <repo> <commit>
-  localci invoke [--wait] [--annotation key=value] [dir] [commit]
-  localci cancel
-  localci cancel [dir] <commit> <task>
-  localci wait [dir] [commit]
-  localci status [dir] <commit> [task]
-  localci web [dir] [commit] [task]
+  localci invoke [--wait] [--no-clone] [--annotation key=value] [dir] [commit]
+  localci cancel [--no-clone]
+  localci cancel [--no-clone] [dir] <commit> <task>
+  localci wait [--no-clone] [dir] [commit]
+  localci status [--no-clone] [dir] <commit> [task]
+  localci web [--no-clone] [dir] [commit] [task]
   localci install-hooks [dir]
 `
 }
@@ -276,10 +290,15 @@ type commitTarget struct {
 
 func (a App) runInvoke(args []string) error {
 	wait := false
+	noClone := false
 	filtered := make([]string, 0, len(args))
 	for _, arg := range args {
-		if arg == "--wait" {
+		switch arg {
+		case "--wait":
 			wait = true
+			continue
+		case "--no-clone":
+			noClone = true
 			continue
 		}
 		filtered = append(filtered, arg)
@@ -299,10 +318,18 @@ func (a App) runInvoke(args []string) error {
 		if err != nil {
 			return err
 		}
+	} else {
+		commit, err = a.resolveCommitAlias(repo, commit)
+		if err != nil {
+			return err
+		}
 	}
 
 	if commit == "" {
 		return fmt.Errorf("commit must not be empty")
+	}
+	if noClone {
+		commit = noCloneCommitLabel(commit)
 	}
 
 	runner, err := a.newRunner()
@@ -314,6 +341,7 @@ func (a App) runInvoke(args []string) error {
 		RepoDir:     repo,
 		Commit:      commit,
 		Annotations: mergedAnnotations(localci.GitAnnotations(context.Background(), repo), annotations),
+		NoClone:     noClone,
 	})
 	if err != nil {
 		return err
@@ -336,6 +364,8 @@ func (a App) runInvoke(args []string) error {
 }
 
 func (a App) runCancel(args []string) error {
+	noClone := false
+	args = filterFlag(args, "--no-clone", &noClone)
 	runner, err := a.newRunner()
 	if err != nil {
 		return err
@@ -357,16 +387,19 @@ func (a App) runCancel(args []string) error {
 		commit = active.Commit
 		taskName = active.TaskName
 	} else {
-		spec, err := a.parseCommitTarget(args, "usage: localci cancel [dir] <commit> <task>")
+		spec, err := a.parseCommitTarget(args, "usage: localci cancel [--no-clone] [dir] <commit> <task>")
 		if err != nil {
 			return err
 		}
 		if spec.Task == "" {
-			return fmt.Errorf("usage: localci cancel [dir] <commit> <task>")
+			return fmt.Errorf("usage: localci cancel [--no-clone] [dir] <commit> <task>")
 		}
 		repoDir = spec.RepoDir
 		commit = spec.Commit
 		taskName = spec.Task
+	}
+	if noClone {
+		commit = noCloneCommitLabel(commit)
 	}
 
 	result, err := client.Cancel(context.Background(), repoDir, commit, taskName)
@@ -389,7 +422,9 @@ func (a App) runCancel(args []string) error {
 }
 
 func (a App) runWait(args []string) error {
-	spec, err := a.parseCommitTarget(args, "usage: localci wait [dir] [commit]")
+	noClone := false
+	args = filterFlag(args, "--no-clone", &noClone)
+	spec, err := a.parseStatusTarget(args, noClone, "usage: localci wait [--no-clone] [dir] [commit]")
 	if err != nil {
 		return err
 	}
@@ -429,8 +464,48 @@ func (a App) parseInvokeTarget(args []string) (string, string, error) {
 		}
 		return repo, strings.TrimSpace(args[1]), nil
 	default:
-		return "", "", fmt.Errorf("usage: localci invoke [--wait] [--annotation key=value] [dir] [commit]")
+		return "", "", fmt.Errorf("usage: localci invoke [--wait] [--no-clone] [--annotation key=value] [dir] [commit]")
 	}
+}
+
+func (a App) parseStatusTarget(args []string, noClone bool, usage string) (commitTarget, error) {
+	if noClone {
+		switch {
+		case len(args) == 0:
+			return a.currentNoCloneTarget()
+		case len(args) == 1 && looksLikePathArg(args[0]):
+			repo, err := a.resolveRepoArg(args[0])
+			if err != nil {
+				return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
+			}
+			commit, err := a.headCommit(repo)
+			if err != nil {
+				return commitTarget{}, err
+			}
+			return commitTarget{RepoDir: repo, Commit: noCloneCommitLabel(commit)}, nil
+		}
+	}
+
+	spec, err := a.parseCommitTarget(args, usage)
+	if err != nil {
+		return commitTarget{}, err
+	}
+	if noClone {
+		spec.Commit = noCloneCommitLabel(spec.Commit)
+	}
+	return spec, nil
+}
+
+func (a App) currentNoCloneTarget() (commitTarget, error) {
+	repo, err := a.resolveRepoArg(a.Cwd)
+	if err != nil {
+		return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
+	}
+	commit, err := a.headCommit(repo)
+	if err != nil {
+		return commitTarget{}, err
+	}
+	return commitTarget{RepoDir: repo, Commit: noCloneCommitLabel(commit)}, nil
 }
 
 func (a App) statusViewForRun(runner localci.Runner, result localci.RunRecord) (localci.CommitStatusView, error) {
@@ -519,6 +594,18 @@ func parseAnnotationArgs(args []string) (map[string]string, []string, error) {
 	return annotations, filtered, nil
 }
 
+func filterFlag(args []string, flag string, found *bool) []string {
+	filtered := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == flag {
+			*found = true
+			continue
+		}
+		filtered = append(filtered, arg)
+	}
+	return filtered
+}
+
 func mergedAnnotations(base map[string]string, override map[string]string) map[string]string {
 	if len(base) == 0 && len(override) == 0 {
 		return nil
@@ -531,6 +618,14 @@ func mergedAnnotations(base map[string]string, override map[string]string) map[s
 		merged[key] = value
 	}
 	return merged
+}
+
+func noCloneCommitLabel(commit string) string {
+	commit = strings.TrimSpace(commit)
+	if strings.HasSuffix(commit, "*") {
+		return commit
+	}
+	return commit + "*"
 }
 
 func (a App) newRunner() (localci.Runner, error) {
@@ -1003,6 +1098,13 @@ func (a App) latestCommitForRepo(repoDir string) (string, error) {
 
 func (a App) resolveCommitAlias(repoDir string, commit string) (string, error) {
 	commit = strings.TrimSpace(commit)
+	if commit == "HEAD*" {
+		head, err := a.headCommit(repoDir)
+		if err != nil {
+			return "", err
+		}
+		return noCloneCommitLabel(head), nil
+	}
 	if commit != "HEAD" {
 		return commit, nil
 	}

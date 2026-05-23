@@ -30,6 +30,7 @@ type InvokeRequest struct {
 	RepoDir     string
 	Commit      string
 	Annotations map[string]string
+	NoClone     bool
 }
 
 type RunRecord struct {
