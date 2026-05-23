@@ -1,4 +1,6 @@
-# Command line reference
+# CLI Reference
+
+This is a short command index. The CLI is still changing, so use `localci --help` as the source of truth for exact usage.
 
 ## `localci start`
 
@@ -14,38 +16,23 @@ Stop the daemon.
 
 ## `localci postcommit [--annotation key=value] <repo> <commit>`
 
-Enqueue LocalCI tasks for a committed revision. This is the command the Git post-commit hook calls.
-
-Annotations are stored with the run and displayed in the UI. Git annotations such as branch are added automatically when available.
-
-The command prints:
-
-- number of enqueued tasks
-- a `localci status` command
-- a web results URL when the daemon exposes one
-- a `localci wait` command
+Enqueue tasks for a committed revision. This is the command the Git post-commit hook calls.
 
 ## `localci invoke [--wait] [--no-clone] [--annotation key=value] [dir] [commit]`
 
-Discover and enqueue tasks manually.
-
-With no args, `dir` defaults to the current directory and `commit` defaults to `HEAD`.
-
-`--wait` blocks until the run completes and prints failed task details.
-
-`--no-clone` runs against the live working tree and labels the commit as `<commit>*`.
+Discover and enqueue tasks manually. Use `--wait` to block for results and `--no-clone` to run against the live working tree.
 
 ## `localci wait [--no-clone] [dir] [commit]`
 
-Wait for a run to complete. With no args, waits for the latest run for the current directory.
+Wait for a run to complete.
 
 ## `localci status [--no-clone] [dir] <commit> [task]`
 
-Print status for a run. When `task` is provided, prints detail for that task.
+Print status for a run.
 
 ## `localci web [--no-clone] [dir] [commit] [task]`
 
-Open the web UI for a repo, commit, or task.
+Open the web UI.
 
 ## `localci cancel [--no-clone]`
 
@@ -57,4 +44,4 @@ Cancel a specific task.
 
 ## `localci install-hooks [dir]`
 
-Install LocalCI's Git post-commit hook entry for a repository. `dir` defaults to the current working directory.
+Install LocalCI's Git post-commit hook entry for a repository.

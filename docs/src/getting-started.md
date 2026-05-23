@@ -1,0 +1,81 @@
+# Getting Started
+
+This guide gets a repository to the point where LocalCI runs checks after each commit.
+
+## Install LocalCI
+
+LocalCI requires mise. Install mise first, then add LocalCI as a pinned GitHub release tool:
+
+```toml
+[tools]
+"github:irskep/localci" = "VERSION"
+```
+
+Use an exact released version rather than a floating version.
+
+## Define setup
+
+Add a `localci:setup` task if the repository needs dependencies installed before checks run:
+
+```toml
+[tasks."localci:setup"]
+description = "Install dependencies for LocalCI runs"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "mise trust",
+  "mise install",
+]
+```
+
+Setup runs before validation tasks. Keep it deterministic and pinned.
+
+## Define checks
+
+LocalCI discovers mise tasks in the `localci:` namespace. For simple shell checks, use script tasks:
+
+```sh
+mkdir -p mise-tasks/localci
+```
+
+```sh
+#!/bin/sh
+set -eu
+
+printf 'cwd: %s\n' "$(pwd)"
+
+go test ./...
+```
+
+Save that as `mise-tasks/localci/test` and make it executable.
+
+Monorepo tasks work too. A task named `//web:localci:test` is discovered the same way as `localci:test`.
+
+## Start the daemon
+
+```sh
+localci start
+```
+
+## Install the hook
+
+From the repository root:
+
+```sh
+localci install-hooks
+```
+
+After each commit, the hook enqueues checks and prints commands for status and waiting.
+
+## Check results
+
+Wait in the terminal:
+
+```sh
+localci wait
+```
+
+Or open the web UI:
+
+```sh
+localci web
+```

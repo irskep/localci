@@ -1,5 +1,8 @@
 # Task Reference
 
+LocalCI tasks are mise tasks. The only naming convention LocalCI adds is the
+`localci:` namespace.
+
 ## Discovery
 
 LocalCI discovers tasks by running:
@@ -12,9 +15,11 @@ Any discovered task containing the `localci:` namespace is eligible to run. This
 
 `localci:setup` is reserved for setup and is not treated as an ordinary validation task.
 
-## Execution order
+## Setup
 
-LocalCI runs `localci:setup` first when it exists. Validation tasks run after setup.
+LocalCI runs `localci:setup` first when it exists. Use it for dependency installation shared by all checks.
+
+## Execution
 
 Each task runs through mise:
 
@@ -22,17 +27,17 @@ Each task runs through mise:
 mise run <task-name>
 ```
 
-## Environment
+## Task environment
 
 Every task receives these environment variables:
 
 | Variable | Meaning |
 | --- | --- |
 | `LOCALCI_TASK_OUTPUT_DIR` | Directory for artifacts from this task attempt. |
-| `LOCALCI_TASK_CACHE_DIR` | Cache directory shared by attempts of the same task. |
-| `LOCALCI_CACHE_DIR` | Cache directory shared across all tasks for the repo. |
+| `LOCALCI_TASK_CACHE_DIR` | Cache directory for this task. |
+| `LOCALCI_CACHE_DIR` | Cache directory shared by LocalCI tasks. |
 
-Write logs, build outputs, reports, and other inspectable artifacts under `LOCALCI_TASK_OUTPUT_DIR`.
+Write logs, reports, and inspectable artifacts under `LOCALCI_TASK_OUTPUT_DIR`.
 
 ## Logs and artifacts
 
@@ -45,8 +50,8 @@ mkdir -p "$LOCALCI_TASK_OUTPUT_DIR"
 go test ./... >"$LOCALCI_TASK_OUTPUT_DIR/test.log" 2>&1
 ```
 
-## Clones
+## Clone behavior
 
-Committed runs execute in independent clones under LocalCI's data directory. This keeps asynchronous runs isolated from later edits in the live checkout.
+Committed runs execute in independent clones. This keeps asynchronous runs isolated from later edits in the live checkout.
 
 No-clone runs are explicit exceptions. They execute in the live working directory and are labeled with a trailing `*`.

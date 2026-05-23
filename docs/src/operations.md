@@ -1,5 +1,7 @@
 # How-to Guides
 
+These commands cover the common ways to run and inspect LocalCI checks.
+
 ## Run checks for the latest commit
 
 To enqueue tasks for the repository's current `HEAD` and wait for the result:
@@ -18,7 +20,7 @@ To test uncommitted changes, use `--no-clone`:
 localci invoke --no-clone --wait
 ```
 
-No-clone runs are labeled with a trailing `*` on the commit. They intentionally execute against the current working directory, so they can see unstaged files and local edits.
+No-clone runs are labeled with a trailing `*`. They intentionally see unstaged files and local edits.
 
 ## Open the web UI
 

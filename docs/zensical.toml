@@ -3,11 +3,10 @@ site_name = "LocalCI"
 docs_dir = "src"
 nav = [
   "index.md",
-  "installation.md",
-  "setup.md",
+  "getting-started.md",
   "operations.md",
-  "cli.md",
   "tasks.md",
+  "cli.md",
 ]
 
 [project.theme.icon]
