@@ -3,6 +3,7 @@ import RepoLink from '@/components/RepoLink.vue'
 import RunLink from '@/components/RunLink.vue'
 import {
   annotationEntries,
+  displayTaskStatus,
   displayStatusSeverity,
   taskStatusIcon,
   taskStatusGroups,
@@ -35,6 +36,75 @@ function groupSeverity(
 ): ReturnType<typeof displayStatusSeverity> {
   return displayStatusSeverity(group.tasks[0]!)
 }
+
+const PROGRESS_STATUS = [
+  {
+    status: 'succeeded',
+    label: 'passed',
+    color: 'var(--p-green-500)',
+    complete: true,
+  },
+  {
+    status: 'failed',
+    label: 'failed',
+    color: 'var(--p-red-500)',
+    complete: true,
+  },
+  {
+    status: 'timed-out',
+    label: 'timed out',
+    color: 'var(--p-red-400)',
+    complete: true,
+  },
+  {
+    status: 'canceled',
+    label: 'canceled',
+    color: 'var(--p-surface-500)',
+    complete: true,
+  },
+  {
+    status: 'running',
+    label: 'running',
+    color: 'var(--p-primary-500)',
+    complete: false,
+  },
+  {
+    status: 'queued',
+    label: 'queued',
+    color: 'var(--p-yellow-500)',
+    complete: false,
+  },
+  {
+    status: 'not-run',
+    label: 'not run',
+    color: 'var(--p-surface-300)',
+    complete: false,
+  },
+] as const
+
+function progressItems(
+  entry: CommitSummary,
+): Array<{ label: string; value: number; color: string }> {
+  return PROGRESS_STATUS.map((progressStatus) => ({
+    label: progressStatus.label,
+    value: entry.tasks.filter((task) => displayTaskStatus(task) === progressStatus.status).length,
+    color: progressStatus.color,
+  })).filter((item) => item.value > 0)
+}
+
+function hasIncompleteTasks(entry: CommitSummary): boolean {
+  return entry.tasks.some((task) => {
+    const status = displayTaskStatus(task)
+    return status === 'running' || status === 'queued' || status === 'not-run'
+  })
+}
+
+function completedTaskCount(entry: CommitSummary): number {
+  return entry.tasks.filter((task) => {
+    const status = displayTaskStatus(task)
+    return status !== 'running' && status !== 'queued' && status !== 'not-run'
+  }).length
+}
 </script>
 
 <template>
@@ -52,6 +122,12 @@ function groupSeverity(
         />
       </span>
       <span class="muted">{{ activityTime(run) }}</span>
+    </div>
+    <div v-if="hasIncompleteTasks(run)" class="run-progress">
+      <PMeterGroup :value="progressItems(run)" :max="run.tasks.length" aria-label="Run progress">
+        <template #label></template>
+      </PMeterGroup>
+      <span class="muted">{{ completedTaskCount(run) }}/{{ run.tasks.length }} complete</span>
     </div>
     <div class="run-status-list">
       <div v-for="group in runGroups(run)" :key="group.label" class="run-status-row">
@@ -99,6 +175,12 @@ function groupSeverity(
 .run-status-list {
   display: grid;
   gap: var(--app-space-3);
+  min-width: 0;
+}
+
+.run-progress {
+  display: grid;
+  gap: var(--app-space-2);
   min-width: 0;
 }
 

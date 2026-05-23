@@ -60,10 +60,9 @@ onUnmounted(() => store.unsubscribePage())
                 v-for="entry in queueRows.slice(0, 6)"
                 :key="`${entry.repo.repo_path}:${entry.commit}:${entry.task}`"
               >
-                <PTag severity="warn" value="pending" />
+                <i class="pi pi-clock run-task-icon run-task-icon-queued" aria-hidden="true"></i>
                 <span class="inline-link-list">
                   <RepoLink :repo-path="entry.repo.repo_path" />
-                  <RunLink :repo-path="entry.repo.repo_path" :commit="entry.commit" />
                   <RouterLink :to="taskURL(entry.repo.repo_path, entry.commit, entry.task)">
                     {{ entry.task }}
                   </RouterLink>

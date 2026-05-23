@@ -3,7 +3,6 @@ import { computed, onMounted, onUnmounted } from 'vue'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import RepoLink from '@/components/RepoLink.vue'
-import RunLink from '@/components/RunLink.vue'
 import { taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
@@ -33,9 +32,11 @@ onUnmounted(() => store.unsubscribePage())
     <section v-if="store.queue" class="stack">
       <PPanel header="Active">
         <div v-if="active" class="inline-link-list">
-          <PTag severity="info" value="running" />
+          <i
+            class="pi pi-spin pi-spinner run-task-icon run-task-icon-running"
+            aria-hidden="true"
+          ></i>
           <RepoLink :repo-path="active.repo.repo_path" />
-          <RunLink :repo-path="active.repo.repo_path" :commit="active.commit" />
           <RouterLink :to="taskURL(active.repo.repo_path, active.commit, active.task)">
             {{ active.task }}
           </RouterLink>
@@ -45,17 +46,14 @@ onUnmounted(() => store.unsubscribePage())
 
       <PDataTable v-if="pending.length > 0" :value="pending" size="small" class="table-surface">
         <template #header>Pending</template>
-        <PColumn header="#">
-          <template #body="{ index }">{{ index + 1 }}</template>
+        <PColumn>
+          <template #body>
+            <i class="pi pi-clock run-task-icon run-task-icon-queued" aria-hidden="true"></i>
+          </template>
         </PColumn>
         <PColumn header="Repo">
           <template #body="{ data }">
             <RepoLink :repo-path="data.repo.repo_path" />
-          </template>
-        </PColumn>
-        <PColumn header="Commit">
-          <template #body="{ data }">
-            <RunLink :repo-path="data.repo.repo_path" :commit="data.commit" />
           </template>
         </PColumn>
         <PColumn header="Task">
