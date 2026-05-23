@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  MISE_EXPERIMENTAL: "true"
+
 jobs:
   localci:
     name: ${{ matrix.task }}
