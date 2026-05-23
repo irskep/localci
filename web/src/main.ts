@@ -12,6 +12,7 @@ import Message from 'primevue/message'
 import Panel from 'primevue/panel'
 import ProgressSpinner from 'primevue/progressspinner'
 import Tag from 'primevue/tag'
+import Tooltip from 'primevue/tooltip'
 
 import App from './App.vue'
 import router from './router'
@@ -56,5 +57,6 @@ app.component('PMessage', Message)
 app.component('PPanel', Panel)
 app.component('PProgressSpinner', ProgressSpinner)
 app.component('PTag', Tag)
+app.directive('tooltip', Tooltip)
 
 app.mount('#app')

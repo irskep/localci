@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import ArtifactActions from '@/components/ArtifactActions.vue'
 import { attemptURL, commitURL, parseRepoRoute, repoPathURL, taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
@@ -10,9 +11,6 @@ import { useLocalciStore } from '@/stores/localci'
 const route = useRoute()
 const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
-const revealing = ref(false)
-const revealNotice = ref('')
-const canShowInFinder = computed(() => navigator.platform.toLowerCase().includes('mac'))
 const taskName = computed(() => store.currentArtifact?.task ?? parsed.value.taskName ?? 'Task')
 const title = computed(() => {
   const artifact =
@@ -25,15 +23,6 @@ useDocumentTitle(title)
 function subscribe(): void {
   if (parsed.value.kind !== 'artifact') return
   store.subscribeArtifact(parsed.value.apiPath)
-}
-
-async function showInFinder(): Promise<void> {
-  if (parsed.value.kind !== 'artifact' || revealing.value) return
-  revealing.value = true
-  revealNotice.value = ''
-  const result = await store.revealArtifact(parsed.value.apiPath)
-  if (result?.ok) revealNotice.value = 'Shown in Finder'
-  revealing.value = false
 }
 
 onMounted(subscribe)
@@ -80,27 +69,28 @@ onUnmounted(() => store.unsubscribeArtifact())
       <span>Loading artifact</span>
     </div>
 
-    <template v-if="store.currentArtifact">
+    <div v-if="store.currentArtifact" class="artifact-content">
       <div class="artifact-toolbar">
-        <span class="artifact-path mono">{{ store.currentArtifact.artifact.path }}</span>
-        <PButton
-          v-if="canShowInFinder"
-          label="Show in Finder"
-          icon="pi pi-folder-open"
-          size="small"
-          :loading="revealing"
-          @click="showInFinder"
-        />
+        <span class="artifact-path mono" :title="store.currentArtifact.artifact.path">{{
+          store.currentArtifact.artifact.path
+        }}</span>
+        <ArtifactActions :path="store.currentArtifact.artifact.path" :api-path="parsed.apiPath" />
       </div>
-      <PMessage v-if="revealNotice" severity="success" :closable="false" class="artifact-notice">{{
-        revealNotice
-      }}</PMessage>
       <pre class="artifact-log-view">{{ store.currentArtifact.content }}</pre>
-    </template>
+    </div>
   </main>
 </template>
 
 <style scoped>
+.artifact-content {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: var(--app-space-3);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .artifact-toolbar {
   display: flex;
   align-items: center;
@@ -113,11 +103,13 @@ onUnmounted(() => store.unsubscribeArtifact())
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
   color: var(--p-text-muted-color);
 }
 
-.artifact-notice {
-  margin: 0;
+.artifact-toolbar :global(.p-button) {
+  flex: 0 0 auto;
 }
 
 .artifact-log-view {

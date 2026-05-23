@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import ArtifactActions from '@/components/ArtifactActions.vue'
 import {
   artifactURL,
   attemptURL,
@@ -59,6 +60,21 @@ async function cancel(): Promise<void> {
     parsed.value.taskName,
   )
   if (!result?.canceled) canceling.value = false
+}
+
+function artifactPath(displayName: string): string {
+  if (!parsed.value.commit || !parsed.value.taskName || !task.value) return ''
+  return artifactURL(
+    parsed.value.repoPath,
+    parsed.value.commit,
+    parsed.value.taskName,
+    task.value.attempt,
+    displayName,
+  )
+}
+
+function artifactApiPath(displayName: string): string {
+  return `/api${artifactPath(displayName)}`
 }
 
 onMounted(subscribe)
@@ -150,19 +166,14 @@ onUnmounted(() => store.unsubscribeTask())
             <ul v-if="task.artifacts.length > 0" class="artifact-list">
               <li v-for="artifact in task.artifacts" :key="artifact.display_name">
                 <i class="pi pi-file" aria-hidden="true"></i>
-                <RouterLink
-                  :to="
-                    artifactURL(
-                      parsed.repoPath,
-                      parsed.commit,
-                      parsed.taskName,
-                      task.attempt,
-                      artifact.display_name,
-                    )
-                  "
-                >
+                <RouterLink :to="artifactPath(artifact.display_name)">
                   {{ artifact.display_name }}
                 </RouterLink>
+                <ArtifactActions
+                  :path="artifact.path"
+                  :api-path="artifactApiPath(artifact.display_name)"
+                  compact
+                />
               </li>
             </ul>
             <div v-else class="empty-state">No artifacts for this attempt.</div>
@@ -284,8 +295,10 @@ onUnmounted(() => store.unsubscribeTask())
 }
 
 .artifact-list a {
+  flex: 1 1 auto;
   min-width: 0;
   padding: var(--app-space-3) 0;
+  overflow: hidden;
   overflow-wrap: anywhere;
 }
 
