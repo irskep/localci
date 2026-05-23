@@ -1,5 +1,6 @@
 [project]
 site_name = "LocalCI"
+site_url = "https://steveasleep.com/localci/"
 docs_dir = "src"
 nav = [
   "index.md",
