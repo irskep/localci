@@ -1014,7 +1014,11 @@ func (a App) discoverRepoFromCwd() (string, error) {
 		start = mustGetwd()
 	}
 	if !filepath.IsAbs(start) {
-		start = filepath.Clean(start)
+		absStart, err := filepath.Abs(start)
+		if err != nil {
+			return "", fmt.Errorf("resolve cwd: %w", err)
+		}
+		start = absStart
 	}
 
 	dir := start

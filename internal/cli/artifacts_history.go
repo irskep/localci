@@ -178,6 +178,13 @@ func (a App) runHistory(args []string) error {
 	if err != nil {
 		return err
 	}
+	commitFilter := ""
+	if flags.Commit != "" {
+		commitFilter, err = a.resolveCommitAlias(repo, flags.Commit)
+		if err != nil {
+			return err
+		}
+	}
 	runner, err := a.newRunner()
 	if err != nil {
 		return err
@@ -186,10 +193,13 @@ func (a App) runHistory(args []string) error {
 	if err != nil {
 		return err
 	}
-	statuses := selectedHistoryStatuses(flags)
+	statuses, err := selectedHistoryStatuses(flags)
+	if err != nil {
+		return err
+	}
 	rows := make([]cliHistoryRow, 0, min(flags.Limit, len(commits)))
 	for _, run := range commits {
-		if flags.Commit != "" && run.Commit != flags.Commit {
+		if commitFilter != "" && run.Commit != commitFilter {
 			continue
 		}
 		view, err := localci.BuildCommitStatusView(runner.Paths, repo, run.Commit, run.DiscoveredTasks, nil, nil)
@@ -238,14 +248,15 @@ func (a App) runHistory(args []string) error {
 	return nil
 }
 
-func selectedHistoryStatuses(flags cliFlags) map[localci.ExecutionStatus]bool {
+func selectedHistoryStatuses(flags cliFlags) (map[localci.ExecutionStatus]bool, error) {
 	statuses := map[localci.ExecutionStatus]bool{}
 	if flags.Failed {
 		statuses[localci.ExecutionStatusFailed] = true
 		statuses[localci.ExecutionStatusTimedOut] = true
 	}
 	for _, raw := range flags.Statuses {
-		switch strings.TrimSpace(raw) {
+		status := strings.TrimSpace(raw)
+		switch status {
 		case "ok", "succeeded", "passed":
 			statuses[localci.ExecutionStatusSucceeded] = true
 		case "failed":
@@ -258,9 +269,11 @@ func selectedHistoryStatuses(flags cliFlags) map[localci.ExecutionStatus]bool {
 			statuses[localci.ExecutionStatusQueued] = true
 		case "not-run":
 			statuses[localci.ExecutionStatusNotRun] = true
+		default:
+			return nil, fmt.Errorf("unknown status %q", status)
 		}
 	}
-	return statuses
+	return statuses, nil
 }
 
 func runMatchesStatuses(tasks []localci.TaskStatusView, statuses map[localci.ExecutionStatus]bool) bool {

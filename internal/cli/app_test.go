@@ -285,6 +285,15 @@ func TestParseCLIFlagsRejectsInvalidAnnotations(t *testing.T) {
 	}
 }
 
+func TestSelectedHistoryStatusesRejectsUnknownStatus(t *testing.T) {
+	t.Parallel()
+
+	_, err := selectedHistoryStatuses(cliFlags{Statuses: []string{"wat"}})
+	if err == nil {
+		t.Fatalf("selectedHistoryStatuses returned nil error, want invalid status error")
+	}
+}
+
 func TestAppRunRecognizesRestart(t *testing.T) {
 	t.Parallel()
 

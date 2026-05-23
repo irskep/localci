@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+env:
+  MISE_EXPERIMENTAL: "true"
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    env:
+      LOCALCI_CACHE_DIR: /tmp/localci/cache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag
+        run: |
+          set -eu
+          tag="${GITHUB_REF_NAME}"
+          if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Release tags must look like vX.Y.Z, got $tag" >&2
+            exit 1
+          fi
+          printf 'TAG=%s\n' "$tag" >>"$GITHUB_ENV"
+          printf 'VERSION=%s\n' "${tag#v}" >>"$GITHUB_ENV"
+
+      - uses: jdx/mise-action@v2
+        with:
+          cache: true
+          install: true
+
+      - name: Set up LocalCI task dependencies
+        run: mise run localci:setup
+
+      - name: Run release checks
+        env:
+          LOCALCI_TASK_CACHE_DIR: ${{ runner.temp }}/localci/task-cache/release-checks
+          LOCALCI_TASK_OUTPUT_DIR: ${{ runner.temp }}/localci/out/release-checks
+        run: |
+          set -eu
+          mise run localci:build
+          mise run localci:fmt
+          mise run //docs:localci:build
+          mise run //web:localci:build
+          mise run //web:localci:fmt
+          mise run //web:localci:lint
+          mise run //web:localci:typecheck
+
+      - name: Build release artifacts
+        run: |
+          set -eu
+          mkdir -p dist
+          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            os=${target%/*}
+            arch=${target#*/}
+            name="localci_${VERSION}_${os}_${arch}"
+            mkdir -p "dist/$name"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w" -o "dist/$name/localci" ./cmd/localci
+            tar -C "dist/$name" -czf "dist/$name.tar.gz" localci
+            rm -rf "dist/$name"
+          done
+          (cd dist && sha256sum *.tar.gz > checksums.txt)
+
+      - name: Extract release notes
+        run: |
+          set -eu
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+          import sys
+
+          version = os.environ["VERSION"]
+          text = pathlib.Path("CHANGELOG.md").read_text()
+          pattern = rf"^## {re.escape(version)} - (?P<date>[^\n]+)\n(?P<body>.*?)(?=^## |\Z)"
+          match = re.search(pattern, text, re.MULTILINE | re.DOTALL)
+          if not match:
+              sys.exit(f"CHANGELOG.md has no section for {version}")
+
+          date = match.group("date").strip()
+          if date.lower() == "unreleased":
+              sys.exit(f"CHANGELOG.md section for {version} is still marked Unreleased")
+
+          body = match.group("body").strip()
+          if not body:
+              sys.exit(f"CHANGELOG.md section for {version} has no release notes")
+
+          pathlib.Path("release-notes.md").write_text(body + "\n")
+          PY
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          gh release create "$TAG" dist/*.tar.gz dist/checksums.txt --title "$TAG" --notes-file release-notes.md --verify-tag

@@ -17,9 +17,16 @@ LocalCI is not a GitHub Actions clone. There is no workflow DSL; mise is the con
 
 ## Quick Start
 
-Install LocalCI, start the daemon, and install the post-commit hook:
+Install LocalCI with mise, then start the daemon and install the post-commit hook:
+
+```toml
+[tools]
+"github:irskep/localci" = "0.1.0"
+```
 
 ```sh
+mise install
+
 localci start
 localci install-hooks
 ```
