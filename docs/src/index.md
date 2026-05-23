@@ -8,10 +8,21 @@ LocalCI is deliberately small. It discovers mise tasks, queues them in a daemon,
 
 <div class="grid cards" markdown>
 
-- :lucide-check:{ .lg .middle } __Post-commit validation__
-- :lucide-check:{ .lg .middle } __Agent accountability__
-- :lucide-check:{ .lg .middle } __Local task logs__
-- :lucide-check:{ .lg .middle } __Working-tree runs__
+-   :lucide-check:{ .lg .middle } __Post-commit validation__
+
+    Run the checks you already trust locally after every commit.
+
+-   :lucide-check:{ .lg .middle } __Agent accountability__
+
+    Make coding agents produce commits that automatically exercise the expected suite.
+
+-   :lucide-check:{ .lg .middle } __Local task logs__
+
+    Keep logs and artifacts available without rerunning commands manually.
+
+-   :lucide-check:{ .lg .middle } __Working-tree runs__
+
+    Use `--no-clone` when you want fast feedback on uncommitted changes.
 
 </div>
 
@@ -19,9 +30,17 @@ LocalCI is deliberately small. It discovers mise tasks, queues them in a daemon,
 
 <div class="grid cards" markdown>
 
-- :lucide-x:{ .lg .middle } __Release gates__
-- :lucide-x:{ .lg .middle } __Workflow DSLs__
-- :lucide-x:{ .lg .middle } __Non-mise projects__
+-   :lucide-x:{ .lg .middle } __Release gates__
+
+    Keep remote CI for protected branches, release gates, and cross-platform checks.
+
+-   :lucide-x:{ .lg .middle } __GitHub YAML__
+
+    LocalCI does not define another workflow format; it discovers mise tasks.
+
+-   :lucide-x:{ .lg .middle } __Non-mise projects__
+
+    If a project cannot express its checks as mise tasks, it is not a good fit yet.
 
 </div>
 
