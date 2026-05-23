@@ -828,6 +828,16 @@ func TestShellQuote(t *testing.T) {
 	}
 }
 
+func TestPostcommitWaitInstruction(t *testing.T) {
+	t.Parallel()
+
+	got := postcommitWaitInstruction("/repo with spaces", "abc123")
+	want := "Wait: localci wait '/repo with spaces' abc123"
+	if got != want {
+		t.Fatalf("postcommitWaitInstruction = %q, want %q", got, want)
+	}
+}
+
 func TestFormatTaskSummary(t *testing.T) {
 	t.Parallel()
 

@@ -142,7 +142,12 @@ func (a App) runPostcommit(args []string) error {
 	for _, entry := range enqueued {
 		fmt.Fprintf(a.Stdout, "%s\n", entry.TaskName)
 	}
+	fmt.Fprintln(a.Stdout, postcommitWaitInstruction(repo, commit))
 	return nil
+}
+
+func postcommitWaitInstruction(repo string, commit string) string {
+	return fmt.Sprintf("Wait: localci wait %s %s", shellQuote(repo), shellQuote(commit))
 }
 
 func (a App) runStatus(args []string) error {
