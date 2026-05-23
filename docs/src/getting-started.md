@@ -37,7 +37,7 @@ LocalCI discovers mise tasks in the `localci:` namespace. For simple shell check
 mkdir -p mise-tasks/localci
 ```
 
-```sh
+```sh title="mise-tasks/localci/test"
 #!/bin/sh
 set -eu
 
