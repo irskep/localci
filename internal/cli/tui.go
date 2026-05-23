@@ -60,7 +60,7 @@ func (a App) runDash(args []string) error {
 	}
 
 	model := newTUIModel(client, route)
-	program := tea.NewProgram(model, tea.WithAltScreen())
+	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err = program.Run()
 	return err
 }

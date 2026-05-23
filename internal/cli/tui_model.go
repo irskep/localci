@@ -50,14 +50,16 @@ type tuiModel struct {
 	width  int
 	height int
 
-	home      *tuiHomeResponse
-	repos     []tuiRepoSummary
-	queue     *tuiQueueResponse
-	repo      *tuiRepoResponse
-	commit    *tuiCommitResponse
-	task      *tuiTaskResponse
-	artifacts *tuiArtifactListResponse
-	artifact  *tuiArtifactResponse
+	home            *tuiHomeResponse
+	repos           []tuiRepoSummary
+	queue           *tuiQueueResponse
+	repo            *tuiRepoResponse
+	commit          *tuiCommitResponse
+	task            *tuiTaskResponse
+	artifacts       *tuiArtifactListResponse
+	artifact        *tuiArtifactResponse
+	taskArtifact    *tuiArtifactResponse
+	taskArtifactErr string
 
 	cursor      int
 	secondary   int
@@ -85,6 +87,8 @@ type tuiKeyMap struct {
 	Down      key.Binding
 	PageUp    key.Binding
 	PageDown  key.Binding
+	PrevTab   key.Binding
+	NextTab   key.Binding
 	HomeKey   key.Binding
 	End       key.Binding
 	HomeView  key.Binding
@@ -98,7 +102,7 @@ type tuiKeyMap struct {
 func defaultTUIKeys() tuiKeyMap {
 	return tuiKeyMap{
 		Open:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
-		Back:      key.NewBinding(key.WithKeys("left", "backspace", "esc"), key.WithHelp("left/esc", "back")),
+		Back:      key.NewBinding(key.WithKeys("left", "backspace", "esc"), key.WithHelp("esc", "back")),
 		Quit:      key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		Help:      key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Refresh:   key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "refresh")),
@@ -106,6 +110,8 @@ func defaultTUIKeys() tuiKeyMap {
 		Down:      key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 		PageUp:    key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "scroll up")),
 		PageDown:  key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "scroll down")),
+		PrevTab:   key.NewBinding(key.WithKeys("left"), key.WithHelp("←", "prev tab")),
+		NextTab:   key.NewBinding(key.WithKeys("right"), key.WithHelp("→", "next tab")),
 		HomeKey:   key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "top")),
 		End:       key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "bottom")),
 		HomeView:  key.NewBinding(key.WithKeys("h"), key.WithHelp("h", "home")),
@@ -118,13 +124,13 @@ func defaultTUIKeys() tuiKeyMap {
 }
 
 func (k tuiKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Open, k.Back, k.Help, k.Quit}
+	return []key.Binding{k.Open, k.Back, k.PrevTab, k.NextTab, k.Help, k.Quit}
 }
 
 func (k tuiKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Open, k.Back, k.Quit, k.Help},
-		{k.Up, k.Down, k.PageUp, k.PageDown, k.HomeKey, k.End},
+		{k.Up, k.Down, k.PrevTab, k.NextTab, k.PageUp, k.PageDown, k.HomeKey, k.End},
 		{k.HomeView, k.Repos, k.Queue, k.Refresh},
 		{k.Retry, k.Cancel, k.Artifacts},
 	}
@@ -148,6 +154,13 @@ type tuiErrMsg struct {
 type tuiActionMsg struct {
 	notice string
 	err    error
+}
+
+type tuiTaskArtifactMsg struct {
+	route    tuiRoute
+	artifact string
+	data     tuiArtifactResponse
+	err      error
 }
 
 type tuiEventMsg struct {
@@ -216,7 +229,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
-		} else if m.route.view == tuiViewTask && (key.Matches(msg, m.keys.PageUp) || key.Matches(msg, m.keys.PageDown)) {
+		} else if m.route.view == tuiViewTask && m.isTaskScrollKey(msg) {
 			var cmd tea.Cmd
 			m.log, cmd = m.log.Update(msg)
 			if cmd != nil {
@@ -224,7 +237,30 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(cmds...)
 		}
+	case tea.MouseMsg:
+		switch m.route.view {
+		case tuiViewTask:
+			var cmd tea.Cmd
+			m.log, cmd = m.log.Update(msg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		case tuiViewArtifact:
+			var cmd tea.Cmd
+			m.artifactLog, cmd = m.artifactLog.Update(msg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
 		switch {
+		case m.route.view == tuiViewTask && key.Matches(msg, m.keys.PrevTab):
+			if m.moveTaskArtifact(-1) {
+				cmds = append(cmds, m.loadSelectedTaskArtifact())
+			}
+		case m.route.view == tuiViewTask && key.Matches(msg, m.keys.NextTab):
+			if m.moveTaskArtifact(1) {
+				cmds = append(cmds, m.loadSelectedTaskArtifact())
+			}
 		case key.Matches(msg, m.keys.Quit):
 			if msg.String() == "q" || msg.String() == "ctrl+c" {
 				if m.stream != nil && m.stream.cancel != nil {
@@ -301,11 +337,26 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.applyData(msg.data)
 			m.syncViewports(true)
 			m.clampSelection()
+			if m.route.view == tuiViewTask {
+				cmds = append(cmds, m.loadSelectedTaskArtifact())
+			}
 		}
 	case tuiErrMsg:
 		if msg.route.apiPath == m.route.apiPath {
 			m.loading = false
 			m.err = msg.err.Error()
+		}
+	case tuiTaskArtifactMsg:
+		if msg.route.apiPath == m.route.apiPath && m.selectedTaskArtifactName() == msg.artifact {
+			m.taskArtifact = nil
+			m.taskArtifactErr = ""
+			if msg.err != nil {
+				m.taskArtifactErr = msg.err.Error()
+			} else {
+				artifact := msg.data
+				m.taskArtifact = &artifact
+			}
+			m.syncViewports(true)
 		}
 	case tuiActionMsg:
 		if msg.err != nil {
@@ -339,6 +390,15 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+func (m tuiModel) isTaskScrollKey(msg tea.KeyMsg) bool {
+	return key.Matches(msg, m.keys.Up) ||
+		key.Matches(msg, m.keys.Down) ||
+		key.Matches(msg, m.keys.PageUp) ||
+		key.Matches(msg, m.keys.PageDown) ||
+		key.Matches(msg, m.keys.HomeKey) ||
+		key.Matches(msg, m.keys.End)
+}
+
 func (m tuiModel) View() string {
 	if m.width <= 0 {
 		return "localci\n"
@@ -370,6 +430,28 @@ func (m *tuiModel) moveCursor(delta int) {
 	if m.cursor >= m.scroll+visible {
 		m.scroll = m.cursor - visible + 1
 	}
+}
+
+func (m *tuiModel) moveTaskArtifact(delta int) bool {
+	if m.task == nil || len(m.task.Task.Artifacts) == 0 {
+		return false
+	}
+	next := m.cursor + delta
+	if next < 0 {
+		next = len(m.task.Task.Artifacts) - 1
+	}
+	if next >= len(m.task.Task.Artifacts) {
+		next = 0
+	}
+	if next == m.cursor {
+		return false
+	}
+	m.cursor = next
+	m.scroll = 0
+	m.taskArtifact = nil
+	m.taskArtifactErr = ""
+	m.log.GotoTop()
+	return true
 }
 
 func (m tuiModel) maxCursor() int {
@@ -435,6 +517,8 @@ func (m tuiModel) gotoRoute(route tuiRoute, push bool) tuiModel {
 	m.err = ""
 	m.notice = ""
 	m.resizeViewports()
+	m.taskArtifact = nil
+	m.taskArtifactErr = ""
 	return m
 }
 
@@ -570,6 +654,13 @@ func (m tuiModel) selectedQueueEntry() (tuiQueueEntry, bool) {
 	return tuiQueueEntry{}, false
 }
 
+func (m tuiModel) selectedTaskArtifactName() string {
+	if m.task == nil || m.cursor < 0 || m.cursor >= len(m.task.Task.Artifacts) {
+		return ""
+	}
+	return m.task.Task.Artifacts[m.cursor].DisplayName
+}
+
 func (m *tuiModel) applyData(data any) {
 	switch typed := data.(type) {
 	case tuiHomeResponse:
@@ -596,7 +687,7 @@ func (m *tuiModel) applyData(data any) {
 func (m *tuiModel) syncViewports(gotoBottom bool) {
 	m.resizeViewports()
 	if m.task != nil {
-		m.log.SetContent(m.task.PrimaryLog)
+		m.log.SetContent(m.selectedTaskArtifactContent())
 		if gotoBottom {
 			m.log.GotoBottom()
 		}
@@ -609,6 +700,48 @@ func (m *tuiModel) syncViewports(gotoBottom bool) {
 	}
 }
 
+func (m tuiModel) selectedTaskArtifactContent() string {
+	if m.task == nil {
+		return ""
+	}
+	name := m.selectedTaskArtifactName()
+	if name == "" || name == m.task.PrimaryArtifact {
+		return m.task.PrimaryLog
+	}
+	if m.taskArtifact != nil && m.taskArtifact.Artifact.DisplayName == name {
+		return m.taskArtifact.Content
+	}
+	return ""
+}
+
+func (m tuiModel) selectedTaskArtifactError() string {
+	if m.task == nil {
+		return ""
+	}
+	name := m.selectedTaskArtifactName()
+	if name == "" || name == m.task.PrimaryArtifact {
+		return ""
+	}
+	return m.taskArtifactErr
+}
+
+func (m tuiModel) loadSelectedTaskArtifact() tea.Cmd {
+	if m.route.view != tuiViewTask || m.task == nil {
+		return nil
+	}
+	name := m.selectedTaskArtifactName()
+	if name == "" || name == m.task.PrimaryArtifact {
+		return nil
+	}
+	route := tuiArtifactRoute(tuiArtifactListRoute(m.route, selectedAttempt(m.task)), name)
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		resp, err := m.client.loadArtifact(ctx, route.apiPath)
+		return tuiTaskArtifactMsg{route: m.route, artifact: name, data: resp, err: err}
+	}
+}
+
 func (m *tuiModel) resizeViewports() {
 	if m.width <= 0 || m.height <= 0 {
 		return
@@ -618,11 +751,12 @@ func (m *tuiModel) resizeViewports() {
 	if m.width < 72 {
 		navWidth = 14
 	}
-	contentWidth := max(20, m.width-navWidth-1)
-	artifactWidth := clamp(contentWidth/4, 22, 36)
-	logWidth := max(20, contentWidth-artifactWidth-2)
-	m.log.Width = max(1, logWidth-4)
-	m.log.Height = max(1, bodyHeight-6)
+	contentWidth := m.width
+	if m.route.view == tuiViewHome {
+		contentWidth = max(20, m.width-navWidth-1)
+	}
+	m.log.Width = max(1, contentWidth-4)
+	m.log.Height = max(1, bodyHeight-7)
 	m.artifactLog.Width = max(1, contentWidth-4)
 	m.artifactLog.Height = max(1, bodyHeight-4)
 }
@@ -854,20 +988,52 @@ func (t tuiTheme) chrome() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("#d4d4d8")).Background(lipgloss.Color("#18181b"))
 }
 
+func (t tuiTheme) activeTab() lipgloss.Style {
+	border := lipgloss.Border{
+		Top: "─", Bottom: " ", Left: "│", Right: "│",
+		TopLeft: "╭", TopRight: "╮", BottomLeft: "┘", BottomRight: "└",
+	}
+	return lipgloss.NewStyle().
+		Border(border).
+		BorderForeground(lipgloss.Color("#8b5cf6")).
+		Foreground(lipgloss.Color("#f5f3ff")).
+		Bold(true).
+		Padding(0, 1)
+}
+
+func (t tuiTheme) inactiveTab() lipgloss.Style {
+	border := lipgloss.Border{
+		Top: "─", Bottom: "─", Left: "│", Right: "│",
+		TopLeft: "╭", TopRight: "╮", BottomLeft: "┴", BottomRight: "┴",
+	}
+	return lipgloss.NewStyle().
+		Border(border).
+		BorderForeground(lipgloss.Color("#8b5cf6")).
+		Foreground(lipgloss.Color("#a1a1aa")).
+		Padding(0, 1)
+}
+
+func (t tuiTheme) tabRule() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("#8b5cf6"))
+}
+
+func (t tuiTheme) statusKey() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Background(lipgloss.Color("#ec4899")).
+		Foreground(lipgloss.Color("#ffffff")).
+		Bold(true).
+		Padding(0, 1)
+}
+
+func (t tuiTheme) statusValue() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Background(lipgloss.Color("#27272a")).
+		Foreground(lipgloss.Color("#d4d4d8")).
+		Padding(0, 1)
+}
+
 func (m tuiModel) renderHeader(theme tuiTheme) string {
-	crumbs := []string{"localci", viewName(m.route.view)}
-	if m.route.repoPath != "" {
-		crumbs = append(crumbs, m.route.repoPath)
-	}
-	if m.route.commit != "" {
-		crumbs = append(crumbs, shortCommit(m.route.commit))
-	}
-	if m.route.task != "" {
-		crumbs = append(crumbs, trimTaskLabel(m.route.task))
-	}
-	if m.route.artifact != "" {
-		crumbs = append(crumbs, m.route.artifact)
-	}
+	crumbs := m.breadcrumbs()
 	left := theme.title().Render(strings.Join(crumbs, " / "))
 	status := "socket " + m.socketState
 	if m.loading {
@@ -882,6 +1048,40 @@ func (m tuiModel) renderHeader(theme tuiTheme) string {
 		line += "\n" + theme.muted().Render(m.notice)
 	}
 	return line
+}
+
+func (m tuiModel) breadcrumbs() []string {
+	switch m.route.view {
+	case tuiViewHome:
+		return []string{"Home"}
+	case tuiViewRepos:
+		return []string{"Home", "Repo"}
+	case tuiViewQueue:
+		return []string{"Home", "Queue"}
+	case tuiViewRepo:
+		return []string{"Home", fallbackLabel(m.route.repoPath, "Repo")}
+	case tuiViewCommit:
+		return []string{"Home", fallbackLabel(m.route.repoPath, "Repo"), fallbackLabel(shortCommit(m.route.commit), "Commit")}
+	case tuiViewTask:
+		crumbs := []string{"Home", fallbackLabel(m.route.repoPath, "Repo"), fallbackLabel(shortCommit(m.route.commit), "Commit"), fallbackLabel(trimTaskLabel(m.route.task), "Task")}
+		if m.route.attempt > 0 {
+			crumbs = append(crumbs, fmt.Sprintf("attempt %d", m.route.attempt))
+		}
+		return crumbs
+	case tuiViewArtifacts:
+		return []string{"Home", fallbackLabel(m.route.repoPath, "Repo"), fallbackLabel(shortCommit(m.route.commit), "Commit"), fallbackLabel(trimTaskLabel(m.route.task), "Task"), fmt.Sprintf("attempt %d", m.route.attempt)}
+	case tuiViewArtifact:
+		return []string{"Home", fallbackLabel(m.route.repoPath, "Repo"), fallbackLabel(shortCommit(m.route.commit), "Commit"), fallbackLabel(trimTaskLabel(m.route.task), "Task"), fmt.Sprintf("attempt %d", m.route.attempt), fallbackLabel(m.route.artifact, "Artifact")}
+	default:
+		return []string{"Home"}
+	}
+}
+
+func fallbackLabel(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }
 
 func (m tuiModel) bodyHandlesError() bool {
@@ -914,6 +1114,9 @@ func (m tuiModel) renderHelpModal(theme tuiTheme, height int) string {
 }
 
 func (m tuiModel) renderBody(theme tuiTheme, height int) string {
+	if m.route.view != tuiViewHome {
+		return lipgloss.NewStyle().Width(m.width).Height(height).Render(m.renderContent(theme, height))
+	}
 	navWidth := 18
 	if m.width < 72 {
 		navWidth = 14
@@ -1127,38 +1330,53 @@ func (m tuiModel) renderTask(theme tuiTheme, height int) string {
 	if m.task == nil {
 		return loadingText(m.loading)
 	}
-	top := []string{
-		theme.title().Render(trimTaskLabel(m.task.Task.Name)),
-		fmt.Sprintf("%s  attempt %s  duration %s", statusLabel(m.task.Task.Status), attemptLabel(m.task.Task.Attempt, m.task.Task.AttemptCount), durationLabel(m.task.Task.DurationMilliseconds)),
-	}
+	top := []string{m.renderTaskStatusLine(theme, m.width)}
 	if m.task.Task.Failure != "" {
 		top = append(top, "failure: "+m.task.Task.Failure)
 	}
-	artifactWidth := clamp(m.width/4, 22, 36)
-	logWidth := max(20, m.width-artifactWidth-2)
-	left := []string{theme.title().Render("Artifacts")}
-	for i, artifact := range m.task.Task.Artifacts {
-		left = append(left, selectableLine(theme, i == m.cursor, truncate(artifact.DisplayName, artifactWidth-5)))
-	}
-	if len(m.task.Task.Artifacts) == 0 {
-		left = append(left, theme.muted().Render("No artifacts."))
-	}
-	logTitle := "Log"
-	if m.task.PrimaryArtifact != "" {
-		logTitle = m.task.PrimaryArtifact
-	}
+	logWidth := m.width
 	logHeight := max(1, height-len(top)-2)
 	logViewport := m.log
 	logViewport.Width = max(1, logWidth-4)
-	logViewport.Height = max(1, logHeight-4)
-	logViewport.SetContent(m.task.PrimaryLog)
-	logView := theme.title().Render(logTitle) + "\n" + logViewport.View()
-	lower := lipgloss.JoinHorizontal(lipgloss.Top,
-		renderTUIPanel(theme, artifactWidth, logHeight, strings.Join(left, "\n")),
-		" ",
-		renderTUIPanel(theme, logWidth, logHeight, logView),
-	)
-	return strings.Join(top, "\n") + "\n" + lower
+	logViewport.Height = max(1, logHeight-5)
+	logViewport.SetContent(m.selectedTaskArtifactContent())
+	tabLine := m.renderArtifactTabs(theme, logWidth)
+	logView := ""
+	if err := m.selectedTaskArtifactError(); err != "" {
+		logView += theme.title().Render("Artifact unavailable") + "\n" + err + "\n\nText artifacts can be viewed here.\nBinary or oversized artifacts stay on disk."
+	} else if m.selectedTaskArtifactName() != "" && m.selectedTaskArtifactContent() == "" && m.selectedTaskArtifactName() != m.task.PrimaryArtifact {
+		logView += theme.muted().Render("Loading artifact...")
+	} else {
+		logView += logViewport.View()
+	}
+	return strings.Join(top, "\n") + "\n" + renderTabbedTUIPanel(theme, logWidth, logHeight, tabLine, logView)
+}
+
+func (m tuiModel) renderTaskStatusLine(theme tuiTheme, width int) string {
+	status := theme.statusKey().Render(strings.ToUpper(statusLabel(m.task.Task.Status)))
+	task := theme.statusValue().Render(trimTaskLabel(m.task.Task.Name))
+	rightText := fmt.Sprintf("attempt %s  %s", attemptLabel(m.task.Task.Attempt, m.task.Task.AttemptCount), durationLabel(m.task.Task.DurationMilliseconds))
+	right := theme.statusValue().Render(rightText)
+	gap := max(0, width-lipgloss.Width(status)-lipgloss.Width(task)-lipgloss.Width(right))
+	return truncate(status+task+strings.Repeat(" ", gap)+right, width)
+}
+
+func (m tuiModel) renderArtifactTabs(theme tuiTheme, width int) string {
+	if m.task == nil || len(m.task.Task.Artifacts) == 0 {
+		return theme.muted().Render("No artifacts.")
+	}
+	parts := []string{}
+	for i, artifact := range m.task.Task.Artifacts {
+		label := artifact.DisplayName
+		if i == m.cursor {
+			parts = append(parts, theme.activeTab().Render(label))
+		} else {
+			parts = append(parts, theme.inactiveTab().Render(label))
+		}
+	}
+	tabs := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+	fill := strings.Repeat("─", max(0, width-lipgloss.Width(tabs)))
+	return tabs + theme.tabRule().Render(fill)
 }
 
 func (m tuiModel) renderArtifacts(theme tuiTheme, height int) string {
@@ -1218,6 +1436,16 @@ func renderTUIPanel(theme tuiTheme, width int, height int, body string) string {
 		Width(max(1, width-4)).
 		Height(max(1, height-2)).
 		Render(body)
+}
+
+func renderTabbedTUIPanel(theme tuiTheme, width int, height int, tabs string, body string) string {
+	contentHeight := max(1, height-lipgloss.Height(tabs)-1)
+	content := lipgloss.NewStyle().
+		PaddingLeft(2).
+		Width(max(1, width-2)).
+		Height(contentHeight).
+		Render(body)
+	return lipgloss.NewStyle().Width(width).Height(height).Render(tabs + "\n" + content)
 }
 
 func runListLine(run tuiCommitSummary, width int) string {
@@ -1504,27 +1732,6 @@ func loadingText(loading bool) string {
 		return "Loading..."
 	}
 	return ""
-}
-
-func viewName(view tuiView) string {
-	switch view {
-	case tuiViewRepos:
-		return "Repos"
-	case tuiViewQueue:
-		return "Queue"
-	case tuiViewRepo:
-		return "Repo"
-	case tuiViewCommit:
-		return "Run"
-	case tuiViewTask:
-		return "Task"
-	case tuiViewArtifacts:
-		return "Artifacts"
-	case tuiViewArtifact:
-		return "Artifact"
-	default:
-		return "Home"
-	}
 }
 
 func shortCommit(commit string) string {
