@@ -1,13 +1,21 @@
 package localci
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
+
+const maxTextArtifactBytes = 2 << 20
+
+var ErrArtifactNotDisplayable = errors.New("artifact is not a displayable text file")
 
 type ExecutionStatus string
 
@@ -407,6 +415,53 @@ func readTaskArtifact(task TaskStatusView, displayName string) ([]byte, error) {
 		return nil, err
 	}
 	return os.ReadFile(path)
+}
+
+func readTextTaskArtifact(task TaskStatusView, displayName string) ([]byte, error) {
+	path, err := resolveArtifactPath(task.OutputDir, displayName)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > maxTextArtifactBytes {
+		return nil, fmt.Errorf("%w: artifact is larger than %d bytes", ErrArtifactNotDisplayable, maxTextArtifactBytes)
+	}
+
+	sample := make([]byte, min(512, max(0, int(info.Size()))))
+	n, err := file.Read(sample)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	sample = sample[:n]
+	if !isDisplayableText(sample) {
+		return nil, ErrArtifactNotDisplayable
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(file)
+}
+
+func isDisplayableText(sample []byte) bool {
+	if len(sample) == 0 {
+		return true
+	}
+	if bytes.IndexByte(sample, 0) >= 0 {
+		return false
+	}
+	contentType := http.DetectContentType(sample)
+	return strings.HasPrefix(contentType, "text/") ||
+		contentType == "application/json" ||
+		contentType == "application/xml"
 }
 
 func resolveArtifactPath(outputDir string, displayName string) (string, error) {

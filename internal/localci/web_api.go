@@ -499,8 +499,12 @@ func (s WebServer) handleAPIArtifact(w http.ResponseWriter, repoDir string, comm
 		writeAPIError(w, http.StatusNotFound, fmt.Errorf("artifact not found"))
 		return
 	}
-	data, err := readTaskArtifact(task, artifact.DisplayName)
+	data, err := readTextTaskArtifact(task, artifact.DisplayName)
 	if err != nil {
+		if errors.Is(err, ErrArtifactNotDisplayable) {
+			writeAPIError(w, http.StatusUnsupportedMediaType, err)
+			return
+		}
 		writeAPIError(w, http.StatusNotFound, err)
 		return
 	}

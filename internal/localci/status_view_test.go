@@ -1,6 +1,7 @@
 package localci
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -115,5 +116,40 @@ func TestResolveArtifactPathRejectsSymlinkEscape(t *testing.T) {
 
 	if _, err := resolveArtifactPath(outputDir, "leak.txt"); err == nil {
 		t.Fatalf("resolveArtifactPath returned nil error, want symlink escape error")
+	}
+}
+
+func TestReadTextTaskArtifactRejectsBinaryArtifact(t *testing.T) {
+	t.Parallel()
+
+	outputDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(outputDir, "bin"), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "bin", "localci"), []byte{0xcf, 0xfa, 0xed, 0xfe, 0x00, 0x00}, 0o755); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	task := TaskStatusView{OutputDir: outputDir}
+
+	if _, err := readTextTaskArtifact(task, "bin/localci"); !errors.Is(err, ErrArtifactNotDisplayable) {
+		t.Fatalf("readTextTaskArtifact error = %v, want ErrArtifactNotDisplayable", err)
+	}
+}
+
+func TestReadTextTaskArtifactAllowsLogs(t *testing.T) {
+	t.Parallel()
+
+	outputDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outputDir, "combined.log"), []byte("hello\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	task := TaskStatusView{OutputDir: outputDir}
+
+	data, err := readTextTaskArtifact(task, "combined.log")
+	if err != nil {
+		t.Fatalf("readTextTaskArtifact returned error: %v", err)
+	}
+	if string(data) != "hello\n" {
+		t.Fatalf("content = %q, want hello newline", data)
 	}
 }

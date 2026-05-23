@@ -974,10 +974,22 @@ func (m tuiModel) renderArtifacts(theme tuiTheme, height int) string {
 
 func (m tuiModel) renderArtifact(theme tuiTheme, height int) string {
 	if m.artifact == nil {
+		if m.err != "" {
+			lines := []string{
+				theme.title().Render("Artifact unavailable"),
+				m.err,
+				"",
+				"Text artifacts can be viewed here.",
+				"Binary or oversized artifacts stay on disk.",
+			}
+			return renderTUIPanel(theme, m.width, height, strings.Join(lines, "\n"))
+		}
 		return loadingText(m.loading)
 	}
 	lines := []string{theme.title().Render(m.artifact.Artifact.DisplayName)}
-	lines = append(lines, splitLines(m.artifact.Content)...)
+	for _, line := range splitLines(m.artifact.Content) {
+		lines = append(lines, truncate(line, m.width-4))
+	}
 	return fitLines(lines, m.scroll, height, m.width)
 }
 
