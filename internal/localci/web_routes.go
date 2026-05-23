@@ -127,7 +127,7 @@ func (s WebServer) renderTaskPage(w http.ResponseWriter, repoDir string, commit 
 		http.Error(w, "task not found", http.StatusNotFound)
 		return
 	}
-	task = applySelectedAttempt(s.Paths, repoDir, commit, task, selectedAttempt)
+	task = ApplySelectedAttempt(s.Paths, repoDir, commit, task, selectedAttempt)
 	primaryArtifact, primaryLog := LoadPrimaryLog(task)
 	_ = taskTemplate.Execute(w, TaskPageView{
 		RepoDir:            repoDir,

@@ -37,7 +37,7 @@ LocalCI is deliberately small. It discovers mise tasks, queues them in a daemon,
 The normal path is:
 
 1. The daemon is running.
-2. A Git post-commit hook calls `localci postcommit <commit>`.
+2. A Git post-commit hook calls `localci postcommit --repo <repo> --commit <commit>`.
 3. The LocalCI daemon clones your project to a unique place and checks out the commit.
 4. The daemon discovers every mise task whose task name starts with `localci:`, including monorepo tasks addressed with mise's `//path:task` syntax, and puts them in a queue.
 5. One by one, the daemon runs each task.

@@ -120,6 +120,7 @@ func (s Scheduler) expandRun(ctx context.Context, entry QueueEntry) (RunNextResu
 		_ = clones.Cleanup(entry.RepoDir, entry.Commit)
 		return RunNextResult{DidWork: true, Entry: entry, Task: task, Run: run}, errTaskFailed
 	}
+	tasks = filterRequestedTasks(tasks, entry.RequestedTasks)
 
 	setup, userTasks, hasSetup := splitSetupTask(tasks)
 	run, err := ensureRunRecordWithTasks(s.Runner.Paths, InvokeRequest{

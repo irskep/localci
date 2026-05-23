@@ -14,9 +14,9 @@ import (
 )
 
 func (a App) runDash(args []string) error {
-	noClone := false
-	args = filterFlag(args, "--no-clone", &noClone)
-	repoArg, args, err := extractRepoFlag(args)
+	flags, err := parseCLIFlags(args, flagSpec{
+		"repo": true, "commit": true, "task": true, "attempt": true, "artifact": true, "no-clone": true,
+	})
 	if err != nil {
 		return err
 	}
@@ -38,21 +38,37 @@ func (a App) runDash(args []string) error {
 	}
 
 	route := tuiRoute{view: tuiViewHome, apiPath: "/api", title: "Home"}
-	if repoArg != "" || len(args) > 0 {
-		spec, err := a.parseWebTarget(repoArg, args)
+	if flags.Repo != "" || flags.Commit != "" || flags.Task != "" || flags.Artifact != "" || flags.NoClone {
+		repo, err := a.resolveSelectorRepo(flags.Repo)
 		if err != nil {
 			return err
 		}
-		if noClone {
-			if spec.Commit == "" {
-				commit, err := a.headCommit(spec.RepoDir)
-				if err != nil {
-					return err
-				}
-				spec.Commit = commit
-			}
-			spec.Commit = noCloneCommitLabel(spec.Commit)
+		commit, err := a.resolveQueryCommit(repo, flags)
+		if err != nil {
+			return err
 		}
+		task := flags.Task
+		attempt := flags.Attempt
+		if task != "" {
+			var view localci.CommitStatusView
+			view, err = (localci.DaemonClient{Paths: runner.Paths}).Status(context.Background(), repo, commit)
+			if err != nil {
+				return err
+			}
+			task, err = resolveTaskName(view.Tasks, task)
+			if err != nil {
+				return err
+			}
+			if attempt <= 0 {
+				for _, candidate := range view.Tasks {
+					if candidate.Name == task {
+						attempt = candidate.Attempt
+						break
+					}
+				}
+			}
+		}
+		spec := commitTarget{RepoDir: repo, Commit: commit, Task: task, Attempt: attempt, Artifact: flags.Artifact}
 		route, err = a.tuiRouteForTarget(spec)
 		if err != nil {
 			return err
@@ -103,7 +119,7 @@ func tuiRouteForTarget(root string, spec commitTarget) (tuiRoute, error) {
 			commit:   spec.Commit,
 			title:    shortCommit(spec.Commit),
 		}, nil
-	default:
+	case spec.Artifact == "":
 		taskPath, err := localci.TaskRoutePath(root, spec.RepoDir, spec.Commit, spec.Task)
 		if err != nil {
 			return tuiRoute{}, err
@@ -118,6 +134,21 @@ func tuiRouteForTarget(root string, spec commitTarget) (tuiRoute, error) {
 			task:     spec.Task,
 			title:    trimTaskLabel(spec.Task),
 		}, nil
+	default:
+		attempt := spec.Attempt
+		if attempt <= 0 {
+			attempt = 1
+		}
+		base := tuiRoute{
+			view:     tuiViewArtifacts,
+			repoPath: canonicalPathLabel(root, spec.RepoDir),
+			repoDir:  spec.RepoDir,
+			commit:   spec.Commit,
+			task:     spec.Task,
+			attempt:  attempt,
+		}
+		base.apiPath = path.Join("/api/repo", base.repoPath, "commit", base.commit, "task", url.PathEscape(base.task), "attempt", strconv.Itoa(attempt), "artifact")
+		return tuiArtifactRoute(base, spec.Artifact), nil
 	}
 }
 

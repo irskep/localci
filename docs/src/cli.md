@@ -14,39 +14,43 @@ Restart the daemon.
 
 Stop the daemon.
 
-## `localci postcommit [--repo dir] [--annotation key=value] <commit>`
+## `localci postcommit [--repo dir] [--commit ref] [--task task] [--annotation key=value]`
 
 Enqueue tasks for a committed revision. This is the command the Git post-commit hook calls.
 
 When `--repo` is omitted, commands that operate on a repository use the nearest ancestor of the current directory that contains `.git`.
 
-## `localci invoke [--repo dir] [--wait] [--no-clone] [--annotation key=value] [commit]`
+## `localci status [--repo dir] [--commit ref] [--task task] [--attempt n] [--no-clone]`
 
-Discover and enqueue tasks manually. Use `--wait` to block for results and `--no-clone` to run against the live working tree.
+Print a bounded status summary for the selected run.
 
-## `localci wait [--repo dir] [--no-clone] [commit]`
+## `localci wait [--repo dir] [--commit ref] [--task task] [--no-clone]`
 
-Wait for a run to complete.
+Wait for the selected run or task to complete.
 
-## `localci status [--repo dir] [--no-clone] <commit> [task]`
+## `localci artifacts [--repo dir] [--commit ref] [--task task] [--attempt n] [--failed] [--primary] [--paths-only]`
 
-Print status for a run.
+Print filesystem paths for task artifacts without dumping log contents.
 
-## `localci web [--repo dir] [--no-clone] [commit] [task]`
+## `localci history [--repo dir] [--commit ref] [--task task] [--status status] [--failed] [--limit n]`
+
+Print recent runs, optionally filtered to a task or status.
+
+## `localci web [--repo dir] [--commit ref] [--task task] [--attempt n] [--artifact artifact] [--no-clone]`
 
 Open the web UI. Artifact pages show full artifact paths and can reveal files in Finder on macOS.
 
-## `localci dash [--repo dir] [--no-clone] [commit] [task]`
+## `localci dash [--repo dir] [--commit ref] [--task task] [--attempt n] [--artifact artifact] [--no-clone]`
 
 Open the terminal UI. It uses the daemon's REST and websocket APIs, supports the same run, task, artifact, retry, and cancel workflows as the web UI, and defaults to the all-repos home view when no target is provided. Artifact views support `e` for `$VISUAL` or `$EDITOR`, `o` for the platform opener, and `f` for Finder on macOS.
 
-## `localci cancel [--no-clone]`
+## `localci cancel [--repo dir] [--commit ref] [--task task] [--no-clone]`
 
-Cancel queued and active work for the current repository's latest run.
+Cancel queued and active work.
 
-## `localci cancel [--repo dir] [--no-clone] <commit> <task>`
+## `localci invoke [--repo dir] [--commit ref] [--task task] [--wait] [--no-clone] [--annotation key=value]`
 
-Cancel a specific task.
+Run an ad hoc check manually. Use `--wait` to block for results and `--no-clone` to run against the live working tree.
 
 ## `localci install-hooks [--repo dir]`
 

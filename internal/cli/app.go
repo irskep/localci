@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -78,6 +79,10 @@ func (a App) Run(args []string) error {
 		return a.runWait(args[1:])
 	case "status":
 		return a.runStatus(args[1:])
+	case "history":
+		return a.runHistory(args[1:])
+	case "artifacts":
+		return a.runArtifacts(args[1:])
 	case "web":
 		return a.runWeb(args[1:])
 	case "dash":
@@ -106,24 +111,21 @@ func (a App) checkRequirements() error {
 }
 
 func (a App) runPostcommit(args []string) error {
-	repoArg, args, err := extractRepoFlag(args)
+	flags, err := parseCLIFlags(args, flagSpec{
+		"repo": true, "commit": true, "task": true, "annotation": true, "json": true,
+	})
 	if err != nil {
 		return err
 	}
-	annotations, args, err := parseAnnotationArgs(args)
+	repo, err := a.resolveSelectorRepo(flags.Repo)
 	if err != nil {
 		return err
 	}
-	if len(args) != 1 {
-		return repoPositionalError("usage: localci postcommit [--repo dir] [--annotation key=value] <commit>")
-	}
-
-	repo, err := a.repoFromFlagOrCwd(repoArg)
+	commit, err := a.resolveRunCommit(repo, flags)
 	if err != nil {
 		return err
 	}
 
-	commit := strings.TrimSpace(args[0])
 	if commit == "" {
 		return fmt.Errorf("commit must not be empty")
 	}
@@ -132,15 +134,26 @@ func (a App) runPostcommit(args []string) error {
 	if err != nil {
 		return err
 	}
-
-	client := localci.DaemonClient{Paths: runner.Paths}
-	enqueued, err := client.Postcommit(context.Background(), repo, commit, mergedAnnotations(localci.GitAnnotations(context.Background(), repo), annotations))
+	requestedTasks, err := a.resolveRequestedTasks(context.Background(), runner, repo, flags.Task)
 	if err != nil {
 		return err
 	}
 
+	client := localci.DaemonClient{Paths: runner.Paths}
+	enqueued, err := client.Postcommit(context.Background(), repo, commit, mergedAnnotations(localci.GitAnnotations(context.Background(), repo), flags.Annotation), requestedTasks)
+	if err != nil {
+		return err
+	}
+	if flags.JSON {
+		return writeJSON(a.Stdout, map[string]any{
+			"repo":     repo,
+			"commit":   commit,
+			"enqueued": enqueued,
+		})
+	}
+
 	fmt.Fprintf(a.Stdout, "Enqueued %d %s for %s at %s\n", len(enqueued), pluralizeTask(len(enqueued)), repo, commit)
-	fmt.Fprintf(a.Stdout, "Status: localci status --repo %s %s\n", shellQuote(repo), shellQuote(commit))
+	fmt.Fprintf(a.Stdout, "Status: localci status --repo %s --commit %s\n", shellQuote(repo), shellQuote(commit))
 	if resultURL, err := a.postcommitResultURL(client, repo, commit); err == nil && resultURL != "" {
 		fmt.Fprintf(a.Stdout, "Results: %s\n", resultURL)
 	}
@@ -152,47 +165,53 @@ func (a App) runPostcommit(args []string) error {
 }
 
 func postcommitWaitInstruction(repo string, commit string) string {
-	return fmt.Sprintf("Wait: localci wait --repo %s %s", shellQuote(repo), shellQuote(commit))
+	return fmt.Sprintf("Wait: localci wait --repo %s --commit %s", shellQuote(repo), shellQuote(commit))
 }
 
 func (a App) runStatus(args []string) error {
-	repoArg, args, err := extractRepoFlag(args)
+	flags, err := parseCLIFlags(args, flagSpec{
+		"repo": true, "commit": true, "task": true, "attempt": true, "no-clone": true, "json": true,
+	})
 	if err != nil {
 		return err
 	}
-	noClone := false
-	args = filterFlag(args, "--no-clone", &noClone)
-	spec, err := a.parseStatusTarget(repoArg, args, noClone, "usage: localci status [--repo dir] [--no-clone] <commit> [task]")
-	if err != nil {
-		return err
-	}
-
 	runner, err := a.newRunner()
 	if err != nil {
 		return err
 	}
 
 	client := localci.DaemonClient{Paths: runner.Paths}
-	statusView, err := client.Status(context.Background(), spec.RepoDir, spec.Commit)
+	repo, err := a.resolveSelectorRepo(flags.Repo)
+	if err != nil {
+		return err
+	}
+	commit, err := a.resolveQueryCommit(repo, flags)
+	if err != nil {
+		return err
+	}
+	statusView, err := client.Status(context.Background(), repo, commit)
 	if err != nil {
 		return err
 	}
 
-	filtered := statusView.Tasks
-	if spec.Task != "" {
-		filtered = nil
-		for _, task := range statusView.Tasks {
-			if task.Name == spec.Task {
-				filtered = append(filtered, task)
-				break
-			}
-		}
-		if len(filtered) == 0 {
-			return fmt.Errorf("task %q not found", spec.Task)
-		}
+	taskName, err := resolveTaskName(statusView.Tasks, flags.Task)
+	if err != nil {
+		return err
+	}
+	filtered := filterStatusTasks(statusView.Tasks, taskName, false)
+	for i := range filtered {
+		filtered[i] = localci.ApplySelectedAttempt(runner.Paths, repo, commit, filtered[i], flags.Attempt)
+	}
+	if flags.JSON {
+		return writeJSON(a.Stdout, localci.CommitStatusView{
+			RepoDir:     statusView.RepoDir,
+			Commit:      statusView.Commit,
+			Annotations: statusView.Annotations,
+			Tasks:       filtered,
+		})
 	}
 
-	if spec.Task != "" {
+	if taskName != "" {
 		a.printCommitHeader("Status", statusView)
 		fmt.Fprintln(a.Stdout)
 		a.printTaskDetail(filtered[0])
@@ -203,27 +222,23 @@ func (a App) runStatus(args []string) error {
 }
 
 func (a App) runWeb(args []string) error {
-	noClone := false
-	args = filterFlag(args, "--no-clone", &noClone)
-	repoArg, args, err := extractRepoFlag(args)
+	flags, err := parseCLIFlags(args, flagSpec{
+		"repo": true, "commit": true, "task": true, "attempt": true, "artifact": true, "no-clone": true,
+	})
 	if err != nil {
 		return err
 	}
-	spec, err := a.parseWebTarget(repoArg, args)
+	repo, err := a.resolveSelectorRepo(flags.Repo)
 	if err != nil {
 		return err
 	}
-	if noClone {
-		if spec.Commit == "" {
-			commit, err := a.headCommit(spec.RepoDir)
-			if err != nil {
-				return err
-			}
-			spec.Commit = commit
+	commit := ""
+	if flags.Commit != "" || flags.Task != "" || flags.Artifact != "" || flags.NoClone {
+		commit, err = a.resolveQueryCommit(repo, flags)
+		if err != nil {
+			return err
 		}
-		spec.Commit = noCloneCommitLabel(spec.Commit)
 	}
-
 	runner, err := a.newRunner()
 	if err != nil {
 		return err
@@ -234,6 +249,27 @@ func (a App) runWeb(args []string) error {
 	if err != nil {
 		return err
 	}
+	task := flags.Task
+	attempt := flags.Attempt
+	if commit != "" && task != "" {
+		view, err := client.Status(context.Background(), repo, commit)
+		if err != nil {
+			return err
+		}
+		task, err = resolveTaskName(view.Tasks, task)
+		if err != nil {
+			return err
+		}
+		if attempt <= 0 {
+			for _, candidate := range view.Tasks {
+				if candidate.Name == task {
+					attempt = candidate.Attempt
+					break
+				}
+			}
+		}
+	}
+	spec := commitTarget{RepoDir: repo, Commit: commit, Task: task, Attempt: attempt, Artifact: flags.Artifact}
 
 	return a.openWeb(spec, state)
 }
@@ -258,29 +294,163 @@ Usage:
   localci start
   localci restart
   localci stop
-  localci postcommit [--repo dir] [--annotation key=value] <commit>
-  localci invoke [--repo dir] [--wait] [--no-clone] [--annotation key=value] [commit]
-  localci cancel [--no-clone]
-  localci cancel [--repo dir] [--no-clone] <commit> <task>
-  localci wait [--repo dir] [--no-clone] [commit]
-  localci status [--repo dir] [--no-clone] <commit> [task]
-  localci web [--repo dir] [--no-clone] [commit] [task]
-  localci dash [--repo dir] [--no-clone] [commit] [task]
-  localci install-hooks [--repo dir]
+  localci postcommit [--repo DIR] [--commit REF] [--task TASK] [--annotation KEY=VALUE] [--json]
+  localci status [--repo DIR] [--commit REF] [--task TASK] [--attempt N] [--no-clone] [--json]
+  localci wait [--repo DIR] [--commit REF] [--task TASK] [--no-clone] [--json]
+  localci history [--repo DIR] [--commit REF] [--task TASK] [--status STATUS] [--failed] [--limit N] [--json]
+  localci artifacts [--repo DIR] [--commit REF] [--task TASK] [--attempt N] [--failed] [--primary] [--paths-only] [--json]
+  localci web [--repo DIR] [--commit REF] [--task TASK] [--attempt N] [--artifact ARTIFACT] [--no-clone]
+  localci dash [--repo DIR] [--commit REF] [--task TASK] [--attempt N] [--artifact ARTIFACT] [--no-clone]
+  localci cancel [--repo DIR] [--commit REF] [--task TASK] [--no-clone] [--json]
+  localci invoke [--repo DIR] [--commit REF] [--task TASK] [--wait] [--no-clone] [--annotation KEY=VALUE] [--json]
+  localci install-hooks [--repo DIR]
+
+Selectors:
+  --repo DIR       Defaults to the nearest Git repo ancestor.
+  --commit REF     Defaults to the latest run for query commands and HEAD for run commands.
+  --task TASK      Full task name or unambiguous short task name.
+  --attempt N      Defaults to the latest attempt.
 `
 }
 
 func commandHelpText(command string) (string, bool) {
 	switch command {
+	case "status":
+		return `Usage:
+  localci status [--repo DIR] [--commit REF] [--task TASK] [--attempt N] [--no-clone] [--json]
+
+Print a bounded status summary for a LocalCI run.
+
+Defaults:
+  --repo      nearest Git repo ancestor
+  --commit    latest LocalCI run for the repo
+  --task      all tasks
+  --attempt   latest attempt
+
+Examples:
+  localci status
+  localci status --task noisy-fail
+  localci status --commit HEAD
+  localci status --commit 'HEAD*' --task test
+`, true
+	case "artifacts":
+		return `Usage:
+  localci artifacts [--repo DIR] [--commit REF] [--task TASK] [--attempt N] [--failed] [--primary] [--paths-only] [--json]
+
+Print filesystem paths for task artifacts.
+
+Defaults:
+  --repo      nearest Git repo ancestor
+  --commit    latest LocalCI run for the repo
+  --task      all tasks
+  --attempt   latest attempt for each task
+
+Examples:
+  localci artifacts
+  localci artifacts --task noisy-fail
+  localci artifacts --failed --primary
+  localci artifacts --task noisy-fail --primary --paths-only
+`, true
+	case "history":
+		return `Usage:
+  localci history [--repo DIR] [--commit REF] [--task TASK] [--status STATUS] [--failed] [--limit N] [--json]
+
+Print recent LocalCI runs, optionally filtered to a task or status.
+
+Defaults:
+  --repo    nearest Git repo ancestor
+  --limit   20
+
+Examples:
+  localci history
+  localci history --task noisy-fail
+  localci history --failed
+  localci history --task //web:localci:test --limit 50
+`, true
+	case "wait":
+		return `Usage:
+  localci wait [--repo DIR] [--commit REF] [--task TASK] [--no-clone] [--json]
+
+Wait for the selected run or task to complete.
+
+Examples:
+  localci wait
+  localci wait --task noisy-fail
+  localci wait --commit 'HEAD*'
+`, true
+	case "invoke":
+		return `Usage:
+  localci invoke [--repo DIR] [--commit REF] [--task TASK] [--wait] [--no-clone] [--annotation KEY=VALUE] [--json]
+
+Run an ad hoc LocalCI check for a commit or working tree.
+
+Defaults:
+  --repo      nearest Git repo ancestor
+  --commit    HEAD
+  --task      all tasks
+
+Examples:
+  localci invoke --task test --wait
+  localci invoke --no-clone --task test --wait
+  localci invoke --commit HEAD --annotation branch=main
+`, true
+	case "postcommit":
+		return `Usage:
+  localci postcommit [--repo DIR] [--commit REF] [--task TASK] [--annotation KEY=VALUE] [--json]
+
+Queue LocalCI checks for a commit. Intended for Git hooks.
+
+Defaults:
+  --repo      nearest Git repo ancestor
+  --commit    HEAD
+  --task      all tasks
+
+Examples:
+  localci postcommit --commit HEAD
+  localci postcommit --commit HEAD --task test
+  localci postcommit --repo "$repo" --commit "$commit"
+`, true
+	case "cancel":
+		return `Usage:
+  localci cancel [--repo DIR] [--commit REF] [--task TASK] [--no-clone] [--json]
+
+Cancel active or queued LocalCI tasks.
+
+Examples:
+  localci cancel
+  localci cancel --task noisy-fail
+  localci cancel --commit 'HEAD*' --task test
+`, true
+	case "web":
+		return `Usage:
+  localci web [--repo DIR] [--commit REF] [--task TASK] [--attempt N] [--artifact ARTIFACT] [--no-clone]
+
+Open the local web UI at the selected page.
+
+Examples:
+  localci web
+  localci web --task noisy-fail
+  localci web --task noisy-fail --artifact combined.log
+`, true
+	case "dash":
+		return `Usage:
+  localci dash [--repo DIR] [--commit REF] [--task TASK] [--attempt N] [--artifact ARTIFACT] [--no-clone]
+
+Open the terminal dashboard at the selected page.
+
+Examples:
+  localci dash
+  localci dash --task noisy-fail
+`, true
 	case "install-hooks":
 		return `Usage:
-  localci install-hooks [--repo dir]
+  localci install-hooks [--repo DIR]
 
 Install localci's Git post-commit hook entry for a repo, defaulting to the
 nearest ancestor of the current working directory that contains .git. The hook
 uses modern Git hook.* config and runs:
 
-  localci postcommit --repo "$repo" "$commit"
+  localci postcommit --repo "$repo" --commit "$commit"
 `, true
 	default:
 		return "", false
@@ -301,75 +471,53 @@ func mustGetwd() string {
 }
 
 type commitTarget struct {
-	RepoDir string
-	Commit  string
-	Task    string
+	RepoDir  string
+	Commit   string
+	Task     string
+	Attempt  int
+	Artifact string
 }
 
 func (a App) runInvoke(args []string) error {
-	repoArg, args, err := extractRepoFlag(args)
+	flags, err := parseCLIFlags(args, flagSpec{
+		"repo": true, "commit": true, "task": true, "wait": true, "no-clone": true, "annotation": true, "json": true,
+	})
 	if err != nil {
 		return err
 	}
-	wait := false
-	noClone := false
-	filtered := make([]string, 0, len(args))
-	for _, arg := range args {
-		switch arg {
-		case "--wait":
-			wait = true
-			continue
-		case "--no-clone":
-			noClone = true
-			continue
-		}
-		filtered = append(filtered, arg)
-	}
-	args = filtered
-	annotations, args, err := parseAnnotationArgs(args)
+	repo, err := a.resolveSelectorRepo(flags.Repo)
 	if err != nil {
 		return err
 	}
-
-	repo, commit, err := a.parseInvokeTarget(repoArg, args)
+	commit, err := a.resolveRunCommit(repo, flags)
 	if err != nil {
 		return err
 	}
-	if commit == "" {
-		commit, err = a.headCommit(repo)
-		if err != nil {
-			return err
-		}
-	} else {
-		commit, err = a.resolveCommitAlias(repo, commit)
-		if err != nil {
-			return err
-		}
-	}
-
 	if commit == "" {
 		return fmt.Errorf("commit must not be empty")
-	}
-	if noClone {
-		commit = noCloneCommitLabel(commit)
 	}
 
 	runner, err := a.newRunner()
 	if err != nil {
 		return err
 	}
+	requestedTasks, err := a.resolveRequestedTasks(context.Background(), runner, repo, flags.Task)
+	if err != nil {
+		return err
+	}
 
 	result, err := runner.Invoke(context.Background(), localci.InvokeRequest{
-		RepoDir:     repo,
-		Commit:      commit,
-		Annotations: mergedAnnotations(localci.GitAnnotations(context.Background(), repo), annotations),
-		NoClone:     noClone,
+		RepoDir:        repo,
+		Commit:         commit,
+		Annotations:    mergedAnnotations(localci.GitAnnotations(context.Background(), repo), flags.Annotation),
+		RequestedTasks: requestedTasks,
+		NoClone:        flags.NoClone,
 	})
 	if err != nil {
 		return err
 	}
 
-	if wait {
+	if flags.Wait {
 		view, err := a.statusViewForRun(runner, result)
 		if err != nil {
 			return err
@@ -377,6 +525,9 @@ func (a App) runInvoke(args []string) error {
 		return a.printWaitSummary(view)
 	}
 
+	if flags.JSON {
+		return writeJSON(a.Stdout, result)
+	}
 	a.printInvokeSummary(result)
 	if !result.Success() {
 		return fmt.Errorf("invoke finished with failing tasks")
@@ -386,12 +537,12 @@ func (a App) runInvoke(args []string) error {
 }
 
 func (a App) runCancel(args []string) error {
-	repoArg, args, err := extractRepoFlag(args)
+	flags, err := parseCLIFlags(args, flagSpec{
+		"repo": true, "commit": true, "task": true, "no-clone": true, "json": true,
+	})
 	if err != nil {
 		return err
 	}
-	noClone := false
-	args = filterFlag(args, "--no-clone", &noClone)
 	runner, err := a.newRunner()
 	if err != nil {
 		return err
@@ -401,7 +552,7 @@ func (a App) runCancel(args []string) error {
 	var repoDir string
 	var commit string
 	var taskName string
-	if len(args) == 0 {
+	if flags.Repo == "" && flags.Commit == "" && flags.Task == "" {
 		active, err := client.ActiveTask(context.Background())
 		if err != nil {
 			return err
@@ -413,19 +564,25 @@ func (a App) runCancel(args []string) error {
 		commit = active.Commit
 		taskName = active.TaskName
 	} else {
-		spec, err := a.parseCommitTarget(repoArg, args, "usage: localci cancel [--repo dir] [--no-clone] <commit> <task>")
+		repoDir, err = a.resolveSelectorRepo(flags.Repo)
 		if err != nil {
 			return err
 		}
-		if spec.Task == "" {
-			return fmt.Errorf("usage: localci cancel [--repo dir] [--no-clone] <commit> <task>")
+		commit, err = a.resolveQueryCommit(repoDir, flags)
+		if err != nil {
+			return err
 		}
-		repoDir = spec.RepoDir
-		commit = spec.Commit
-		taskName = spec.Task
-	}
-	if noClone {
-		commit = noCloneCommitLabel(commit)
+		view, err := client.Status(context.Background(), repoDir, commit)
+		if err != nil {
+			return err
+		}
+		taskName, err = resolveTaskName(view.Tasks, flags.Task)
+		if err != nil {
+			return err
+		}
+		if taskName == "" {
+			return fmt.Errorf("--task is required when canceling by selector")
+		}
 	}
 
 	result, err := client.Cancel(context.Background(), repoDir, commit, taskName)
@@ -435,6 +592,9 @@ func (a App) runCancel(args []string) error {
 	if !result.Active && result.Pending == 0 {
 		fmt.Fprintf(a.Stdout, "No queued or running task matched %s at %s\n", taskName, commit)
 		return nil
+	}
+	if flags.JSON {
+		return writeJSON(a.Stdout, result)
 	}
 	fmt.Fprintf(a.Stdout, "Canceled %s at %s", taskName, commit)
 	if result.Active {
@@ -448,81 +608,65 @@ func (a App) runCancel(args []string) error {
 }
 
 func (a App) runWait(args []string) error {
-	repoArg, args, err := extractRepoFlag(args)
+	flags, err := parseCLIFlags(args, flagSpec{
+		"repo": true, "commit": true, "task": true, "no-clone": true, "json": true,
+	})
 	if err != nil {
 		return err
 	}
-	noClone := false
-	args = filterFlag(args, "--no-clone", &noClone)
-	spec, err := a.parseStatusTarget(repoArg, args, noClone, "usage: localci wait [--repo dir] [--no-clone] [commit]")
-	if err != nil {
-		return err
-	}
-
 	runner, err := a.newRunner()
+	if err != nil {
+		return err
+	}
+	repo, err := a.resolveSelectorRepo(flags.Repo)
+	if err != nil {
+		return err
+	}
+	commit, err := a.resolveQueryCommit(repo, flags)
 	if err != nil {
 		return err
 	}
 
 	client := localci.DaemonClient{Paths: runner.Paths}
-	view, err := (localci.Waiter{Client: client}).Wait(context.Background(), spec.RepoDir, spec.Commit)
+	view, err := (localci.Waiter{Client: client}).Wait(context.Background(), repo, commit)
 	if err != nil {
 		return err
+	}
+	if flags.Task != "" {
+		taskName, err := resolveTaskName(view.Tasks, flags.Task)
+		if err != nil {
+			return err
+		}
+		view.Tasks = filterStatusTasks(view.Tasks, taskName, false)
+	}
+	if flags.JSON {
+		return writeJSON(a.Stdout, view)
 	}
 
 	return a.printWaitSummary(view)
 }
 
-func (a App) parseInvokeTarget(repoArg string, args []string) (string, string, error) {
-	if len(args) > 1 {
-		return "", "", fmt.Errorf("usage: localci invoke [--repo dir] [--wait] [--no-clone] [--annotation key=value] [commit]")
-	}
-	repo, err := a.repoFromFlagOrCwd(repoArg)
-	if err != nil {
-		return "", "", err
-	}
-	switch len(args) {
-	case 0:
-		return repo, "", nil
-	case 1:
-		return repo, strings.TrimSpace(args[0]), nil
-	}
-	return repo, "", nil
-}
-
-func (a App) parseStatusTarget(repoArg string, args []string, noClone bool, usage string) (commitTarget, error) {
-	if noClone && len(args) == 0 {
-		return a.currentNoCloneTarget(repoArg)
-	}
-
-	spec, err := a.parseCommitTarget(repoArg, args, usage)
-	if err != nil {
-		return commitTarget{}, err
-	}
-	if noClone {
-		spec.Commit = noCloneCommitLabel(spec.Commit)
-	}
-	return spec, nil
-}
-
-func (a App) currentNoCloneTarget(repoArg string) (commitTarget, error) {
-	repo, err := a.repoFromFlagOrCwd(repoArg)
-	if err != nil {
-		return commitTarget{}, err
-	}
-	commit, err := a.headCommit(repo)
-	if err != nil {
-		return commitTarget{}, err
-	}
-	return commitTarget{RepoDir: repo, Commit: noCloneCommitLabel(commit)}, nil
-}
-
 func (a App) statusViewForRun(runner localci.Runner, result localci.RunRecord) (localci.CommitStatusView, error) {
-	tasks, err := runner.DiscoverTasks(context.Background(), result.RepoDir)
-	if err != nil {
-		return localci.CommitStatusView{}, err
+	tasks := result.DiscoveredTasks
+	if len(tasks) == 0 {
+		var err error
+		tasks, err = runner.DiscoverTasks(context.Background(), result.RepoDir)
+		if err != nil {
+			return localci.CommitStatusView{}, err
+		}
 	}
 	return localci.BuildCommitStatusView(runner.Paths, result.RepoDir, result.Commit, tasks, nil, nil)
+}
+
+func (a App) resolveRequestedTasks(ctx context.Context, runner localci.Runner, repo string, taskQuery string) ([]string, error) {
+	if strings.TrimSpace(taskQuery) == "" {
+		return nil, nil
+	}
+	tasks, err := runner.DiscoverTasks(ctx, repo)
+	if err != nil {
+		return nil, err
+	}
+	return resolveDiscoveredTaskNames(tasks, taskQuery)
 }
 
 func (a App) printWaitSummary(view localci.CommitStatusView) error {
@@ -543,62 +687,14 @@ func (a App) printWaitSummary(view localci.CommitStatusView) error {
 		if resultURL, err := a.taskResultURL(view.RepoDir, view.Commit, task.Name); err == nil && resultURL != "" {
 			fmt.Fprintf(a.Stdout, "  Results: %s\n", resultURL)
 		}
-		primaryArtifact, primaryLog := localci.LoadPrimaryLog(task)
-		if primaryArtifact != "" {
-			fmt.Fprintf(a.Stdout, "  Primary log: %s\n", primaryArtifact)
-			if primaryLogPath := artifactPathByDisplayName(task, primaryArtifact); primaryLogPath != "" {
+		if primaryArtifact, ok := localci.PrimaryArtifact(task); ok {
+			fmt.Fprintf(a.Stdout, "  Primary artifact: %s\n", primaryArtifact.DisplayName)
+			if primaryLogPath := artifactPathByDisplayName(task, primaryArtifact.DisplayName); primaryLogPath != "" {
 				fmt.Fprintf(a.Stdout, "  Primary log path: %s\n", primaryLogPath)
-			}
-			if primaryLog != "" {
-				fmt.Fprintln(a.Stdout, primaryLog)
 			}
 		}
 	}
 	return fmt.Errorf("localci run failed")
-}
-
-func parseAnnotationArgs(args []string) (map[string]string, []string, error) {
-	annotations := map[string]string{}
-	filtered := make([]string, 0, len(args))
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		var value string
-		switch {
-		case arg == "--annotation":
-			i++
-			if i >= len(args) {
-				return nil, nil, fmt.Errorf("--annotation requires key=value")
-			}
-			value = args[i]
-		case strings.HasPrefix(arg, "--annotation="):
-			value = strings.TrimPrefix(arg, "--annotation=")
-		default:
-			filtered = append(filtered, arg)
-			continue
-		}
-		key, annotationValue, ok := strings.Cut(value, "=")
-		key = strings.TrimSpace(key)
-		if !ok || key == "" {
-			return nil, nil, fmt.Errorf("--annotation requires key=value")
-		}
-		annotations[key] = annotationValue
-	}
-	if len(annotations) == 0 {
-		return nil, filtered, nil
-	}
-	return annotations, filtered, nil
-}
-
-func filterFlag(args []string, flag string, found *bool) []string {
-	filtered := make([]string, 0, len(args))
-	for _, arg := range args {
-		if arg == flag {
-			*found = true
-			continue
-		}
-		filtered = append(filtered, arg)
-	}
-	return filtered
 }
 
 func mergedAnnotations(base map[string]string, override map[string]string) map[string]string {
@@ -613,6 +709,12 @@ func mergedAnnotations(base map[string]string, override map[string]string) map[s
 		merged[key] = value
 	}
 	return merged
+}
+
+func writeJSON(w io.Writer, value any) error {
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(value)
 }
 
 func noCloneCommitLabel(commit string) string {
@@ -643,93 +745,6 @@ func defaultLocalCIRoot() (string, error) {
 	}
 
 	return filepath.Join(home, ".localci"), nil
-}
-
-func (a App) parseCommitTarget(repoArg string, args []string, usage string) (commitTarget, error) {
-	if len(args) > 2 {
-		return commitTarget{}, repoPositionalError(usage)
-	}
-	repo, err := a.repoFromFlagOrCwd(repoArg)
-	if err != nil {
-		return commitTarget{}, err
-	}
-	switch len(args) {
-	case 0:
-		commit, err := a.latestCommitForRepo(repo)
-		if err != nil {
-			return commitTarget{}, err
-		}
-		return commitTarget{
-			RepoDir: repo,
-			Commit:  commit,
-		}, nil
-	case 1:
-		commit, err := a.resolveCommitAlias(repo, args[0])
-		if err != nil {
-			return commitTarget{}, err
-		}
-		return commitTarget{
-			RepoDir: repo,
-			Commit:  commit,
-		}, nil
-	case 2:
-		if looksLikePathArg(args[0]) {
-			return commitTarget{}, repoPositionalError(usage)
-		}
-		commit, err := a.resolveCommitAlias(repo, args[0])
-		if err != nil {
-			return commitTarget{}, err
-		}
-
-		return commitTarget{
-			RepoDir: repo,
-			Commit:  commit,
-			Task:    strings.TrimSpace(args[1]),
-		}, nil
-	}
-	return commitTarget{}, repoPositionalError(usage)
-}
-
-func looksLikePathArg(arg string) bool {
-	arg = strings.TrimSpace(arg)
-	return arg == "." || arg == ".." || strings.HasPrefix(arg, "~") || strings.ContainsAny(arg, `/\`)
-}
-
-func (a App) parseWebTarget(repoArg string, args []string) (commitTarget, error) {
-	if len(args) > 2 {
-		return commitTarget{}, repoPositionalError("usage: localci web [--repo dir] [commit] [task]")
-	}
-	repo, err := a.repoFromFlagOrCwd(repoArg)
-	if err != nil {
-		return commitTarget{}, err
-	}
-	switch len(args) {
-	case 0:
-		return commitTarget{RepoDir: repo}, nil
-	case 1:
-		commit, err := a.resolveCommitAlias(repo, args[0])
-		if err != nil {
-			return commitTarget{}, err
-		}
-		return commitTarget{
-			RepoDir: repo,
-			Commit:  commit,
-		}, nil
-	case 2:
-		if looksLikePathArg(args[0]) {
-			return commitTarget{}, repoPositionalError("usage: localci web [--repo dir] [commit] [task]")
-		}
-		commit, err := a.resolveCommitAlias(repo, args[0])
-		if err != nil {
-			return commitTarget{}, err
-		}
-		return commitTarget{
-			RepoDir: repo,
-			Commit:  commit,
-			Task:    strings.TrimSpace(args[1]),
-		}, nil
-	}
-	return commitTarget{}, repoPositionalError("usage: localci web [--repo dir] [commit] [task]")
 }
 
 func (a App) openWeb(spec commitTarget, state localci.DaemonState) error {
@@ -815,12 +830,24 @@ func (a App) buildWebURL(baseURL string, spec commitTarget) (string, error) {
 		if err := setEscapedURLPath(root, commitPath); err != nil {
 			return "", err
 		}
-	default:
+	case spec.Artifact == "":
 		taskPath, err := localci.TaskRoutePath(cfg.Root, spec.RepoDir, spec.Commit, spec.Task)
 		if err != nil {
 			return "", err
 		}
 		if err := setEscapedURLPath(root, taskPath); err != nil {
+			return "", err
+		}
+	default:
+		attempt := spec.Attempt
+		if attempt <= 0 {
+			attempt = 1
+		}
+		artifactPath, err := localci.ArtifactRoutePath(cfg.Root, spec.RepoDir, spec.Commit, spec.Task, attempt, spec.Artifact)
+		if err != nil {
+			return "", err
+		}
+		if err := setEscapedURLPath(root, artifactPath); err != nil {
 			return "", err
 		}
 	}
@@ -916,14 +943,10 @@ func (a App) printTaskDetail(task localci.TaskStatusView) {
 			fmt.Fprintf(a.Stdout, "  %s\t%s\n", artifact.DisplayName, artifact.Path)
 		}
 	}
-	primaryArtifact, primaryLog := localci.LoadPrimaryLog(task)
-	if primaryArtifact != "" {
-		fmt.Fprintf(a.Stdout, "Primary log: %s\n", primaryArtifact)
-		if primaryLogPath := artifactPathByDisplayName(task, primaryArtifact); primaryLogPath != "" {
+	if primaryArtifact, ok := localci.PrimaryArtifact(task); ok {
+		fmt.Fprintf(a.Stdout, "Primary artifact: %s\n", primaryArtifact.DisplayName)
+		if primaryLogPath := artifactPathByDisplayName(task, primaryArtifact.DisplayName); primaryLogPath != "" {
 			fmt.Fprintf(a.Stdout, "Primary log path: %s\n", primaryLogPath)
-		}
-		if primaryLog != "" {
-			fmt.Fprintln(a.Stdout, primaryLog)
 		}
 	}
 }
@@ -938,15 +961,12 @@ func artifactPathByDisplayName(task localci.TaskStatusView, displayName string) 
 }
 
 func (a App) runInstallHooks(args []string) error {
-	repoArg, args, err := extractRepoFlag(args)
+	flags, err := parseCLIFlags(args, flagSpec{"repo": true})
 	if err != nil {
 		return err
 	}
-	if len(args) > 0 {
-		return repoPositionalError("usage: localci install-hooks [--repo dir]")
-	}
 
-	repoDir, err := a.repoFromFlagOrCwd(repoArg)
+	repoDir, err := a.repoFromFlagOrCwd(flags.Repo)
 	if err != nil {
 		return err
 	}
@@ -1013,42 +1033,6 @@ func (a App) discoverRepoFromCwd() (string, error) {
 	}
 
 	return "", fmt.Errorf("could not find a git repository from %s; pass --repo <path>", start)
-}
-
-func extractRepoFlag(args []string) (string, []string, error) {
-	filtered := make([]string, 0, len(args))
-	var repo string
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "--repo" {
-			if i+1 >= len(args) || strings.TrimSpace(args[i+1]) == "" {
-				return "", nil, fmt.Errorf("--repo requires a path")
-			}
-			if repo != "" {
-				return "", nil, fmt.Errorf("--repo specified more than once")
-			}
-			repo = args[i+1]
-			i++
-			continue
-		}
-		if strings.HasPrefix(arg, "--repo=") {
-			value := strings.TrimSpace(strings.TrimPrefix(arg, "--repo="))
-			if value == "" {
-				return "", nil, fmt.Errorf("--repo requires a path")
-			}
-			if repo != "" {
-				return "", nil, fmt.Errorf("--repo specified more than once")
-			}
-			repo = value
-			continue
-		}
-		filtered = append(filtered, arg)
-	}
-	return repo, filtered, nil
-}
-
-func repoPositionalError(usage string) error {
-	return fmt.Errorf("%s\npass --repo <path> to select a repository", usage)
 }
 
 func (a App) loadConfig() (localci.Config, error) {

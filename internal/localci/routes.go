@@ -68,3 +68,19 @@ func AttemptRoutePath(root string, repoDir string, commit string, taskName strin
 	}
 	return path.Join(taskPath, "attempt", fmt.Sprintf("%d", attempt)), nil
 }
+
+func ArtifactRoutePath(root string, repoDir string, commit string, taskName string, attempt int, artifact string) (string, error) {
+	attemptPath, err := AttemptRoutePath(root, repoDir, commit, taskName, attempt)
+	if err != nil {
+		return "", err
+	}
+	segments := strings.Split(filepath.ToSlash(artifact), "/")
+	escaped := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		if segment == "" || segment == "." {
+			continue
+		}
+		escaped = append(escaped, url.PathEscape(segment))
+	}
+	return path.Join(append([]string{attemptPath, "artifact"}, escaped...)...), nil
+}

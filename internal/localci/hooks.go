@@ -17,7 +17,7 @@ func (i HookInstaller) Install() error {
 		return fmt.Errorf("repo dir must not be empty")
 	}
 
-	command := `sh -c 'repo=$(git rev-parse --show-toplevel) && commit=$(git rev-parse HEAD) && exec localci postcommit --repo "$repo" "$commit"'`
+	command := `sh -c 'repo=$(git rev-parse --show-toplevel) && commit=$(git rev-parse HEAD) && exec localci postcommit --repo "$repo" --commit "$commit"'`
 	for _, args := range [][]string{
 		{"config", "--local", "--replace-all", "hook." + localCIHookName + ".event", "post-commit"},
 		{"config", "--local", "--replace-all", "hook." + localCIHookName + ".command", command},

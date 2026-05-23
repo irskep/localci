@@ -212,7 +212,7 @@ func (s WebServer) handleTask(w http.ResponseWriter, r *http.Request) {
 
 	task, ok := findTaskStatus(view.Tasks, taskName)
 	if ok {
-		task = applySelectedAttempt(s.Paths, repoDir, commit, task, selectedAttempt)
+		task = ApplySelectedAttempt(s.Paths, repoDir, commit, task, selectedAttempt)
 		primaryArtifact, primaryLog := LoadPrimaryLog(task)
 		_ = taskTemplate.Execute(w, TaskPageView{
 			RepoDir:            repoDir,
@@ -690,7 +690,7 @@ func parseAttemptQuery(raw string) int {
 	return attempt
 }
 
-func applySelectedAttempt(paths Paths, repoDir string, commit string, task TaskStatusView, selectedAttempt int) TaskStatusView {
+func ApplySelectedAttempt(paths Paths, repoDir string, commit string, task TaskStatusView, selectedAttempt int) TaskStatusView {
 	if selectedAttempt <= 0 || task.AttemptCount <= 1 {
 		return task
 	}

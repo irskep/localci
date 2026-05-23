@@ -86,6 +86,7 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 		}
 		return run, nil
 	}
+	tasks = filterRequestedTasks(tasks, req.RequestedTasks)
 
 	now := r.now()
 	record, err := ensureRunRecordWithTasks(r.Paths, req, tasks, now)
@@ -129,6 +130,23 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 	}
 
 	return record, nil
+}
+
+func filterRequestedTasks(tasks []Task, requested []string) []Task {
+	if len(requested) == 0 {
+		return tasks
+	}
+	allowed := map[string]bool{}
+	for _, name := range requested {
+		allowed[name] = true
+	}
+	filtered := make([]Task, 0, len(tasks))
+	for _, task := range tasks {
+		if allowed[task.Name] || task.Name == setupTaskName {
+			filtered = append(filtered, task)
+		}
+	}
+	return filtered
 }
 
 func (r Runner) DiscoverTasks(ctx context.Context, repoDir string) ([]Task, error) {

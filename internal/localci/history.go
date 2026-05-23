@@ -46,8 +46,8 @@ func (r HistoryReader) ListRepos() ([]RepoHistory, error) {
 	sort.Slice(repos, func(i int, j int) bool {
 		left := mostRecentRun(repos[i].Commits)
 		right := mostRecentRun(repos[j].Commits)
-		leftAt := runActivityAt(left)
-		rightAt := runActivityAt(right)
+		leftAt := RunActivityAt(left)
+		rightAt := RunActivityAt(right)
 		if leftAt.Equal(rightAt) {
 			return repos[i].RepoDir < repos[j].RepoDir
 		}
@@ -103,8 +103,8 @@ func (r HistoryReader) listRuns() ([]RunRecord, error) {
 
 func sortRunRecords(runs []RunRecord) {
 	sort.Slice(runs, func(i int, j int) bool {
-		leftAt := runActivityAt(runs[i])
-		rightAt := runActivityAt(runs[j])
+		leftAt := RunActivityAt(runs[i])
+		rightAt := RunActivityAt(runs[j])
 		if leftAt.Equal(rightAt) {
 			if runs[i].RepoDir == runs[j].RepoDir {
 				return runs[i].Commit > runs[j].Commit
@@ -122,7 +122,7 @@ func mostRecentRun(runs []RunRecord) RunRecord {
 	return runs[0]
 }
 
-func runActivityAt(run RunRecord) time.Time {
+func RunActivityAt(run RunRecord) time.Time {
 	if !run.FinishedAt.IsZero() {
 		return run.FinishedAt
 	}

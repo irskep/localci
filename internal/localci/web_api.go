@@ -795,7 +795,7 @@ func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered 
 		Commit:      run.Commit,
 		Annotations: cloneAnnotations(run.Annotations),
 		Tasks:       tasks,
-		ActivityAt:  runActivityAt(run),
+		ActivityAt:  RunActivityAt(run),
 	}
 }
 
@@ -815,7 +815,7 @@ func (s WebServer) selectedTaskStatus(repoDir string, commit string, taskName st
 	if !ok {
 		return TaskStatusView{}, fmt.Errorf("task not found")
 	}
-	task = applySelectedAttempt(s.Paths, repoDir, commit, task, selectedAttempt)
+	task = ApplySelectedAttempt(s.Paths, repoDir, commit, task, selectedAttempt)
 	if selectedAttempt > 0 && task.Attempt != selectedAttempt {
 		return TaskStatusView{}, fmt.Errorf("attempt not found")
 	}

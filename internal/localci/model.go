@@ -27,10 +27,11 @@ type Task struct {
 }
 
 type InvokeRequest struct {
-	RepoDir     string
-	Commit      string
-	Annotations map[string]string
-	NoClone     bool
+	RepoDir        string
+	Commit         string
+	Annotations    map[string]string
+	RequestedTasks []string
+	NoClone        bool
 }
 
 type RunRecord struct {
