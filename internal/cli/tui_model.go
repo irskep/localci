@@ -237,6 +237,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(cmds...)
 		}
+		return m.handleKey(msg)
 	case tea.MouseMsg:
 		switch m.route.view {
 		case tuiViewTask:
@@ -249,84 +250,6 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.artifactLog, cmd = m.artifactLog.Update(msg)
 			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-		switch {
-		case m.route.view == tuiViewTask && key.Matches(msg, m.keys.PrevTab):
-			if m.moveTaskArtifact(-1) {
-				cmds = append(cmds, m.loadSelectedTaskArtifact())
-			}
-		case m.route.view == tuiViewTask && key.Matches(msg, m.keys.NextTab):
-			if m.moveTaskArtifact(1) {
-				cmds = append(cmds, m.loadSelectedTaskArtifact())
-			}
-		case key.Matches(msg, m.keys.Quit):
-			if msg.String() == "q" || msg.String() == "ctrl+c" {
-				if m.stream != nil && m.stream.cancel != nil {
-					m.stream.cancel()
-				}
-				return m, tea.Quit
-			}
-		case key.Matches(msg, m.keys.Help):
-			m.help.ShowAll = true
-		case key.Matches(msg, m.keys.Refresh):
-			m.loading = true
-			cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
-		case key.Matches(msg, m.keys.HomeView):
-			m = m.gotoRoute(tuiRoute{view: tuiViewHome, apiPath: "/api", title: "Home"}, true)
-			cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
-		case key.Matches(msg, m.keys.Queue):
-			m = m.gotoRoute(tuiRoute{view: tuiViewQueue, apiPath: "/api/queue", title: "Queue"}, true)
-			cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
-		case key.Matches(msg, m.keys.Repos):
-			m = m.gotoRoute(tuiRoute{view: tuiViewRepos, apiPath: "/api/repo", title: "Repos"}, true)
-			cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
-		case key.Matches(msg, m.keys.Back):
-			if len(m.back) > 0 {
-				route := m.back[len(m.back)-1]
-				m.back = m.back[:len(m.back)-1]
-				m = m.gotoRoute(route, false)
-				cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
-			}
-		case key.Matches(msg, m.keys.Up):
-			m.moveCursor(-1)
-		case key.Matches(msg, m.keys.Down):
-			m.moveCursor(1)
-		case key.Matches(msg, m.keys.PageUp):
-			m.scroll -= pageSize(m.height)
-			if m.scroll < 0 {
-				m.scroll = 0
-			}
-		case key.Matches(msg, m.keys.PageDown):
-			m.scroll += pageSize(m.height)
-		case key.Matches(msg, m.keys.HomeKey):
-			m.cursor = 0
-			m.scroll = 0
-		case key.Matches(msg, m.keys.End):
-			m.cursor = m.maxCursor()
-			if m.route.view == tuiViewTask {
-				m.log.GotoBottom()
-			}
-			if m.route.view == tuiViewArtifact {
-				m.artifactLog.GotoBottom()
-			}
-		case key.Matches(msg, m.keys.Open):
-			if next, ok := m.openSelected(); ok {
-				m = m.gotoRoute(next, true)
-				cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
-			}
-		case key.Matches(msg, m.keys.Artifacts):
-			if next, ok := m.artifactListRoute(); ok {
-				m = m.gotoRoute(next, true)
-				cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
-			}
-		case key.Matches(msg, m.keys.Retry):
-			if cmd := m.retrySelected(); cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		case key.Matches(msg, m.keys.Cancel):
-			if cmd := m.cancelSelected(); cmd != nil {
 				cmds = append(cmds, cmd)
 			}
 		}
@@ -397,6 +320,81 @@ func (m tuiModel) isTaskScrollKey(msg tea.KeyMsg) bool {
 		key.Matches(msg, m.keys.PageDown) ||
 		key.Matches(msg, m.keys.HomeKey) ||
 		key.Matches(msg, m.keys.End)
+}
+
+func (m tuiModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	switch {
+	case m.route.view == tuiViewTask && key.Matches(msg, m.keys.PrevTab):
+		if m.moveTaskArtifact(-1) {
+			cmds = append(cmds, m.loadSelectedTaskArtifact())
+		}
+	case m.route.view == tuiViewTask && key.Matches(msg, m.keys.NextTab):
+		if m.moveTaskArtifact(1) {
+			cmds = append(cmds, m.loadSelectedTaskArtifact())
+		}
+	case key.Matches(msg, m.keys.Quit):
+		if m.stream != nil && m.stream.cancel != nil {
+			m.stream.cancel()
+		}
+		return m, tea.Quit
+	case key.Matches(msg, m.keys.Help):
+		m.help.ShowAll = true
+	case key.Matches(msg, m.keys.Refresh):
+		m.loading = true
+		cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
+	case key.Matches(msg, m.keys.HomeView):
+		m = m.gotoRoute(tuiRoute{view: tuiViewHome, apiPath: "/api", title: "Home"}, true)
+		cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
+	case key.Matches(msg, m.keys.Queue):
+		m = m.gotoRoute(tuiRoute{view: tuiViewQueue, apiPath: "/api/queue", title: "Queue"}, true)
+		cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
+	case key.Matches(msg, m.keys.Repos):
+		m = m.gotoRoute(tuiRoute{view: tuiViewRepos, apiPath: "/api/repo", title: "Repos"}, true)
+		cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
+	case key.Matches(msg, m.keys.Back):
+		if len(m.back) > 0 {
+			route := m.back[len(m.back)-1]
+			m.back = m.back[:len(m.back)-1]
+			m = m.gotoRoute(route, false)
+			cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
+		}
+	case key.Matches(msg, m.keys.Up):
+		m.moveCursor(-1)
+	case key.Matches(msg, m.keys.Down):
+		m.moveCursor(1)
+	case key.Matches(msg, m.keys.PageUp):
+		m.scroll -= pageSize(m.height)
+		if m.scroll < 0 {
+			m.scroll = 0
+		}
+	case key.Matches(msg, m.keys.PageDown):
+		m.scroll += pageSize(m.height)
+	case key.Matches(msg, m.keys.HomeKey):
+		m.cursor = 0
+		m.scroll = 0
+	case key.Matches(msg, m.keys.End):
+		m.cursor = m.maxCursor()
+	case key.Matches(msg, m.keys.Open):
+		if next, ok := m.openSelected(); ok {
+			m = m.gotoRoute(next, true)
+			cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
+		}
+	case key.Matches(msg, m.keys.Artifacts):
+		if next, ok := m.artifactListRoute(); ok {
+			m = m.gotoRoute(next, true)
+			cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
+		}
+	case key.Matches(msg, m.keys.Retry):
+		if cmd := m.retrySelected(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	case key.Matches(msg, m.keys.Cancel):
+		if cmd := m.cancelSelected(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	return m, tea.Batch(cmds...)
 }
 
 func (m tuiModel) View() string {
@@ -661,6 +659,13 @@ func (m tuiModel) selectedTaskArtifactName() string {
 	return m.task.Task.Artifacts[m.cursor].DisplayName
 }
 
+func (m tuiModel) selectedTaskArtifactPath() string {
+	if m.task == nil || m.cursor < 0 || m.cursor >= len(m.task.Task.Artifacts) {
+		return ""
+	}
+	return m.task.Task.Artifacts[m.cursor].Path
+}
+
 func (m *tuiModel) applyData(data any) {
 	switch typed := data.(type) {
 	case tuiHomeResponse:
@@ -752,7 +757,7 @@ func (m *tuiModel) resizeViewports() {
 		navWidth = 14
 	}
 	contentWidth := m.width
-	if m.route.view == tuiViewHome {
+	if m.usesSidebar() {
 		contentWidth = max(20, m.width-navWidth-1)
 	}
 	m.log.Width = max(1, contentWidth-4)
@@ -1114,7 +1119,7 @@ func (m tuiModel) renderHelpModal(theme tuiTheme, height int) string {
 }
 
 func (m tuiModel) renderBody(theme tuiTheme, height int) string {
-	if m.route.view != tuiViewHome {
+	if !m.usesSidebar() {
 		return lipgloss.NewStyle().Width(m.width).Height(height).Render(m.renderContent(theme, height))
 	}
 	navWidth := 18
@@ -1127,6 +1132,10 @@ func (m tuiModel) renderBody(theme tuiTheme, height int) string {
 	contentModel.width = contentWidth
 	content := contentModel.renderContent(theme, height)
 	return lipgloss.JoinHorizontal(lipgloss.Top, nav, " ", lipgloss.NewStyle().Width(contentWidth).Height(height).Render(content))
+}
+
+func (m tuiModel) usesSidebar() bool {
+	return m.route.view == tuiViewHome || m.route.view == tuiViewRepos || m.route.view == tuiViewQueue
 }
 
 func (m tuiModel) renderContent(theme tuiTheme, height int) string {
@@ -1342,8 +1351,11 @@ func (m tuiModel) renderTask(theme tuiTheme, height int) string {
 	logViewport.SetContent(m.selectedTaskArtifactContent())
 	tabLine := m.renderArtifactTabs(theme, logWidth)
 	logView := ""
+	if path := m.selectedTaskArtifactPath(); path != "" {
+		logView += theme.muted().Render(path) + "\n\n"
+	}
 	if err := m.selectedTaskArtifactError(); err != "" {
-		logView += theme.title().Render("Artifact unavailable") + "\n" + err + "\n\nText artifacts can be viewed here.\nBinary or oversized artifacts stay on disk."
+		logView += theme.title().Render("Artifact unavailable") + "\n" + err + "\n\nOnly text artifacts can be viewed here.\nOpen the artifact from the output directory."
 	} else if m.selectedTaskArtifactName() != "" && m.selectedTaskArtifactContent() == "" && m.selectedTaskArtifactName() != m.task.PrimaryArtifact {
 		logView += theme.muted().Render("Loading artifact...")
 	} else {
@@ -1400,8 +1412,8 @@ func (m tuiModel) renderArtifact(theme tuiTheme, height int) string {
 				theme.title().Render("Artifact unavailable"),
 				m.err,
 				"",
-				"Text artifacts can be viewed here.",
-				"Binary or oversized artifacts stay on disk.",
+				"Only text artifacts can be viewed here.",
+				"Open the artifact from the output directory.",
 			}
 			return renderTUIPanel(theme, m.width, height, strings.Join(lines, "\n"))
 		}
@@ -1411,10 +1423,11 @@ func (m tuiModel) renderArtifact(theme tuiTheme, height int) string {
 	logViewport.Width = max(1, m.width-4)
 	logViewport.Height = max(1, height-4)
 	logViewport.SetContent(m.artifact.Content)
-	lines := []string{
-		theme.title().Render(m.artifact.Artifact.DisplayName),
-		logViewport.View(),
+	lines := []string{theme.title().Render(m.artifact.Artifact.DisplayName)}
+	if m.artifact.Artifact.Path != "" {
+		lines = append(lines, theme.muted().Render(m.artifact.Artifact.Path), "")
 	}
+	lines = append(lines, logViewport.View())
 	return renderTUIPanel(theme, m.width, height, strings.Join(lines, "\n"))
 }
 

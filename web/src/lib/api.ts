@@ -129,6 +129,7 @@ export type TaskAttemptView = {
 
 export type ArtifactView = {
   display_name: string
+  path: string
 }
 
 type Validator<T> = (value: unknown) => T
@@ -351,6 +352,7 @@ function parseArtifactView(value: unknown): ArtifactView {
   const data = asObject(value, 'artifact')
   return {
     display_name: asString(data.display_name, 'artifact.display_name'),
+    path: asString(data.path, 'artifact.path'),
   }
 }
 

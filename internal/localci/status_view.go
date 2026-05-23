@@ -52,7 +52,7 @@ type TaskStatusView struct {
 type ArtifactView struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
-	Path        string `json:"-"`
+	Path        string `json:"path"`
 }
 
 type TaskAttemptView struct {

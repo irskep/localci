@@ -63,7 +63,7 @@ describe('api validation', () => {
       primary_log: 'ok',
     })
 
-    expect(response.task.artifacts).toEqual([{ display_name: 'combined.log' }])
+    expect(response.task.artifacts).toEqual([{ display_name: 'combined.log', path: '/tmp/combined.log' }])
   })
 
   it('displays canceled task failures as canceled', () => {
