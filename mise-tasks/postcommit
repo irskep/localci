@@ -3,6 +3,35 @@ set -eu
 
 printf 'cwd: %s\n' "$(pwd)"
 
+exec_with_repo() {
+  repo=$1
+  shift
+  case "${1:-}" in
+    ""|--*)
+      exec go run ./cmd/localci postcommit --repo "$repo" "$@"
+      ;;
+    *)
+      commit=$1
+      shift
+      exec go run ./cmd/localci postcommit --repo "$repo" --commit "$commit" "$@"
+      ;;
+  esac
+}
+
+if [ "$#" -ge 2 ] && [ "$1" = "--repo" ]; then
+  repo=$2
+  shift 2
+  exec_with_repo "$repo" "$@"
+fi
+
+case "${1:-}" in
+  --repo=*)
+    repo=${1#--repo=}
+    shift
+    exec_with_repo "$repo" "$@"
+    ;;
+esac
+
 case "${1:-}" in
   --repo|--repo=*)
     exec go run ./cmd/localci postcommit "$@"
@@ -12,7 +41,7 @@ esac
 if [ "$#" -ge 2 ]; then
   repo=$1
   shift
-  exec go run ./cmd/localci postcommit --repo "$repo" "$@"
+  exec_with_repo "$repo" "$@"
 fi
 
 exec go run ./cmd/localci postcommit "$@"

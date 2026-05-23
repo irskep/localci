@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  localci:
+    name: ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - task: localci:build
+            slug: root-build
+          - task: localci:fmt
+            slug: root-fmt
+          - task: localci:slow-stream
+            slug: root-slow-stream
+          - task: localci:test
+            slug: root-test
+          - task: //docs:localci:build
+            slug: docs-build
+          - task: //web:localci:build
+            slug: web-build
+          - task: //web:localci:fmt
+            slug: web-fmt
+          - task: //web:localci:lint
+            slug: web-lint
+          - task: //web:localci:test
+            slug: web-test
+          - task: //web:localci:typecheck
+            slug: web-typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+        with:
+          cache: true
+          install: true
+
+      - name: Set up LocalCI task dependencies
+        run: mise run localci:setup
+
+      - name: Run ${{ matrix.task }}
+        env:
+          LOCALCI_CACHE_DIR: ${{ runner.temp }}/localci/cache
+          LOCALCI_TASK_CACHE_DIR: ${{ runner.temp }}/localci/task-cache/${{ matrix.slug }}
+          LOCALCI_TASK_OUTPUT_DIR: ${{ runner.temp }}/localci/out/${{ matrix.slug }}
+        run: mise run '${{ matrix.task }}'
+
+  docs:
+    name: deploy docs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: localci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+        with:
+          cache: true
+          install: true
+
+      - name: Set up LocalCI task dependencies
+        run: mise run localci:setup
+
+      - name: Build docs
+        env:
+          LOCALCI_CACHE_DIR: ${{ runner.temp }}/localci/cache
+          LOCALCI_TASK_CACHE_DIR: ${{ runner.temp }}/localci/task-cache/docs
+          LOCALCI_TASK_OUTPUT_DIR: ${{ runner.temp }}/localci/out/docs
+        run: mise run //docs:localci:build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
