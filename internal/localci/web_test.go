@@ -356,8 +356,8 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("Decode raw artifact list returned error: %v", err)
 	}
 	_ = resp.Body.Close()
-	if _, ok := rawArtifactList.Artifacts[0]["path"]; ok {
-		t.Fatalf("artifact API leaked internal path: %#v", rawArtifactList.Artifacts[0])
+	if path, ok := rawArtifactList.Artifacts[0]["path"].(string); !ok || path == "" {
+		t.Fatalf("artifact API omitted path: %#v", rawArtifactList.Artifacts[0])
 	}
 
 	resp, err = http.Get(baseURL + "/api/repo/team/repo/commit/" + commit + "/task/" + taskPath + "/attempt/2/artifact/combined.log")
