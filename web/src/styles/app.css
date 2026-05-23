@@ -59,11 +59,6 @@ a:hover {
   border-radius: var(--p-content-border-radius);
 }
 
-.run-table.p-datatable.p-datatable-sm .p-datatable-tbody > tr > [data-pc-section='bodycell'] {
-  padding-top: var(--app-space-5);
-  padding-bottom: var(--app-space-5);
-}
-
 code,
 pre,
 .mono {
