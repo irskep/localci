@@ -70,7 +70,7 @@ func TestTUIRenderHomeIncludesQueueAndRuns(t *testing.T) {
 	}
 
 	rendered := model.View()
-	for _, want := range []string{"Active", "team/repo", "abc123456789", "test", "1 ok"} {
+	for _, want := range []string{"active", "team/repo", "abc123456789", "test", "1 ok"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered home missing %q:\n%s", want, rendered)
 		}

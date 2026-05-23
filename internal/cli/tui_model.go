@@ -714,10 +714,23 @@ func (m tuiModel) renderHeader(theme tuiTheme) string {
 
 func (m tuiModel) renderFooter(theme tuiTheme) string {
 	keys := "enter open  left back  h home  l repos  p queue  r retry  c cancel  a artifacts  R refresh  ? help  q quit"
-	return theme.muted().Width(m.width).Render(keys)
+	return theme.muted().Width(m.width).Render(truncate(keys, m.width))
 }
 
 func (m tuiModel) renderBody(theme tuiTheme, height int) string {
+	navWidth := 18
+	if m.width < 72 {
+		navWidth = 14
+	}
+	contentWidth := max(20, m.width-navWidth-1)
+	nav := m.renderNav(theme, navWidth, height)
+	contentModel := m
+	contentModel.width = contentWidth
+	content := contentModel.renderContent(theme, height)
+	return lipgloss.JoinHorizontal(lipgloss.Top, nav, " ", lipgloss.NewStyle().Width(contentWidth).Height(height).Render(content))
+}
+
+func (m tuiModel) renderContent(theme tuiTheme, height int) string {
 	switch m.route.view {
 	case tuiViewHome:
 		return m.renderHome(theme, height)
@@ -740,33 +753,88 @@ func (m tuiModel) renderBody(theme tuiTheme, height int) string {
 	}
 }
 
+func (m tuiModel) renderNav(theme tuiTheme, width int, height int) string {
+	items := []struct {
+		key  string
+		name string
+		view tuiView
+	}{
+		{"h", "Home", tuiViewHome},
+		{"l", "Repos", tuiViewRepos},
+		{"p", "Queue", tuiViewQueue},
+	}
+	lines := []string{theme.title().Render("LocalCI")}
+	for _, item := range items {
+		label := item.key + " " + item.name
+		lines = append(lines, selectableLine(theme, m.route.view == item.view, truncate(label, width-4)))
+	}
+	lines = append(lines, "", theme.muted().Render("socket"))
+	lines = append(lines, truncate(m.socketState, width-4))
+	if m.home != nil {
+		lines = append(lines, "", theme.muted().Render("active"))
+		if m.home.Queue.Active == nil {
+			lines = append(lines, "none")
+		} else {
+			lines = append(lines, truncate(trimTaskLabel(m.home.Queue.Active.Task), width-4))
+		}
+	}
+	return renderTUIPanel(theme, width, height, strings.Join(lines, "\n"))
+}
+
 func (m tuiModel) renderHome(theme tuiTheme, height int) string {
 	if m.home == nil {
 		return loadingText(m.loading)
 	}
-	sideWidth := clamp(m.width/3, 24, 42)
-	mainWidth := max(20, m.width-sideWidth-2)
-	side := []string{theme.title().Render("Active")}
-	if m.home.Queue.Active == nil {
-		side = append(side, theme.muted().Render("No task is running."))
-	} else {
-		side = append(side, renderQueueLine(*m.home.Queue.Active, false))
+	if m.width >= 96 {
+		listWidth := clamp(m.width/2, 44, 64)
+		detailWidth := max(24, m.width-listWidth-1)
+		list := m.renderRecentRunList(theme, height, listWidth)
+		detail := m.renderSelectedRunDetail(theme, height, detailWidth)
+		return lipgloss.JoinHorizontal(lipgloss.Top, list, " ", detail)
 	}
-	side = append(side, "", theme.title().Render("Repos (l)"))
-	for _, repo := range m.home.Repos {
-		side = append(side, truncate(repo.RepoPath, sideWidth-4))
-	}
-	sidePanel := theme.panel().Width(sideWidth).Height(height).Render(strings.Join(side, "\n"))
+	return m.renderRecentRunList(theme, height, m.width)
+}
 
+func (m tuiModel) renderRecentRunList(theme tuiTheme, height int, width int) string {
 	rows := []string{theme.title().Render("Recent runs")}
-	for i, run := range visibleRuns(m.home.RecentCommits, m.scroll, height-2) {
-		rows = append(rows, m.renderRunSummary(theme, run, m.scroll+i == m.cursor))
+	if m.home != nil {
+		for i, run := range visibleRuns(m.home.RecentCommits, m.scroll, height-2) {
+			rows = append(rows, selectableLine(theme, m.scroll+i == m.cursor, runListLine(run, width-8)))
+		}
 	}
 	if len(m.home.RecentCommits) == 0 {
 		rows = append(rows, theme.muted().Render("No runs yet."))
 	}
-	main := lipgloss.NewStyle().Width(mainWidth).Height(height).Render(strings.Join(rows, "\n"))
-	return lipgloss.JoinHorizontal(lipgloss.Top, sidePanel, " ", main)
+	return renderTUIPanel(theme, width, height, strings.Join(rows, "\n"))
+}
+
+func (m tuiModel) renderSelectedRunDetail(theme tuiTheme, height int, width int) string {
+	lines := []string{theme.title().Render("Selected run")}
+	if m.home == nil || len(m.home.RecentCommits) == 0 || m.cursor < 0 || m.cursor >= len(m.home.RecentCommits) {
+		lines = append(lines, theme.muted().Render("No run selected."))
+		return renderTUIPanel(theme, width, height, strings.Join(lines, "\n"))
+	}
+	run := m.home.RecentCommits[m.cursor]
+	lines = append(lines,
+		truncate(run.Repo.RepoPath+"  "+shortCommit(run.Commit), width-4),
+		truncate(taskCounts(run.Tasks), width-4),
+	)
+	if branch := run.Annotations["branch"]; branch != "" {
+		lines = append(lines, truncate("branch: "+branch, width-4))
+	}
+	lines = append(lines, "")
+	for _, status := range []localci.ExecutionStatus{localci.ExecutionStatusFailed, localci.ExecutionStatusTimedOut, localci.ExecutionStatusRunning, localci.ExecutionStatusQueued, localci.ExecutionStatusSucceeded, localci.ExecutionStatusNotRun} {
+		names := taskNamesByStatus(run.Tasks, status)
+		if len(names) == 0 {
+			continue
+		}
+		if status == localci.ExecutionStatusSucceeded && len(names) > 3 {
+			lines = append(lines, truncate(fmt.Sprintf("ok: %d tasks", len(names)), width-4))
+			continue
+		}
+		lines = append(lines, truncate(statusLabel(status)+": "+strings.Join(names, ", "), width-4))
+	}
+	return renderTUIPanel(theme, width, height, strings.Join(lines, "\n"))
 }
 
 func (m tuiModel) renderQueue(theme tuiTheme, height int) string {
@@ -809,12 +877,12 @@ func (m tuiModel) renderRepo(theme tuiTheme, height int) string {
 	}
 	rows := []string{theme.title().Render(m.repo.Repo.RepoPath)}
 	for i, run := range visibleRuns(m.repo.Commits, m.scroll, height-2) {
-		rows = append(rows, m.renderRunSummary(theme, run, m.scroll+i == m.cursor))
+		rows = append(rows, selectableLine(theme, m.scroll+i == m.cursor, runListLine(run, m.width-8)))
 	}
 	if len(m.repo.Commits) == 0 {
 		rows = append(rows, theme.muted().Render("No runs for this repo."))
 	}
-	return strings.Join(rows, "\n")
+	return renderTUIPanel(theme, m.width, height, strings.Join(rows, "\n"))
 }
 
 func (m tuiModel) renderCommit(theme tuiTheme, height int) string {
@@ -826,7 +894,7 @@ func (m tuiModel) renderCommit(theme tuiTheme, height int) string {
 	left := []string{theme.title().Render("Tasks")}
 	for i, task := range visibleTasks(m.commit.Commit.Tasks, m.scroll, height-2) {
 		line := taskSummaryLine(task.Name, task.ShortName, task.Status, task.Attempt, task.AttemptCount, task.DurationMilliseconds, task.Failure)
-		left = append(left, selectableLine(theme, m.scroll+i == m.cursor, truncate(line, leftWidth-5)))
+		left = append(left, selectableLine(theme, m.scroll+i == m.cursor, truncate(line, leftWidth-8)))
 	}
 	selected, ok := m.selectedCommitTask()
 	right := []string{theme.title().Render(shortCommit(m.commit.Commit.Commit))}
@@ -848,7 +916,7 @@ func (m tuiModel) renderCommit(theme tuiTheme, height int) string {
 		}
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		theme.panel().Width(leftWidth).Height(height).Render(strings.Join(left, "\n")),
+		renderTUIPanel(theme, leftWidth, height, strings.Join(left, "\n")),
 		" ",
 		lipgloss.NewStyle().Width(rightWidth).Height(height).Render(strings.Join(right, "\n")),
 	)
@@ -879,9 +947,11 @@ func (m tuiModel) renderTask(theme tuiTheme, height int) string {
 		logTitle = m.task.PrimaryArtifact
 	}
 	logLines := []string{theme.title().Render(logTitle)}
-	logLines = append(logLines, tailLines(m.task.PrimaryLog, max(1, height-len(top)-3))...)
+	for _, line := range tailLines(m.task.PrimaryLog, max(1, height-len(top)-3)) {
+		logLines = append(logLines, truncate(line, logWidth))
+	}
 	lower := lipgloss.JoinHorizontal(lipgloss.Top,
-		theme.panel().Width(artifactWidth).Height(max(1, height-len(top)-1)).Render(strings.Join(left, "\n")),
+		renderTUIPanel(theme, artifactWidth, max(1, height-len(top)-1), strings.Join(left, "\n")),
 		" ",
 		lipgloss.NewStyle().Width(logWidth).Height(max(1, height-len(top)-1)).Render(strings.Join(logLines, "\n")),
 	)
@@ -924,6 +994,78 @@ func (m tuiModel) renderRunSummary(theme tuiTheme, run tuiCommitSummary, selecte
 	return selectableBlock(theme, selected, line)
 }
 
+func renderTUIPanel(theme tuiTheme, width int, height int, body string) string {
+	return theme.panel().
+		Width(max(1, width-4)).
+		Height(max(1, height-2)).
+		Render(body)
+}
+
+func runListLine(run tuiCommitSummary, width int) string {
+	mark := "·"
+	if hasTaskStatus(run.Tasks, localci.ExecutionStatusFailed) || hasTaskStatus(run.Tasks, localci.ExecutionStatusTimedOut) {
+		mark = "x"
+	} else if hasTaskStatus(run.Tasks, localci.ExecutionStatusRunning) || hasTaskStatus(run.Tasks, localci.ExecutionStatusQueued) {
+		mark = ">"
+	} else if hasTaskStatus(run.Tasks, localci.ExecutionStatusSucceeded) {
+		mark = "✓"
+	}
+	line := fmt.Sprintf("%s %s  %s  %s  %s", mark, run.Repo.RepoPath, shortCommit(run.Commit), taskCountsShort(run.Tasks), timeAgo(run.ActivityAt))
+	if branch := run.Annotations["branch"]; branch != "" && width >= 72 {
+		line += "  " + branch
+	}
+	return truncate(line, width)
+}
+
+func taskCountsShort(tasks []tuiTaskSummary) string {
+	counts := map[localci.ExecutionStatus]int{}
+	for _, task := range tasks {
+		counts[task.Status]++
+	}
+	labels := map[localci.ExecutionStatus]string{
+		localci.ExecutionStatusFailed:    "fail",
+		localci.ExecutionStatusTimedOut:  "timeout",
+		localci.ExecutionStatusRunning:   "run",
+		localci.ExecutionStatusQueued:    "queue",
+		localci.ExecutionStatusSucceeded: "ok",
+		localci.ExecutionStatusNotRun:    "skip",
+	}
+	parts := []string{}
+	for _, status := range []localci.ExecutionStatus{localci.ExecutionStatusFailed, localci.ExecutionStatusTimedOut, localci.ExecutionStatusRunning, localci.ExecutionStatusQueued, localci.ExecutionStatusSucceeded, localci.ExecutionStatusNotRun} {
+		if counts[status] > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", counts[status], labels[status]))
+		}
+	}
+	if len(parts) == 0 {
+		return "no tasks"
+	}
+	return strings.Join(parts, ", ")
+}
+
+func hasTaskStatus(tasks []tuiTaskSummary, status localci.ExecutionStatus) bool {
+	for _, task := range tasks {
+		if task.Status == status {
+			return true
+		}
+	}
+	return false
+}
+
+func taskNamesByStatus(tasks []tuiTaskSummary, status localci.ExecutionStatus) []string {
+	names := []string{}
+	for _, task := range tasks {
+		if task.Status != status {
+			continue
+		}
+		name := task.ShortName
+		if name == "" {
+			name = trimTaskLabel(task.Name)
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
 func renderQueueLine(entry tuiQueueEntry, compact bool) string {
 	task := trimTaskLabel(entry.Task)
 	if compact {
@@ -937,8 +1079,8 @@ func taskSummaryLine(name string, shortName string, status localci.ExecutionStat
 	if label == "" {
 		label = trimTaskLabel(name)
 	}
-	parts := []string{statusLabel(status), label}
-	if attempt > 0 {
+	parts := []string{statusMark(status), label}
+	if attemptCount > 1 && attempt > 0 {
 		parts = append(parts, "a"+attemptLabel(attempt, attemptCount))
 	}
 	if duration > 0 {
@@ -948,6 +1090,23 @@ func taskSummaryLine(name string, shortName string, status localci.ExecutionStat
 		parts = append(parts, failure)
 	}
 	return strings.Join(parts, "  ")
+}
+
+func statusMark(status localci.ExecutionStatus) string {
+	switch status {
+	case localci.ExecutionStatusSucceeded:
+		return "ok"
+	case localci.ExecutionStatusFailed:
+		return "x"
+	case localci.ExecutionStatusTimedOut:
+		return "!"
+	case localci.ExecutionStatusRunning:
+		return ">"
+	case localci.ExecutionStatusQueued:
+		return "+"
+	default:
+		return "-"
+	}
 }
 
 func statusLabel(status localci.ExecutionStatus) string {
@@ -1094,10 +1253,10 @@ func truncate(value string, width int) string {
 		return value[:min(len(value), width)]
 	}
 	runes := []rune(value)
-	for lipgloss.Width(string(runes)) > width-1 && len(runes) > 0 {
+	for lipgloss.Width(string(runes)) > width && len(runes) > 0 {
 		runes = runes[:len(runes)-1]
 	}
-	return string(runes) + "-"
+	return string(runes)
 }
 
 func pageSize(height int) int {
