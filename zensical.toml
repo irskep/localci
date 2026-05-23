@@ -1,0 +1,3 @@
+[project]
+site_name = "localci"
+nav = ["index.md"]

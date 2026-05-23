@@ -11,6 +11,7 @@ config_roots = ["web"]
 go = "1.26.3"
 node = "24.11.0"
 pnpm = "11.2.2"
+"pipx:zensical" = "0.0.43"
 
 [tasks.build]
 description = "Build the localci binary"
@@ -24,6 +25,20 @@ description = "Build the Vue UI"
 run = [
   "printf 'cwd: %s\\n' \"$(pwd)\"",
   "pnpm --dir web run build-only",
+]
+
+[tasks.docs-build]
+description = "Build the Zensical documentation"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "zensical build",
+]
+
+[tasks.docs-serve]
+description = "Serve the Zensical documentation"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "zensical serve",
 ]
 
 [tasks."localci:setup"]
