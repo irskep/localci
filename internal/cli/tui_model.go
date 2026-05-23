@@ -1322,7 +1322,8 @@ func (m tuiModel) renderNav(theme tuiTheme, width int, height int) string {
 			lines = append(lines, truncate(trimTaskLabel(m.home.Queue.Active.Task), width-4))
 		}
 	}
-	return renderTUIPanel(theme, width, height, strings.Join(lines, "\n"))
+	body := strings.Join(lines, "\n")
+	return renderTUIPanel(theme, width, min(height, lipgloss.Height(body)+2), body)
 }
 
 func (m tuiModel) renderHome(theme tuiTheme, height int) string {
@@ -1356,7 +1357,8 @@ func (m tuiModel) renderSelectedRunDetail(theme tuiTheme, height int, width int)
 	lines := []string{theme.title().Render("Selected run")}
 	if m.home == nil || len(m.home.RecentCommits) == 0 || m.cursor < 0 || m.cursor >= len(m.home.RecentCommits) {
 		lines = append(lines, theme.muted().Render("No run selected."))
-		return renderTUIPanel(theme, width, height, strings.Join(lines, "\n"))
+		body := strings.Join(lines, "\n")
+		return renderTUIPanel(theme, width, min(height, lipgloss.Height(body)+2), body)
 	}
 	run := m.home.RecentCommits[m.cursor]
 	lines = append(lines,
@@ -1383,7 +1385,8 @@ func (m tuiModel) renderSelectedRunDetail(theme tuiTheme, height int, width int)
 		}
 		lines = append(lines, truncate(statusLabel(status)+": "+strings.Join(names, ", "), width-4))
 	}
-	return renderTUIPanel(theme, width, height, strings.Join(lines, "\n"))
+	body := strings.Join(lines, "\n")
+	return renderTUIPanel(theme, width, min(height, lipgloss.Height(body)+2), body)
 }
 
 func (m tuiModel) renderQueue(theme tuiTheme, height int) string {
