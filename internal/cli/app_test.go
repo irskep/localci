@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"localci/internal/localci"
 )
 
@@ -928,6 +930,54 @@ func TestFormatTaskSummary(t *testing.T) {
 	want := "succeeded  build  attempt 2 of 3  483ms"
 	if got != want {
 		t.Fatalf("formatTaskSummary = %q, want %q", got, want)
+	}
+}
+
+func TestPrintStatusSummaryUsesStructuredRows(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	app := App{Stdout: &stdout, Stderr: io.Discard}
+	view := localci.CommitStatusView{
+		RepoDir: "/repo",
+		Commit:  "abc123",
+		Annotations: map[string]string{
+			"branch": "main",
+		},
+		Tasks: []localci.TaskStatusView{
+			{
+				ShortName:            "build",
+				Status:               localci.ExecutionStatusSucceeded,
+				Attempt:              1,
+				DurationMilliseconds: 1200,
+			},
+			{
+				ShortName:            "test",
+				Status:               localci.ExecutionStatusFailed,
+				Attempt:              2,
+				AttemptCount:         3,
+				DurationMilliseconds: 42,
+				Failure:              "exit",
+			},
+		},
+	}
+
+	app.printStatusSummary(view, view.Tasks)
+
+	rendered := ansi.Strip(stdout.String())
+	for _, want := range []string{
+		"Status\n",
+		"repo     /repo\n",
+		"commit   abc123\n",
+		"summary  1 passed, 1 failed, 0 timed out, 0 not run\n",
+		"branch   main\n",
+		"status  task   attempt  duration  failure\n",
+		"ok      build  1        1.2s      -",
+		"failed  test   2/3      42ms      exit",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("status summary missing %q:\n%s", want, rendered)
+		}
 	}
 }
 

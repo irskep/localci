@@ -11,7 +11,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 
 	"localci/internal/localci"
@@ -193,15 +192,13 @@ func (a App) runStatus(args []string) error {
 		}
 	}
 
-	fmt.Fprintf(a.Stdout, "Status for %s at %s\n", statusView.RepoDir, statusView.Commit)
-	a.printAnnotations(statusView.Annotations)
-	for _, task := range filtered {
-		if spec.Task != "" {
-			a.printTaskDetail(task)
-			continue
-		}
-		fmt.Fprintln(a.Stdout, formatTaskSummary(task))
+	if spec.Task != "" {
+		a.printCommitHeader("Status", statusView)
+		fmt.Fprintln(a.Stdout)
+		a.printTaskDetail(filtered[0])
+		return nil
 	}
+	a.printStatusSummary(statusView, filtered)
 	return nil
 }
 
@@ -529,16 +526,17 @@ func (a App) statusViewForRun(runner localci.Runner, result localci.RunRecord) (
 }
 
 func (a App) printWaitSummary(view localci.CommitStatusView) error {
-	fmt.Fprintf(a.Stdout, "Completed %s at %s: %s\n", view.RepoDir, view.Commit, localci.SummarizeCommit(view))
+	a.printCommitHeader("Completed", view)
 
 	failed := localci.FailedTasks(view)
 	if len(failed) == 0 {
 		return nil
 	}
 
-	fmt.Fprintln(a.Stdout, "Failed tasks:")
+	fmt.Fprintln(a.Stdout)
+	fmt.Fprintln(a.Stdout, cliTitleStyle.Render("Failed Tasks"))
+	printTaskRows(a.Stdout, taskRows(failed), false)
 	for _, task := range failed {
-		fmt.Fprintf(a.Stdout, "%s\n", formatTaskSummary(task))
 		if task.OutputDir != "" {
 			fmt.Fprintf(a.Stdout, "  Output: %s\n", task.OutputDir)
 		}
@@ -557,21 +555,6 @@ func (a App) printWaitSummary(view localci.CommitStatusView) error {
 		}
 	}
 	return fmt.Errorf("localci run failed")
-}
-
-func (a App) printAnnotations(annotations map[string]string) {
-	if len(annotations) == 0 {
-		return
-	}
-	fmt.Fprintln(a.Stdout, "Annotations:")
-	keys := make([]string, 0, len(annotations))
-	for key := range annotations {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		fmt.Fprintf(a.Stdout, "  %s=%s\n", key, annotations[key])
-	}
 }
 
 func parseAnnotationArgs(args []string) (map[string]string, []string, error) {
@@ -651,18 +634,6 @@ func (a App) newRunner() (localci.Runner, error) {
 		Stdout: a.Stdout,
 		Stderr: a.Stderr,
 	}, nil
-}
-
-func (a App) printInvokeSummary(result localci.RunRecord) {
-	if len(result.TaskResults) == 0 {
-		fmt.Fprintf(a.Stdout, "No localci tasks discovered for %s at %s\n", result.RepoDir, result.Commit)
-		return
-	}
-
-	fmt.Fprintf(a.Stdout, "Invoked %d task(s) for %s at %s\n", len(result.TaskResults), result.RepoDir, result.Commit)
-	for _, task := range result.TaskResults {
-		fmt.Fprintf(a.Stdout, "%s\t%s\t%s\n", task.Status, task.Name, task.OutputDir)
-	}
 }
 
 func defaultLocalCIRoot() (string, error) {
