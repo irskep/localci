@@ -1,4 +1,7 @@
 [project]
-site_name = "localci"
+site_name = "LocalCI"
 docs_dir = "src"
 nav = ["index.md"]
+
+[project.theme.icon]
+logo = "lucide/git-commit-horizontal"
