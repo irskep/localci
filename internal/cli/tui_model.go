@@ -62,6 +62,7 @@ type tuiModel struct {
 	err         string
 	notice      string
 	socketState string
+	showHelp    bool
 	events      chan tuiEventMsg
 	stream      *tuiStreamState
 }
@@ -117,6 +118,20 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 	case tea.KeyMsg:
+		if m.showHelp {
+			switch msg.String() {
+			case "?", "esc", "q":
+				m.showHelp = false
+				return m, nil
+			case "ctrl+c":
+				if m.stream != nil && m.stream.cancel != nil {
+					m.stream.cancel()
+				}
+				return m, tea.Quit
+			default:
+				return m, nil
+			}
+		}
 		switch msg.String() {
 		case "ctrl+c", "q":
 			if m.stream != nil && m.stream.cancel != nil {
@@ -124,7 +139,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 		case "?":
-			m.notice = "keys: up/down move  enter open  left/backspace back  h home  l repos  p queue  r retry  c cancel  a artifacts  R refresh  q quit"
+			m.showHelp = true
 		case "R":
 			m.loading = true
 			cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
@@ -230,6 +245,9 @@ func (m tuiModel) View() string {
 	header := m.renderHeader(theme)
 	bodyHeight := max(1, m.height-lipgloss.Height(header)-2)
 	body := m.renderBody(theme, bodyHeight)
+	if m.showHelp {
+		body = m.renderHelpModal(theme, bodyHeight)
+	}
 	footer := m.renderFooter(theme)
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
@@ -713,8 +731,47 @@ func (m tuiModel) renderHeader(theme tuiTheme) string {
 }
 
 func (m tuiModel) renderFooter(theme tuiTheme) string {
-	keys := "enter open  left back  h home  l repos  p queue  r retry  c cancel  a artifacts  R refresh  ? help  q quit"
+	keys := "enter open  arrows move  left back  ? help  q quit"
+	if m.showHelp {
+		keys = "?/esc/q close help  ctrl+c quit"
+	}
 	return theme.muted().Width(m.width).Render(truncate(keys, m.width))
+}
+
+func (m tuiModel) renderHelpModal(theme tuiTheme, height int) string {
+	lines := []string{
+		theme.title().Render("Keys"),
+		"↑/k, ↓/j     move",
+		"enter        open",
+		"left/esc     back",
+		"h            home",
+		"l            repos",
+		"p            queue",
+		"r            retry task",
+		"c            cancel task",
+		"a            artifacts",
+		"R            refresh",
+		"?            close help",
+		"q            close help",
+		"ctrl+c       quit",
+	}
+	modalWidth := min(42, max(24, m.width-4))
+	modal := renderTUIPanel(theme, modalWidth, len(lines)+4, strings.Join(lines, "\n"))
+	startRow := max(0, (height-lipgloss.Height(modal))/2)
+	startCol := max(0, (m.width-lipgloss.Width(modal))/2)
+	modalLines := splitLines(modal)
+	bodyLines := make([]string, height)
+	for len(bodyLines) < height {
+		bodyLines = append(bodyLines, "")
+	}
+	for i, line := range modalLines {
+		row := startRow + i
+		if row >= len(bodyLines) {
+			break
+		}
+		bodyLines[row] = overlayLine(bodyLines[row], line, startCol, m.width)
+	}
+	return strings.Join(bodyLines[:min(len(bodyLines), height)], "\n")
 }
 
 func (m tuiModel) renderBody(theme tuiTheme, height int) string {
@@ -1267,6 +1324,41 @@ func truncate(value string, width int) string {
 	runes := []rune(value)
 	for lipgloss.Width(string(runes)) > width && len(runes) > 0 {
 		runes = runes[:len(runes)-1]
+	}
+	return string(runes)
+}
+
+func overlayLine(base string, overlay string, column int, width int) string {
+	if column < 0 {
+		column = 0
+	}
+	if lipgloss.Width(base) < column {
+		base += strings.Repeat(" ", column-lipgloss.Width(base))
+	}
+	prefix := takeWidth(base, column)
+	suffixStart := column + lipgloss.Width(overlay)
+	suffix := dropWidth(base, suffixStart)
+	return truncate(prefix+overlay+suffix, width)
+}
+
+func takeWidth(value string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	for lipgloss.Width(string(runes)) > width && len(runes) > 0 {
+		runes = runes[:len(runes)-1]
+	}
+	return string(runes)
+}
+
+func dropWidth(value string, width int) string {
+	if width <= 0 {
+		return value
+	}
+	runes := []rune(value)
+	for len(runes) > 0 && lipgloss.Width(value)-lipgloss.Width(string(runes)) < width {
+		runes = runes[1:]
 	}
 	return string(runes)
 }
