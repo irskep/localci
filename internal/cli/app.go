@@ -81,8 +81,8 @@ func (a App) Run(args []string) error {
 		return a.runStatus(args[1:])
 	case "web":
 		return a.runWeb(args[1:])
-	case "tui":
-		return a.runTUI(args[1:])
+	case "dash":
+		return a.runDash(args[1:])
 	case "install-hooks":
 		return a.runInstallHooks(args[1:])
 	default:
@@ -268,7 +268,7 @@ Usage:
   localci wait [--repo dir] [--no-clone] [commit]
   localci status [--repo dir] [--no-clone] <commit> [task]
   localci web [--repo dir] [--no-clone] [commit] [task]
-  localci tui [--repo dir] [--no-clone] [commit] [task]
+  localci dash [--repo dir] [--no-clone] [commit] [task]
   localci install-hooks [--repo dir]
 `
 }

@@ -33,7 +33,7 @@ localci web
 Open the terminal UI:
 
 ```sh
-localci tui
+localci dash
 ```
 
 Open a specific commit:

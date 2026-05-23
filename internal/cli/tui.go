@@ -13,7 +13,7 @@ import (
 	"localci/internal/localci"
 )
 
-func (a App) runTUI(args []string) error {
+func (a App) runDash(args []string) error {
 	noClone := false
 	args = filterFlag(args, "--no-clone", &noClone)
 	repoArg, args, err := extractRepoFlag(args)
