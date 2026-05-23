@@ -8,10 +8,10 @@ LocalCI should be installed as a mise-managed GitHub release tool. In the projec
 
 ```toml
 [tools]
-"github:OWNER/localci" = "VERSION"
+"github:irskep/localci" = "VERSION"
 ```
 
-Use the real GitHub owner and an exact released version. Do not rely on an unpinned floating version for project automation.
+Use an exact released version. Do not rely on an unpinned floating version for project automation.
 
 If the release archive needs disambiguation, use mise's GitHub backend options in that same tool entry, for example `asset_pattern` or executable naming options.
 
