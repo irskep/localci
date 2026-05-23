@@ -54,6 +54,24 @@ Use `--no-clone` when viewing a no-clone run:
 localci web --no-clone HEAD
 ```
 
+Task artifact pages show the full artifact path. On macOS, use the page's Show in Finder action to reveal that file through the daemon.
+
+## Use the terminal UI
+
+Open the all-repos dashboard:
+
+```sh
+localci dash
+```
+
+Open a specific task:
+
+```sh
+localci dash <commit> <task>
+```
+
+The terminal UI supports the same run, task, retry, cancel, and artifact views as the web UI. On artifact views, use `e` to edit the selected artifact with `$VISUAL` or `$EDITOR`, `o` to open it with the platform opener, and `f` on macOS to reveal it in Finder through the daemon.
+
 ## Wait for a post-commit run
 
 After `localci postcommit` enqueues tasks, use the wait command it prints:

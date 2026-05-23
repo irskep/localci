@@ -18,6 +18,8 @@ Stop the daemon.
 
 Enqueue tasks for a committed revision. This is the command the Git post-commit hook calls.
 
+When `--repo` is omitted, commands that operate on a repository use the nearest ancestor of the current directory that contains `.git`.
+
 ## `localci invoke [--repo dir] [--wait] [--no-clone] [--annotation key=value] [commit]`
 
 Discover and enqueue tasks manually. Use `--wait` to block for results and `--no-clone` to run against the live working tree.
@@ -32,11 +34,11 @@ Print status for a run.
 
 ## `localci web [--repo dir] [--no-clone] [commit] [task]`
 
-Open the web UI.
+Open the web UI. Artifact pages show full artifact paths and can reveal files in Finder on macOS.
 
 ## `localci dash [--repo dir] [--no-clone] [commit] [task]`
 
-Open the terminal UI. It uses the daemon's REST and websocket APIs, supports the same run, task, artifact, retry, and cancel workflows as the web UI, and defaults to the all-repos home view when no target is provided.
+Open the terminal UI. It uses the daemon's REST and websocket APIs, supports the same run, task, artifact, retry, and cancel workflows as the web UI, and defaults to the all-repos home view when no target is provided. Artifact views support `e` for `$VISUAL` or `$EDITOR`, `o` for the platform opener, and `f` for Finder on macOS.
 
 ## `localci cancel [--no-clone]`
 

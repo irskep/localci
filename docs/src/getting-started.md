@@ -79,3 +79,9 @@ Or open the web UI:
 ```sh
 localci web
 ```
+
+For a compact terminal UI with the same daemon-backed data:
+
+```sh
+localci dash
+```

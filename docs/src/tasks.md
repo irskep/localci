@@ -43,7 +43,7 @@ Write logs, reports, and inspectable artifacts under `LOCALCI_TASK_OUTPUT_DIR`.
 
 ## Logs and artifacts
 
-LocalCI captures task output into `combined.log`. Files written under `LOCALCI_TASK_OUTPUT_DIR` are exposed as task artifacts in the web UI.
+LocalCI captures task output into `combined.log`. Files written under `LOCALCI_TASK_OUTPUT_DIR` are exposed as task artifacts in the web and terminal UIs.
 
 Prefer stable, descriptive artifact names:
 
