@@ -116,3 +116,23 @@ pre,
   padding: var(--app-space-5) 0;
   color: var(--p-text-muted-color);
 }
+
+.run-task-icon {
+  font-size: var(--p-icon-size);
+  line-height: 1;
+}
+
+.run-task-icon-success {
+  color: color-mix(in srgb, var(--p-green-500), var(--p-text-muted-color) 45%);
+}
+
+.run-task-icon-failed {
+  color: var(--p-red-500);
+}
+
+.run-task-icon-canceled,
+.run-task-icon-running,
+.run-task-icon-queued,
+.run-task-icon-muted {
+  color: var(--p-text-muted-color);
+}

@@ -432,6 +432,49 @@ export function summarizeCommit(commit: { tasks: TaskStatusLike[] }): string {
   return parts.join(', ')
 }
 
+export type TaskStatusGroup<T extends TaskStatusLike> = {
+  label: string
+  tasks: T[]
+}
+
+const TASK_STATUS_GROUPS = [
+  'failed',
+  'canceled',
+  'running',
+  'queued',
+  'not-run',
+  'succeeded',
+] as const
+
+export function taskStatusGroups<T extends TaskStatusLike>(tasks: T[]): Array<TaskStatusGroup<T>> {
+  return TASK_STATUS_GROUPS.map((status) => ({
+    label: status === 'not-run' ? 'not run' : status === 'succeeded' ? 'passed' : status,
+    tasks: tasks.filter((task) => {
+      const displayStatus = displayTaskStatus(task)
+      if (status === 'failed') return displayStatus === 'failed' || displayStatus === 'timed-out'
+      return displayStatus === status
+    }),
+  })).filter((group) => group.tasks.length > 0)
+}
+
+export function taskStatusIcon(task: TaskStatusLike): string {
+  switch (displayTaskStatus(task)) {
+    case 'succeeded':
+      return 'pi pi-check run-task-icon run-task-icon-success'
+    case 'failed':
+    case 'timed-out':
+      return 'pi pi-times run-task-icon run-task-icon-failed'
+    case 'canceled':
+      return 'pi pi-stop run-task-icon run-task-icon-canceled'
+    case 'running':
+      return 'pi pi-spin pi-spinner run-task-icon run-task-icon-running'
+    case 'queued':
+      return 'pi pi-clock run-task-icon run-task-icon-queued'
+    default:
+      return 'pi pi-circle run-task-icon run-task-icon-muted'
+  }
+}
+
 export function statusSeverity(
   status: string,
 ): 'success' | 'info' | 'warn' | 'danger' | 'secondary' {

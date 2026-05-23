@@ -3,9 +3,15 @@ import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
-import TaskSummaryLinks from '@/components/TaskSummaryLinks.vue'
-import { annotationEntries, shortCommit, summarizeCommit } from '@/lib/api'
-import { commitURL, parseRepoRoute } from '@/lib/routes'
+import {
+  annotationEntries,
+  displayStatusSeverity,
+  shortCommit,
+  taskStatusIcon,
+  taskStatusGroups,
+} from '@/lib/api'
+import type { CommitSummary, TaskStatusGroup, TaskSummary } from '@/lib/api'
+import { commitURL, parseRepoRoute, taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
 
@@ -20,6 +26,21 @@ useDocumentTitle(title)
 function subscribe(): void {
   if (parsed.value.kind !== 'repo') return
   store.subscribeRepo(parsed.value.apiPath)
+}
+
+function activityTime(entry: CommitSummary): string {
+  if (!entry.activity_at) return ''
+  return new Date(entry.activity_at).toLocaleString()
+}
+
+function runGroups(entry: CommitSummary): Array<TaskStatusGroup<TaskSummary>> {
+  return taskStatusGroups(entry.tasks)
+}
+
+function groupSeverity(
+  group: TaskStatusGroup<TaskSummary>,
+): ReturnType<typeof displayStatusSeverity> {
+  return displayStatusSeverity(group.tasks[0]!)
 }
 
 onMounted(subscribe)
@@ -42,38 +63,48 @@ onUnmounted(() => store.unsubscribePage())
       <span>Loading repo</span>
     </div>
 
-    <PDataTable v-if="commits.length > 0" :value="commits" data-key="commit" size="small">
-      <PColumn header="Commit">
+    <PDataTable
+      v-if="commits.length > 0"
+      :value="commits"
+      data-key="commit"
+      size="small"
+      :show-headers="false"
+    >
+      <PColumn>
         <template #body="{ data }">
-          <RouterLink :to="commitURL(parsed.repoPath, data.commit)" class="mono">
-            {{ shortCommit(data.commit) }}
-          </RouterLink>
+          <div class="run-row">
+            <div class="run-meta">
+              <span>{{ store.currentRepo?.repo.repo_path ?? parsed.repoPath }}</span>
+              <RouterLink :to="commitURL(parsed.repoPath, data.commit)" class="mono">
+                {{ shortCommit(data.commit) }}
+              </RouterLink>
+              <span class="attribute-list">
+                <PTag
+                  v-for="attribute in annotationEntries(data.annotations)"
+                  :key="attribute.key"
+                  severity="secondary"
+                  :value="`${attribute.key}: ${attribute.value}`"
+                />
+              </span>
+              <span class="muted">{{ activityTime(data) }}</span>
+            </div>
+            <div class="run-status-list">
+              <div v-for="group in runGroups(data)" :key="group.label" class="run-status-row">
+                <PTag :severity="groupSeverity(group)" :value="group.label" />
+                <span class="run-task-list">
+                  <RouterLink
+                    v-for="task in group.tasks"
+                    :key="task.name"
+                    :to="taskURL(parsed.repoPath, data.commit, task.name)"
+                  >
+                    <i :class="taskStatusIcon(task)" aria-hidden="true"></i>
+                    {{ task.short_name }}
+                  </RouterLink>
+                </span>
+              </div>
+            </div>
+          </div>
         </template>
-      </PColumn>
-      <PColumn header="Summary">
-        <template #body="{ data }">
-          <div>{{ summarizeCommit(data) }}</div>
-          <TaskSummaryLinks
-            :repo-path="parsed.repoPath"
-            :commit="data.commit"
-            :tasks="data.tasks"
-          />
-        </template>
-      </PColumn>
-      <PColumn header="Attributes">
-        <template #body="{ data }">
-          <span class="attribute-list">
-            <PTag
-              v-for="attribute in annotationEntries(data.annotations)"
-              :key="attribute.key"
-              severity="secondary"
-              :value="`${attribute.key}: ${attribute.value}`"
-            />
-          </span>
-        </template>
-      </PColumn>
-      <PColumn header="Tasks">
-        <template #body="{ data }">{{ data.tasks.length }}</template>
       </PColumn>
     </PDataTable>
     <div v-else-if="store.repoLoaded && !store.error" class="empty-state">
@@ -81,3 +112,32 @@ onUnmounted(() => store.unsubscribePage())
     </div>
   </main>
 </template>
+
+<style scoped>
+.run-row,
+.run-status-list {
+  display: grid;
+  gap: var(--app-space-3);
+  min-width: 0;
+}
+
+.run-meta,
+.run-status-row,
+.run-task-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--app-space-3);
+  min-width: 0;
+}
+
+.run-meta {
+  justify-content: space-between;
+}
+
+.run-task-list a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-1);
+}
+</style>
