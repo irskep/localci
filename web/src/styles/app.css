@@ -49,7 +49,7 @@ a:hover {
 .icon-link {
   display: inline-flex;
   align-items: center;
-  gap: var(--app-space-1);
+  gap: var(--app-space-3);
   min-width: 0;
 }
 

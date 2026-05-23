@@ -28,6 +28,7 @@ import {
   postJSON,
 } from '@/lib/api'
 import { taskURL } from '@/lib/routes'
+import { useWebsocketStore } from '@/stores/websocket'
 
 type RequestState<T> =
   | { state: 'idle' }
@@ -41,6 +42,7 @@ type EventStream = {
   reconnectTimer: number | null
   reconnectAttempts: number
   stopped: boolean
+  removeVisibilityListener: (() => void) | null
 }
 
 export const useLocalciStore = defineStore('localci', () => {
@@ -459,10 +461,13 @@ function openReconnectingEventStream(
     reconnectTimer: null,
     reconnectAttempts: 0,
     stopped: false,
+    removeVisibilityListener: null,
   }
+  const websocket = useWebsocketStore()
 
   const connect = (): void => {
-    if (stream.stopped) return
+    if (stream.stopped || document.visibilityState === 'hidden') return
+    websocket.setStream(apiPath, 'connecting', stream.reconnectAttempts)
     let socket: WebSocket
     try {
       socket = openEventSocket(apiPath)
@@ -475,6 +480,7 @@ function openReconnectingEventStream(
     socket.addEventListener('open', () => {
       if (stream.stopped || stream.socket !== socket) return
       stream.reconnectAttempts = 0
+      websocket.setStream(apiPath, 'connected')
       handlers.onReconnect?.()
     })
     socket.addEventListener('message', (message) => {
@@ -491,6 +497,28 @@ function openReconnectingEventStream(
     })
   }
 
+  const handleVisibilityChange = (): void => {
+    if (stream.stopped) return
+    if (document.visibilityState === 'hidden') {
+      if (stream.reconnectTimer !== null) {
+        window.clearTimeout(stream.reconnectTimer)
+        stream.reconnectTimer = null
+      }
+      const socket = stream.socket
+      stream.socket = null
+      socket?.close()
+      websocket.setStream(apiPath, 'paused', stream.reconnectAttempts)
+      handlers.onDisconnect?.()
+      return
+    }
+    connect()
+  }
+
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  stream.removeVisibilityListener = () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }
+
   connect()
   return stream
 }
@@ -500,7 +528,10 @@ function scheduleReconnect(
   connect: () => void,
   onDisconnect?: () => void,
 ): void {
-  if (stream.stopped || stream.reconnectTimer !== null) return
+  if (stream.stopped || stream.reconnectTimer !== null || document.visibilityState === 'hidden') {
+    return
+  }
+  useWebsocketStore().setStream(stream.key, 'reconnecting', stream.reconnectAttempts + 1)
   onDisconnect?.()
   const delay = Math.min(5000, 250 * 2 ** stream.reconnectAttempts)
   stream.reconnectAttempts += 1
@@ -514,5 +545,7 @@ function closeEventStream(stream: EventStream | null): void {
   if (!stream) return
   stream.stopped = true
   if (stream.reconnectTimer !== null) window.clearTimeout(stream.reconnectTimer)
+  stream.removeVisibilityListener?.()
   stream.socket?.close()
+  useWebsocketStore().removeStream(stream.key)
 }

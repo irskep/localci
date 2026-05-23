@@ -4,6 +4,7 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import RepoLink from '@/components/RepoLink.vue'
 import RunLink from '@/components/RunLink.vue'
 import RunList from '@/components/RunList.vue'
+import WebsocketStatus from '@/components/WebsocketStatus.vue'
 import { taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
@@ -39,14 +40,17 @@ onUnmounted(() => store.unsubscribePage())
 
         <aside class="stack">
           <PPanel header="Active Now">
-            <div v-if="active" class="inline-link-list">
-              <RepoLink :repo-path="active.repo.repo_path" />
-              <RunLink :repo-path="active.repo.repo_path" :commit="active.commit" />
-              <RouterLink :to="taskURL(active.repo.repo_path, active.commit, active.task)">
-                {{ active.task }}
-              </RouterLink>
+            <div class="active-panel-content">
+              <WebsocketStatus />
+              <div v-if="active" class="inline-link-list">
+                <RepoLink :repo-path="active.repo.repo_path" />
+                <RunLink :repo-path="active.repo.repo_path" :commit="active.commit" />
+                <RouterLink :to="taskURL(active.repo.repo_path, active.commit, active.task)">
+                  {{ active.task }}
+                </RouterLink>
+              </div>
+              <div v-else class="empty-state">No task is running.</div>
             </div>
-            <div v-else class="empty-state">No task is running.</div>
           </PPanel>
 
           <PPanel header="Queue">
@@ -113,6 +117,12 @@ onUnmounted(() => store.unsubscribePage())
   min-width: 0;
   padding: var(--app-space-3) 0;
   overflow-wrap: anywhere;
+}
+
+.active-panel-content {
+  display: grid;
+  gap: var(--app-space-3);
+  min-width: 0;
 }
 
 .inline-link-list {
