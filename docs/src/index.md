@@ -49,9 +49,9 @@ LocalCI is deliberately small. It discovers mise tasks, queues them in a daemon,
 The normal path is:
 
 1. The daemon is running.
-2. A Git post-commit hook calls `localci postcommit <repo> <commit>`.
-3. LocalCI discovers every mise task named `localci:*`, including monorepo tasks such as `//web:localci:test`.
-4. The daemon runs `localci:setup`, when present, before other tasks.
+2. A Git post-commit hook calls `localci postcommit --repo <repo> <commit>`.
+3. LocalCI discovers every mise task whose task name starts with `localci:`, including monorepo tasks addressed with mise's `//path:task` syntax.
+4. The daemon runs the root `localci:setup`, when present, before other tasks.
 5. Each task receives output and cache directories through environment variables.
 6. Results can be inspected with `localci wait`, `localci status`, or `localci web`.
 

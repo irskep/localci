@@ -275,13 +275,28 @@ func ensureRunRecordWithTasks(paths Paths, req InvokeRequest, tasks []Task, now 
 }
 
 func splitSetupTask(tasks []Task) (Task, []Task, bool) {
-	for i, task := range tasks {
-		if task.Name != setupTaskName {
+	var setup Task
+	hasSetup := false
+	rest := make([]Task, 0, len(tasks))
+	for _, task := range tasks {
+		if !isSetupTask(task.Name) {
+			rest = append(rest, task)
 			continue
 		}
-		rest := append([]Task{}, tasks[:i]...)
-		rest = append(rest, tasks[i+1:]...)
-		return task, rest, true
+		if isRootSetupTask(task.Name) && !hasSetup {
+			setup = task
+			hasSetup = true
+		}
 	}
-	return Task{}, tasks, false
+	return setup, rest, hasSetup
+}
+
+func isSetupTask(name string) bool {
+	_, taskName := splitTaskName(name)
+	return taskName == setupTaskName
+}
+
+func isRootSetupTask(name string) bool {
+	prefix, taskName := splitTaskName(name)
+	return taskName == setupTaskName && (prefix == "" || prefix == "//:")
 }

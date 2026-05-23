@@ -14,23 +14,23 @@ Restart the daemon.
 
 Stop the daemon.
 
-## `localci postcommit [--annotation key=value] <repo> <commit>`
+## `localci postcommit [--repo dir] [--annotation key=value] <commit>`
 
 Enqueue tasks for a committed revision. This is the command the Git post-commit hook calls.
 
-## `localci invoke [--wait] [--no-clone] [--annotation key=value] [dir] [commit]`
+## `localci invoke [--repo dir] [--wait] [--no-clone] [--annotation key=value] [commit]`
 
 Discover and enqueue tasks manually. Use `--wait` to block for results and `--no-clone` to run against the live working tree.
 
-## `localci wait [--no-clone] [dir] [commit]`
+## `localci wait [--repo dir] [--no-clone] [commit]`
 
 Wait for a run to complete.
 
-## `localci status [--no-clone] [dir] <commit> [task]`
+## `localci status [--repo dir] [--no-clone] <commit> [task]`
 
 Print status for a run.
 
-## `localci web [--no-clone] [dir] [commit] [task]`
+## `localci web [--repo dir] [--no-clone] [commit] [task]`
 
 Open the web UI.
 
@@ -38,10 +38,10 @@ Open the web UI.
 
 Cancel queued and active work for the current repository's latest run.
 
-## `localci cancel [--no-clone] [dir] <commit> <task>`
+## `localci cancel [--repo dir] [--no-clone] <commit> <task>`
 
 Cancel a specific task.
 
-## `localci install-hooks [dir]`
+## `localci install-hooks [--repo dir]`
 
 Install LocalCI's Git post-commit hook entry for a repository.

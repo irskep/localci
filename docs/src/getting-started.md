@@ -27,7 +27,7 @@ run = [
 ]
 ```
 
-Setup runs before validation tasks. Keep it deterministic and pinned.
+The root setup task runs before validation tasks. Keep it deterministic and pinned.
 
 ## Define checks
 
@@ -48,7 +48,7 @@ go test ./...
 
 Save that as `mise-tasks/localci/test` and make it executable.
 
-Monorepo tasks work too. A task named `//web:localci:test` is discovered the same way as `localci:test`.
+Monorepo tasks work too. Mise addresses child tasks as `//path:task`; LocalCI treats the task portion after the path as eligible when it starts with `localci:`.
 
 ## Start the daemon
 

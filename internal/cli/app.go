@@ -105,20 +105,24 @@ func (a App) checkRequirements() error {
 }
 
 func (a App) runPostcommit(args []string) error {
+	repoArg, args, err := extractRepoFlag(args)
+	if err != nil {
+		return err
+	}
 	annotations, args, err := parseAnnotationArgs(args)
 	if err != nil {
 		return err
 	}
-	if len(args) != 2 {
-		return fmt.Errorf("usage: localci postcommit [--annotation key=value] <repo> <commit>")
+	if len(args) != 1 {
+		return repoPositionalError("usage: localci postcommit [--repo dir] [--annotation key=value] <commit>")
 	}
 
-	repo, err := a.resolveRepoArg(args[0])
+	repo, err := a.repoFromFlagOrCwd(repoArg)
 	if err != nil {
-		return fmt.Errorf("resolve repo: %w", err)
+		return err
 	}
 
-	commit := strings.TrimSpace(args[1])
+	commit := strings.TrimSpace(args[0])
 	if commit == "" {
 		return fmt.Errorf("commit must not be empty")
 	}
@@ -135,7 +139,7 @@ func (a App) runPostcommit(args []string) error {
 	}
 
 	fmt.Fprintf(a.Stdout, "Enqueued %d %s for %s at %s\n", len(enqueued), pluralizeTask(len(enqueued)), repo, commit)
-	fmt.Fprintf(a.Stdout, "Status: localci status %s %s\n", shellQuote(repo), shellQuote(commit))
+	fmt.Fprintf(a.Stdout, "Status: localci status --repo %s %s\n", shellQuote(repo), shellQuote(commit))
 	if resultURL, err := a.postcommitResultURL(client, repo, commit); err == nil && resultURL != "" {
 		fmt.Fprintf(a.Stdout, "Results: %s\n", resultURL)
 	}
@@ -147,13 +151,17 @@ func (a App) runPostcommit(args []string) error {
 }
 
 func postcommitWaitInstruction(repo string, commit string) string {
-	return fmt.Sprintf("Wait: localci wait %s %s", shellQuote(repo), shellQuote(commit))
+	return fmt.Sprintf("Wait: localci wait --repo %s %s", shellQuote(repo), shellQuote(commit))
 }
 
 func (a App) runStatus(args []string) error {
+	repoArg, args, err := extractRepoFlag(args)
+	if err != nil {
+		return err
+	}
 	noClone := false
 	args = filterFlag(args, "--no-clone", &noClone)
-	spec, err := a.parseStatusTarget(args, noClone, "usage: localci status [--no-clone] [dir] <commit> [task]")
+	spec, err := a.parseStatusTarget(repoArg, args, noClone, "usage: localci status [--repo dir] [--no-clone] <commit> [task]")
 	if err != nil {
 		return err
 	}
@@ -198,7 +206,11 @@ func (a App) runStatus(args []string) error {
 func (a App) runWeb(args []string) error {
 	noClone := false
 	args = filterFlag(args, "--no-clone", &noClone)
-	spec, err := a.parseWebTarget(args)
+	repoArg, args, err := extractRepoFlag(args)
+	if err != nil {
+		return err
+	}
+	spec, err := a.parseWebTarget(repoArg, args)
 	if err != nil {
 		return err
 	}
@@ -247,14 +259,14 @@ Usage:
   localci start
   localci restart
   localci stop
-  localci postcommit [--annotation key=value] <repo> <commit>
-  localci invoke [--wait] [--no-clone] [--annotation key=value] [dir] [commit]
+  localci postcommit [--repo dir] [--annotation key=value] <commit>
+  localci invoke [--repo dir] [--wait] [--no-clone] [--annotation key=value] [commit]
   localci cancel [--no-clone]
-  localci cancel [--no-clone] [dir] <commit> <task>
-  localci wait [--no-clone] [dir] [commit]
-  localci status [--no-clone] [dir] <commit> [task]
-  localci web [--no-clone] [dir] [commit] [task]
-  localci install-hooks [dir]
+  localci cancel [--repo dir] [--no-clone] <commit> <task>
+  localci wait [--repo dir] [--no-clone] [commit]
+  localci status [--repo dir] [--no-clone] <commit> [task]
+  localci web [--repo dir] [--no-clone] [commit] [task]
+  localci install-hooks [--repo dir]
 `
 }
 
@@ -262,12 +274,13 @@ func commandHelpText(command string) (string, bool) {
 	switch command {
 	case "install-hooks":
 		return `Usage:
-  localci install-hooks [dir]
+  localci install-hooks [--repo dir]
 
-Install localci's Git post-commit hook entry for dir, defaulting to the
-current working directory. The hook uses modern Git hook.* config and runs:
+Install localci's Git post-commit hook entry for a repo, defaulting to the
+nearest ancestor of the current working directory that contains .git. The hook
+uses modern Git hook.* config and runs:
 
-  localci postcommit "$repo" "$commit"
+  localci postcommit --repo "$repo" "$commit"
 `, true
 	default:
 		return "", false
@@ -294,6 +307,10 @@ type commitTarget struct {
 }
 
 func (a App) runInvoke(args []string) error {
+	repoArg, args, err := extractRepoFlag(args)
+	if err != nil {
+		return err
+	}
 	wait := false
 	noClone := false
 	filtered := make([]string, 0, len(args))
@@ -314,7 +331,7 @@ func (a App) runInvoke(args []string) error {
 		return err
 	}
 
-	repo, commit, err := a.parseInvokeTarget(args)
+	repo, commit, err := a.parseInvokeTarget(repoArg, args)
 	if err != nil {
 		return err
 	}
@@ -369,6 +386,10 @@ func (a App) runInvoke(args []string) error {
 }
 
 func (a App) runCancel(args []string) error {
+	repoArg, args, err := extractRepoFlag(args)
+	if err != nil {
+		return err
+	}
 	noClone := false
 	args = filterFlag(args, "--no-clone", &noClone)
 	runner, err := a.newRunner()
@@ -392,12 +413,12 @@ func (a App) runCancel(args []string) error {
 		commit = active.Commit
 		taskName = active.TaskName
 	} else {
-		spec, err := a.parseCommitTarget(args, "usage: localci cancel [--no-clone] [dir] <commit> <task>")
+		spec, err := a.parseCommitTarget(repoArg, args, "usage: localci cancel [--repo dir] [--no-clone] <commit> <task>")
 		if err != nil {
 			return err
 		}
 		if spec.Task == "" {
-			return fmt.Errorf("usage: localci cancel [--no-clone] [dir] <commit> <task>")
+			return fmt.Errorf("usage: localci cancel [--repo dir] [--no-clone] <commit> <task>")
 		}
 		repoDir = spec.RepoDir
 		commit = spec.Commit
@@ -427,9 +448,13 @@ func (a App) runCancel(args []string) error {
 }
 
 func (a App) runWait(args []string) error {
+	repoArg, args, err := extractRepoFlag(args)
+	if err != nil {
+		return err
+	}
 	noClone := false
 	args = filterFlag(args, "--no-clone", &noClone)
-	spec, err := a.parseStatusTarget(args, noClone, "usage: localci wait [--no-clone] [dir] [commit]")
+	spec, err := a.parseStatusTarget(repoArg, args, noClone, "usage: localci wait [--repo dir] [--no-clone] [commit]")
 	if err != nil {
 		return err
 	}
@@ -448,50 +473,29 @@ func (a App) runWait(args []string) error {
 	return a.printWaitSummary(view)
 }
 
-func (a App) parseInvokeTarget(args []string) (string, string, error) {
+func (a App) parseInvokeTarget(repoArg string, args []string) (string, string, error) {
+	if len(args) > 1 {
+		return "", "", fmt.Errorf("usage: localci invoke [--repo dir] [--wait] [--no-clone] [--annotation key=value] [commit]")
+	}
+	repo, err := a.repoFromFlagOrCwd(repoArg)
+	if err != nil {
+		return "", "", err
+	}
 	switch len(args) {
 	case 0:
-		repo, err := a.resolveRepoArg(a.Cwd)
-		if err != nil {
-			return "", "", fmt.Errorf("resolve dir: %w", err)
-		}
 		return repo, "", nil
 	case 1:
-		repo, err := a.resolveRepoArg(args[0])
-		if err != nil {
-			return "", "", fmt.Errorf("resolve dir: %w", err)
-		}
-		return repo, "", nil
-	case 2:
-		repo, err := a.resolveRepoArg(args[0])
-		if err != nil {
-			return "", "", fmt.Errorf("resolve repo: %w", err)
-		}
-		return repo, strings.TrimSpace(args[1]), nil
-	default:
-		return "", "", fmt.Errorf("usage: localci invoke [--wait] [--no-clone] [--annotation key=value] [dir] [commit]")
+		return repo, strings.TrimSpace(args[0]), nil
 	}
+	return repo, "", nil
 }
 
-func (a App) parseStatusTarget(args []string, noClone bool, usage string) (commitTarget, error) {
-	if noClone {
-		switch {
-		case len(args) == 0:
-			return a.currentNoCloneTarget()
-		case len(args) == 1 && looksLikePathArg(args[0]):
-			repo, err := a.resolveRepoArg(args[0])
-			if err != nil {
-				return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
-			}
-			commit, err := a.headCommit(repo)
-			if err != nil {
-				return commitTarget{}, err
-			}
-			return commitTarget{RepoDir: repo, Commit: noCloneCommitLabel(commit)}, nil
-		}
+func (a App) parseStatusTarget(repoArg string, args []string, noClone bool, usage string) (commitTarget, error) {
+	if noClone && len(args) == 0 {
+		return a.currentNoCloneTarget(repoArg)
 	}
 
-	spec, err := a.parseCommitTarget(args, usage)
+	spec, err := a.parseCommitTarget(repoArg, args, usage)
 	if err != nil {
 		return commitTarget{}, err
 	}
@@ -501,10 +505,10 @@ func (a App) parseStatusTarget(args []string, noClone bool, usage string) (commi
 	return spec, nil
 }
 
-func (a App) currentNoCloneTarget() (commitTarget, error) {
-	repo, err := a.resolveRepoArg(a.Cwd)
+func (a App) currentNoCloneTarget(repoArg string) (commitTarget, error) {
+	repo, err := a.repoFromFlagOrCwd(repoArg)
 	if err != nil {
-		return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
+		return commitTarget{}, err
 	}
 	commit, err := a.headCommit(repo)
 	if err != nil {
@@ -667,13 +671,16 @@ func defaultLocalCIRoot() (string, error) {
 	return filepath.Join(home, ".localci"), nil
 }
 
-func (a App) parseCommitTarget(args []string, usage string) (commitTarget, error) {
+func (a App) parseCommitTarget(repoArg string, args []string, usage string) (commitTarget, error) {
+	if len(args) > 2 {
+		return commitTarget{}, repoPositionalError(usage)
+	}
+	repo, err := a.repoFromFlagOrCwd(repoArg)
+	if err != nil {
+		return commitTarget{}, err
+	}
 	switch len(args) {
 	case 0:
-		repo, err := a.resolveRepoArg(a.Cwd)
-		if err != nil {
-			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
-		}
 		commit, err := a.latestCommitForRepo(repo)
 		if err != nil {
 			return commitTarget{}, err
@@ -683,10 +690,6 @@ func (a App) parseCommitTarget(args []string, usage string) (commitTarget, error
 			Commit:  commit,
 		}, nil
 	case 1:
-		repo, err := a.resolveRepoArg(a.Cwd)
-		if err != nil {
-			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
-		}
 		commit, err := a.resolveCommitAlias(repo, args[0])
 		if err != nil {
 			return commitTarget{}, err
@@ -696,41 +699,10 @@ func (a App) parseCommitTarget(args []string, usage string) (commitTarget, error
 			Commit:  commit,
 		}, nil
 	case 2:
-		repo, err := a.tryResolveExistingRepoArg(args[0])
-		if err == nil {
-			commit, err := a.resolveCommitAlias(repo, args[1])
-			if err != nil {
-				return commitTarget{}, err
-			}
-
-			return commitTarget{
-				RepoDir: repo,
-				Commit:  commit,
-			}, nil
-		}
 		if looksLikePathArg(args[0]) {
-			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
+			return commitTarget{}, repoPositionalError(usage)
 		}
-		defaultRepo, defaultErr := a.resolveRepoArg(a.Cwd)
-		if defaultErr != nil {
-			return commitTarget{}, fmt.Errorf("resolve dir: %w", defaultErr)
-		}
-		commit, err := a.resolveCommitAlias(defaultRepo, args[0])
-		if err != nil {
-			return commitTarget{}, err
-		}
-
-		return commitTarget{
-			RepoDir: defaultRepo,
-			Commit:  commit,
-			Task:    strings.TrimSpace(args[1]),
-		}, nil
-	case 3:
-		repo, err := a.resolveRepoArg(args[0])
-		if err != nil {
-			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
-		}
-		commit, err := a.resolveCommitAlias(repo, args[1])
+		commit, err := a.resolveCommitAlias(repo, args[0])
 		if err != nil {
 			return commitTarget{}, err
 		}
@@ -738,11 +710,10 @@ func (a App) parseCommitTarget(args []string, usage string) (commitTarget, error
 		return commitTarget{
 			RepoDir: repo,
 			Commit:  commit,
-			Task:    strings.TrimSpace(args[2]),
+			Task:    strings.TrimSpace(args[1]),
 		}, nil
-	default:
-		return commitTarget{}, fmt.Errorf("%s", usage)
 	}
+	return commitTarget{}, repoPositionalError(usage)
 }
 
 func looksLikePathArg(arg string) bool {
@@ -750,61 +721,41 @@ func looksLikePathArg(arg string) bool {
 	return arg == "." || arg == ".." || strings.HasPrefix(arg, "~") || strings.ContainsAny(arg, `/\`)
 }
 
-func (a App) parseWebTarget(args []string) (commitTarget, error) {
+func (a App) parseWebTarget(repoArg string, args []string) (commitTarget, error) {
+	if len(args) > 2 {
+		return commitTarget{}, repoPositionalError("usage: localci web [--repo dir] [commit] [task]")
+	}
+	repo, err := a.repoFromFlagOrCwd(repoArg)
+	if err != nil {
+		return commitTarget{}, err
+	}
 	switch len(args) {
 	case 0:
-		repo, err := a.resolveRepoArg(a.Cwd)
-		if err != nil {
-			return commitTarget{}, fmt.Errorf("resolve dir: %w", err)
-		}
 		return commitTarget{RepoDir: repo}, nil
 	case 1:
-		repo, err := a.tryResolveExistingRepoArg(args[0])
-		if err == nil {
-			return commitTarget{RepoDir: repo}, nil
-		}
-		defaultRepo, defaultErr := a.resolveRepoArg(a.Cwd)
-		if defaultErr != nil {
-			return commitTarget{}, fmt.Errorf("resolve dir: %w", defaultErr)
-		}
-		commit, err := a.resolveCommitAlias(defaultRepo, args[0])
+		commit, err := a.resolveCommitAlias(repo, args[0])
 		if err != nil {
 			return commitTarget{}, err
 		}
 		return commitTarget{
-			RepoDir: defaultRepo,
+			RepoDir: repo,
 			Commit:  commit,
 		}, nil
 	case 2:
-		repo, err := a.tryResolveExistingRepoArg(args[0])
-		if err == nil {
-			commit, err := a.resolveCommitAlias(repo, args[1])
-			if err != nil {
-				return commitTarget{}, err
-			}
-			return commitTarget{
-				RepoDir: repo,
-				Commit:  commit,
-			}, nil
+		if looksLikePathArg(args[0]) {
+			return commitTarget{}, repoPositionalError("usage: localci web [--repo dir] [commit] [task]")
 		}
-		defaultRepo, defaultErr := a.resolveRepoArg(a.Cwd)
-		if defaultErr != nil {
-			return commitTarget{}, fmt.Errorf("resolve dir: %w", defaultErr)
-		}
-		commit, err := a.resolveCommitAlias(defaultRepo, args[0])
+		commit, err := a.resolveCommitAlias(repo, args[0])
 		if err != nil {
 			return commitTarget{}, err
 		}
 		return commitTarget{
-			RepoDir: defaultRepo,
+			RepoDir: repo,
 			Commit:  commit,
 			Task:    strings.TrimSpace(args[1]),
 		}, nil
-	case 3:
-		return a.parseCommitTarget(args, "usage: localci web [dir] [commit] [task]")
-	default:
-		return commitTarget{}, fmt.Errorf("usage: localci web [dir] [commit] [task]")
 	}
+	return commitTarget{}, repoPositionalError("usage: localci web [--repo dir] [commit] [task]")
 }
 
 func (a App) openWeb(spec commitTarget, state localci.DaemonState) error {
@@ -1013,17 +964,17 @@ func artifactPathByDisplayName(task localci.TaskStatusView, displayName string) 
 }
 
 func (a App) runInstallHooks(args []string) error {
-	if len(args) > 1 {
-		return fmt.Errorf("usage: localci install-hooks [dir]")
+	repoArg, args, err := extractRepoFlag(args)
+	if err != nil {
+		return err
+	}
+	if len(args) > 0 {
+		return repoPositionalError("usage: localci install-hooks [--repo dir]")
 	}
 
-	repoDir := a.Cwd
-	if len(args) == 1 {
-		var err error
-		repoDir, err = a.resolveRepoArg(args[0])
-		if err != nil {
-			return fmt.Errorf("resolve dir: %w", err)
-		}
+	repoDir, err := a.repoFromFlagOrCwd(repoArg)
+	if err != nil {
+		return err
 	}
 
 	if err := (localci.HookInstaller{RepoDir: repoDir}).Install(); err != nil {
@@ -1047,19 +998,83 @@ func (a App) resolveRepoArg(path string) (string, error) {
 	return localci.ResolveRepoDir(cfg.Root, path)
 }
 
-func (a App) tryResolveExistingRepoArg(path string) (string, error) {
-	resolved, err := a.resolveRepoArg(path)
+func (a App) repoFromFlagOrCwd(repoArg string) (string, error) {
+	if strings.TrimSpace(repoArg) != "" {
+		repo, err := a.resolveRepoArg(repoArg)
+		if err != nil {
+			return "", fmt.Errorf("resolve --repo: %w", err)
+		}
+		return repo, nil
+	}
+
+	repo, err := a.discoverRepoFromCwd()
 	if err != nil {
 		return "", err
 	}
-	info, err := os.Stat(resolved)
-	if err != nil {
-		return "", err
+	return repo, nil
+}
+
+func (a App) discoverRepoFromCwd() (string, error) {
+	start := a.Cwd
+	if strings.TrimSpace(start) == "" {
+		start = mustGetwd()
 	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("%s is not a directory", resolved)
+	if !filepath.IsAbs(start) {
+		start = filepath.Clean(start)
 	}
-	return resolved, nil
+
+	dir := start
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return a.resolveRepoArg(dir)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("inspect git metadata: %w", err)
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	return "", fmt.Errorf("could not find a git repository from %s; pass --repo <path>", start)
+}
+
+func extractRepoFlag(args []string) (string, []string, error) {
+	filtered := make([]string, 0, len(args))
+	var repo string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--repo" {
+			if i+1 >= len(args) || strings.TrimSpace(args[i+1]) == "" {
+				return "", nil, fmt.Errorf("--repo requires a path")
+			}
+			if repo != "" {
+				return "", nil, fmt.Errorf("--repo specified more than once")
+			}
+			repo = args[i+1]
+			i++
+			continue
+		}
+		if strings.HasPrefix(arg, "--repo=") {
+			value := strings.TrimSpace(strings.TrimPrefix(arg, "--repo="))
+			if value == "" {
+				return "", nil, fmt.Errorf("--repo requires a path")
+			}
+			if repo != "" {
+				return "", nil, fmt.Errorf("--repo specified more than once")
+			}
+			repo = value
+			continue
+		}
+		filtered = append(filtered, arg)
+	}
+	return repo, filtered, nil
+}
+
+func repoPositionalError(usage string) error {
+	return fmt.Errorf("%s\npass --repo <path> to select a repository", usage)
 }
 
 func (a App) loadConfig() (localci.Config, error) {

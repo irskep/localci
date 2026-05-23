@@ -20,9 +20,10 @@ func TestParseCommitTargetDefaultsDirToCWD(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
-	got, err := app.parseCommitTarget([]string{"abc123"}, "usage")
+	got, err := app.parseCommitTarget("", []string{"abc123"}, "usage")
 	if err != nil {
 		t.Fatalf("parseCommitTarget returned error: %v", err)
 	}
@@ -46,6 +47,7 @@ func TestParseCommitTargetWithoutArgsUsesLatestCommitForRepo(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
 	app.LatestCommit = func(repo string) (string, error) {
@@ -55,7 +57,7 @@ func TestParseCommitTargetWithoutArgsUsesLatestCommitForRepo(t *testing.T) {
 		return "latest123", nil
 	}
 
-	got, err := app.parseCommitTarget(nil, "usage")
+	got, err := app.parseCommitTarget("", nil, "usage")
 	if err != nil {
 		t.Fatalf("parseCommitTarget returned error: %v", err)
 	}
@@ -70,7 +72,7 @@ func TestParseCommitTargetWithoutArgsUsesLatestCommitForRepo(t *testing.T) {
 	}
 }
 
-func TestParseCommitTargetWithRepoAndTaskUsesCWD(t *testing.T) {
+func TestParseCommitTargetWithRepoFlagAndTaskUsesCWD(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -81,7 +83,7 @@ func TestParseCommitTargetWithRepoAndTaskUsesCWD(t *testing.T) {
 	}
 
 	app := testApp(root, baseDir)
-	got, err := app.parseCommitTarget([]string{"./worktree", "abc123", "localci:test"}, "usage")
+	got, err := app.parseCommitTarget("./worktree", []string{"abc123", "localci:test"}, "usage")
 	if err != nil {
 		t.Fatalf("parseCommitTarget returned error: %v", err)
 	}
@@ -105,6 +107,7 @@ func TestParseCommitTargetResolvesHeadAlias(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
 	app.HeadCommit = func(repo string) (string, error) {
@@ -114,7 +117,7 @@ func TestParseCommitTargetResolvesHeadAlias(t *testing.T) {
 		return "abc123", nil
 	}
 
-	got, err := app.parseCommitTarget([]string{"HEAD"}, "usage")
+	got, err := app.parseCommitTarget("", []string{"HEAD"}, "usage")
 	if err != nil {
 		t.Fatalf("parseCommitTarget returned error: %v", err)
 	}
@@ -132,6 +135,7 @@ func TestParseCommitTargetWithCommitAndTaskUsesCWD(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
 	app.HeadCommit = func(repo string) (string, error) {
@@ -141,7 +145,7 @@ func TestParseCommitTargetWithCommitAndTaskUsesCWD(t *testing.T) {
 		return "abc123", nil
 	}
 
-	got, err := app.parseCommitTarget([]string{"HEAD", "//:localci:noisy-fail"}, "usage")
+	got, err := app.parseCommitTarget("", []string{"HEAD", "//:localci:noisy-fail"}, "usage")
 	if err != nil {
 		t.Fatalf("parseCommitTarget returned error: %v", err)
 	}
@@ -157,7 +161,7 @@ func TestParseCommitTargetWithCommitAndTaskUsesCWD(t *testing.T) {
 	}
 }
 
-func TestParseCommitTargetWithMissingPathStillReportsPathError(t *testing.T) {
+func TestParseCommitTargetWithPositionalPathExplainsRepoFlag(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -165,11 +169,15 @@ func TestParseCommitTargetWithMissingPathStillReportsPathError(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
-	_, err := app.parseCommitTarget([]string{"./missing", "HEAD"}, "usage")
+	_, err := app.parseCommitTarget("", []string{"./missing", "HEAD"}, "usage")
 	if err == nil {
-		t.Fatalf("parseCommitTarget returned nil error, want path error")
+		t.Fatalf("parseCommitTarget returned nil error, want repo flag error")
+	}
+	if got := err.Error(); !strings.Contains(got, "pass --repo <path>") {
+		t.Fatalf("error = %q, want --repo guidance", got)
 	}
 }
 
@@ -181,6 +189,7 @@ func TestParseWebTargetResolvesHeadAlias(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
 	app.HeadCommit = func(repo string) (string, error) {
@@ -190,7 +199,7 @@ func TestParseWebTargetResolvesHeadAlias(t *testing.T) {
 		return "abc123", nil
 	}
 
-	got, err := app.parseWebTarget([]string{"HEAD"})
+	got, err := app.parseWebTarget("", []string{"HEAD"})
 	if err != nil {
 		t.Fatalf("parseWebTarget returned error: %v", err)
 	}
@@ -208,6 +217,7 @@ func TestParseWebTargetWithCommitAndTaskUsesCWD(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
 	app.HeadCommit = func(repo string) (string, error) {
@@ -217,7 +227,7 @@ func TestParseWebTargetWithCommitAndTaskUsesCWD(t *testing.T) {
 		return "abc123", nil
 	}
 
-	got, err := app.parseWebTarget([]string{"HEAD", "//:localci:noisy-fail"})
+	got, err := app.parseWebTarget("", []string{"HEAD", "//:localci:noisy-fail"})
 	if err != nil {
 		t.Fatalf("parseWebTarget returned error: %v", err)
 	}
@@ -243,7 +253,7 @@ func TestParseCommitTargetRejectsPathsOutsideConfiguredRoot(t *testing.T) {
 	}
 
 	app := testApp(root, baseDir)
-	_, err := app.parseCommitTarget([]string{"../../outside", "abc123"}, "usage")
+	_, err := app.parseCommitTarget("../../outside", []string{"abc123"}, "usage")
 	if err == nil {
 		t.Fatalf("parseCommitTarget returned nil error, want path error")
 	}
@@ -276,9 +286,10 @@ func TestParseWebTargetDefaultsToCWDRepo(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
-	got, err := app.parseWebTarget(nil)
+	got, err := app.parseWebTarget("", nil)
 	if err != nil {
 		t.Fatalf("parseWebTarget returned error: %v", err)
 	}
@@ -289,7 +300,7 @@ func TestParseWebTargetDefaultsToCWDRepo(t *testing.T) {
 	}
 }
 
-func TestParseWebTargetSingleDirOpensRepoPage(t *testing.T) {
+func TestParseWebTargetRepoFlagOpensRepoPage(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -300,12 +311,72 @@ func TestParseWebTargetSingleDirOpensRepoPage(t *testing.T) {
 	}
 
 	app := testApp(root, cwd)
-	got, err := app.parseWebTarget([]string{"./worktree"})
+	got, err := app.parseWebTarget("./worktree", nil)
 	if err != nil {
 		t.Fatalf("parseWebTarget returned error: %v", err)
 	}
 	if got.RepoDir != repoDir || got.Commit != "" || got.Task != "" {
 		t.Fatalf("unexpected target: %#v", got)
+	}
+}
+
+func TestDiscoverRepoFromNestedCWD(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	nestedDir := filepath.Join(repoDir, "sub", "dir")
+	if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	writeGitMetadata(t, repoDir)
+
+	app := testApp(root, nestedDir)
+	got, err := app.repoFromFlagOrCwd("")
+	if err != nil {
+		t.Fatalf("repoFromFlagOrCwd returned error: %v", err)
+	}
+	if got != repoDir {
+		t.Fatalf("repo = %q, want %q", got, repoDir)
+	}
+}
+
+func TestDiscoverRepoFromWorktreeGitFile(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	writeGitFile(t, repoDir)
+
+	app := testApp(root, repoDir)
+	got, err := app.repoFromFlagOrCwd("")
+	if err != nil {
+		t.Fatalf("repoFromFlagOrCwd returned error: %v", err)
+	}
+	if got != repoDir {
+		t.Fatalf("repo = %q, want %q", got, repoDir)
+	}
+}
+
+func TestDiscoverRepoErrorMentionsRepoFlag(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	cwd := filepath.Join(root, "not-repo")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+
+	app := testApp(root, cwd)
+	_, err := app.repoFromFlagOrCwd("")
+	if err == nil {
+		t.Fatalf("repoFromFlagOrCwd returned nil error, want discovery error")
+	}
+	if got := err.Error(); !strings.Contains(got, "pass --repo <path>") {
+		t.Fatalf("error = %q, want --repo guidance", got)
 	}
 }
 
@@ -326,7 +397,7 @@ func TestAppRunRecognizesInvokeUsage(t *testing.T) {
 		t.Fatalf("Run returned nil error, want usage error")
 	}
 
-	if got, want := err.Error(), "usage: localci invoke [--wait] [--no-clone] [--annotation key=value] [dir] [commit]"; got != want {
+	if got, want := err.Error(), "usage: localci invoke [--repo dir] [--wait] [--no-clone] [--annotation key=value] [commit]"; got != want {
 		t.Fatalf("error = %q, want %q", got, want)
 	}
 }
@@ -339,6 +410,7 @@ func TestParseInvokeTargetDefaultsToCWDAndHead(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
 	app.HeadCommit = func(repo string) (string, error) {
@@ -348,7 +420,7 @@ func TestParseInvokeTargetDefaultsToCWDAndHead(t *testing.T) {
 		return "abc123", nil
 	}
 
-	repo, commit, err := app.parseInvokeTarget(nil)
+	repo, commit, err := app.parseInvokeTarget("", nil)
 	if err != nil {
 		t.Fatalf("parseInvokeTarget returned error: %v", err)
 	}
@@ -375,6 +447,7 @@ func TestInvokeTargetResolvesExplicitHeadBeforeNoCloneLabel(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
 	app.HeadCommit = func(repo string) (string, error) {
@@ -384,7 +457,7 @@ func TestInvokeTargetResolvesExplicitHeadBeforeNoCloneLabel(t *testing.T) {
 		return "abc123", nil
 	}
 
-	repo, commit, err := app.parseInvokeTarget([]string{repoDir, "HEAD"})
+	repo, commit, err := app.parseInvokeTarget(repoDir, []string{"HEAD"})
 	if err != nil {
 		t.Fatalf("parseInvokeTarget returned error: %v", err)
 	}
@@ -416,6 +489,7 @@ func TestResolveCommitAliasSupportsNoCloneHead(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
 	app.HeadCommit = func(repo string) (string, error) {
@@ -442,6 +516,7 @@ func TestParseStatusTargetNoCloneDefaultsToCurrentHead(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
 	app.HeadCommit = func(repo string) (string, error) {
@@ -451,7 +526,7 @@ func TestParseStatusTargetNoCloneDefaultsToCurrentHead(t *testing.T) {
 		return "abc123", nil
 	}
 
-	got, err := app.parseStatusTarget(nil, true, "usage")
+	got, err := app.parseStatusTarget("", nil, true, "usage")
 	if err != nil {
 		t.Fatalf("parseStatusTarget returned error: %v", err)
 	}
@@ -472,6 +547,7 @@ func TestParseStatusTargetNoClonePathDefaultsToPathHead(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir repo returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, cwd)
 	app.HeadCommit = func(repo string) (string, error) {
@@ -481,7 +557,7 @@ func TestParseStatusTargetNoClonePathDefaultsToPathHead(t *testing.T) {
 		return "def456", nil
 	}
 
-	got, err := app.parseStatusTarget([]string{"../repo"}, true, "usage")
+	got, err := app.parseStatusTarget("../repo", nil, true, "usage")
 	if err != nil {
 		t.Fatalf("parseStatusTarget returned error: %v", err)
 	}
@@ -588,13 +664,13 @@ func TestAppRunInstallHooksHelpSkipsRequirementsCheck(t *testing.T) {
 		t.Fatalf("requirements checker should not run for command help")
 	}
 	rendered := stdout.String()
-	if !strings.Contains(rendered, "Usage:\n  localci install-hooks [dir]") {
+	if !strings.Contains(rendered, "Usage:\n  localci install-hooks [--repo dir]") {
 		t.Fatalf("help missing usage: %s", rendered)
 	}
 	if !strings.Contains(rendered, "modern Git hook.* config") {
 		t.Fatalf("help missing behavior summary: %s", rendered)
 	}
-	if !strings.Contains(rendered, `localci postcommit "$repo" "$commit"`) {
+	if !strings.Contains(rendered, `localci postcommit --repo "$repo" "$commit"`) {
 		t.Fatalf("help missing installed command: %s", rendered)
 	}
 }
@@ -637,7 +713,7 @@ func TestAppRunRecognizesInstallHooks(t *testing.T) {
 		t.Fatalf("Run returned nil error, want usage error")
 	}
 
-	if got, want := err.Error(), "usage: localci install-hooks [dir]"; got != want {
+	if got, want := err.Error(), "usage: localci install-hooks [--repo dir]\npass --repo <path> to select a repository"; got != want {
 		t.Fatalf("error = %q, want %q", got, want)
 	}
 }
@@ -650,16 +726,17 @@ func TestParseCommitTargetReturnsCommandSpecificUsage(t *testing.T) {
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatalf("Mkdir returned error: %v", err)
 	}
+	writeGitMetadata(t, repoDir)
 
 	app := testApp(root, repoDir)
 	app.LatestCommit = func(string) (string, error) {
 		return "", errors.New("no runs")
 	}
-	_, err := app.parseCommitTarget([]string{"a", "b", "c", "d"}, "usage: localci web [dir] <commit> [task]")
+	_, err := app.parseCommitTarget("", []string{"a", "b", "c", "d"}, "usage: localci web [--repo dir] [commit] [task]")
 	if err == nil {
 		t.Fatalf("parseCommitTarget returned nil error, want usage error")
 	}
-	if got, want := err.Error(), "usage: localci web [dir] <commit> [task]"; got != want {
+	if got, want := err.Error(), "usage: localci web [--repo dir] [commit] [task]\npass --repo <path> to select a repository"; got != want {
 		t.Fatalf("error = %q, want %q", got, want)
 	}
 }
@@ -832,7 +909,7 @@ func TestPostcommitWaitInstruction(t *testing.T) {
 	t.Parallel()
 
 	got := postcommitWaitInstruction("/repo with spaces", "abc123")
-	want := "Wait: localci wait '/repo with spaces' abc123"
+	want := "Wait: localci wait --repo '/repo with spaces' abc123"
 	if got != want {
 		t.Fatalf("postcommitWaitInstruction = %q, want %q", got, want)
 	}
@@ -891,5 +968,21 @@ func testApp(root string, cwd string) App {
 		LoadConfig: func(string) (localci.Config, error) {
 			return localci.Config{Root: root}, nil
 		},
+	}
+}
+
+func writeGitMetadata(t *testing.T, repoDir string) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755); err != nil {
+		t.Fatalf("MkdirAll .git returned error: %v", err)
+	}
+}
+
+func writeGitFile(t *testing.T, repoDir string) {
+	t.Helper()
+
+	if err := os.WriteFile(filepath.Join(repoDir, ".git"), []byte("gitdir: /tmp/worktree\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile .git returned error: %v", err)
 	}
 }

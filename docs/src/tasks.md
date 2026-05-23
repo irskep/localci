@@ -11,13 +11,15 @@ LocalCI discovers tasks by running:
 mise tasks --json --all
 ```
 
-Any discovered task containing the `localci:` namespace is eligible to run. This includes root tasks like `localci:test` and monorepo tasks like `//web:localci:test`.
+Any discovered task whose task name starts with `localci:` is eligible to run. This includes root tasks like `localci:test` or `//:localci:test`, and child config-root tasks addressed with mise's path syntax.
+
+For monorepos, mise addresses child tasks as `//path:task`. LocalCI follows mise's [monorepo task syntax](https://mise.jdx.dev/tasks/monorepo.html) and checks the task portion after the path prefix for the `localci:` namespace.
 
 `localci:setup` is reserved for setup and is not treated as an ordinary validation task.
 
 ## Setup
 
-LocalCI runs `localci:setup` first when it exists. Use it for dependency installation shared by all checks.
+LocalCI runs the root `localci:setup` first when it exists. Use it for dependency installation shared by all checks.
 
 ## Execution
 

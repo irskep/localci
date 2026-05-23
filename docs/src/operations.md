@@ -53,7 +53,7 @@ localci web --no-clone HEAD
 After `localci postcommit` enqueues tasks, use the wait command it prints:
 
 ```sh
-localci wait <repo> <commit>
+localci wait --repo <repo> <commit>
 ```
 
 For the current repository's latest run:
@@ -79,7 +79,7 @@ localci cancel
 Cancel a specific task:
 
 ```sh
-localci cancel <repo> <commit> <task>
+localci cancel --repo <repo> <commit> <task>
 ```
 
 Use `--no-clone` for no-clone runs:
