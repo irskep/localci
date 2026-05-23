@@ -3,4 +3,16 @@ set -eu
 
 printf 'cwd: %s\n' "$(pwd)"
 
+case "${1:-}" in
+  --repo|--repo=*)
+    exec go run ./cmd/localci postcommit "$@"
+    ;;
+esac
+
+if [ "$#" -ge 2 ]; then
+  repo=$1
+  shift
+  exec go run ./cmd/localci postcommit --repo "$repo" "$@"
+fi
+
 exec go run ./cmd/localci postcommit "$@"

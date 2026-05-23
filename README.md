@@ -6,7 +6,7 @@ Workflows are defined as mise tasks under the 'localci' prefix. localci runs 'mi
 
 Postcommit hook:
 1. define git global hooks (latest version of git has a git hooks feature; we DO NOT need a separate git hook manager. local git might be out of date; localci will make sure you have a recent version.)
-2. /path/to/localci postcommit <path-to-repo> # probably define path-to-repo from hook script location
+2. /path/to/localci postcommit --repo <path-to-repo> <commit>
 
 ## How localci discovers "jobs"
 
