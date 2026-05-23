@@ -6,16 +6,24 @@ LocalCI is deliberately small. It discovers mise tasks, queues them in a daemon,
 
 ## What LocalCI is for
 
-- Running a comprehensive local validation suite after every commit.
-- Keeping coding agents honest by making the expected checks automatic.
-- Viewing task logs without rerunning commands manually.
-- Trying a run against the current working tree with `--no-clone` when fast feedback matters.
+<div class="grid cards" markdown>
+
+- :lucide-check:{ .lg .middle } __Post-commit validation__
+- :lucide-check:{ .lg .middle } __Agent accountability__
+- :lucide-check:{ .lg .middle } __Local task logs__
+- :lucide-check:{ .lg .middle } __Working-tree runs__
+
+</div>
 
 ## What LocalCI is not for
 
-- Replacing remote CI for release gates, protected branches, or cross-platform checks.
-- Managing arbitrary workflow syntax. LocalCI intentionally uses mise tasks as the workflow surface.
-- Running without mise. If a project cannot express its checks as mise tasks, it is not a good fit yet.
+<div class="grid cards" markdown>
+
+- :lucide-x:{ .lg .middle } __Release gates__
+- :lucide-x:{ .lg .middle } __Workflow DSLs__
+- :lucide-x:{ .lg .middle } __Non-mise projects__
+
+</div>
 
 ## Model
 
