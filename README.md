@@ -1,25 +1,66 @@
-localci is a minimalistic postcommit validation check runner. You're supposed to call it from a postcommit hook. From there, it waits in a queue, runs all configured checks with output going to files, and make the results available in a web browser or over a cli. Logs can be tailed from anywhere on the system, or via the cli, or tailed live in the browser.
+# LocalCI
 
-Workflows are defined as mise tasks under the 'localci' prefix. localci runs 'mise tasks' to see them all.
+[![CI](https://github.com/irskep/localci/actions/workflows/ci.yml/badge.svg)](https://github.com/irskep/localci/actions/workflows/ci.yml)
 
-# Configuration
+LocalCI is an asynchronous post-commit validation runner for local development. It runs the checks you already define as [mise](https://mise.jdx.dev/) tasks, stores logs on disk, and gives you results through one-shot CLI commands, a terminal UI, and a local web UI.
 
-Postcommit hook:
-1. define git global hooks (latest version of git has a git hooks feature; we DO NOT need a separate git hook manager. local git might be out of date; localci will make sure you have a recent version.)
-2. /path/to/localci postcommit --repo <path-to-repo> <commit>
+It is meant to sit between Git hooks and remote CI: local like a hook, but async like CI.
 
-## How localci discovers "jobs"
+## What It Does
 
-Tasks are mise tasks prefixed with "localci:". That means you can put them under mise-tasks/localci/ as shell scripts if you want.
+- Runs after each commit, so the author or agent does not have to block on the full suite before moving on.
+- Executes checks in isolated clones by default, so results are tied to a committed tree instead of whatever happens to be checked out.
+- Discovers `localci:` mise tasks, including monorepo tasks such as `//web:localci:test`.
+- Keeps logs and artifacts as files, with commands for finding paths when a human or agent needs to inspect them.
 
-## Where to put output
+LocalCI is not a GitHub Actions clone. There is no workflow DSL; mise is the contract.
 
-Each task is called with env vars set:
+## Quick Start
 
-- `LOCALCI_TASK_OUTPUT_DIR`: put task output files here. name them well! send stderr to stdout as a habit.
-- `LOCALCI_TASK_CACHE_DIR`: task-local cache shared across multiple invocations of this task
-- `LOCALCI_CACHE_DIR`: cache shared across all tasks and all invocations
+Install LocalCI, start the daemon, and install the post-commit hook:
 
-There is no cache busting built in at the moment.
+```sh
+localci start
+localci install-hooks
+```
 
-There is no special "workflow configuration," only files, so place and name your files well.
+Define checks as mise tasks in the `localci:` namespace. For example, `mise-tasks/localci/test`:
+
+```sh
+#!/bin/sh
+set -eu
+
+go test ./...
+```
+
+After a commit, inspect the latest run:
+
+```sh
+localci wait
+localci status
+localci web
+localci dash
+```
+
+For an ad hoc working-tree check, use `invoke` explicitly:
+
+```sh
+localci invoke --no-clone --task test --wait
+```
+
+## Artifacts
+
+LocalCI never needs to dump a huge log into your terminal. Ask for paths instead:
+
+```sh
+localci artifacts --failed --primary
+localci artifacts --task noisy-fail --primary --paths-only
+```
+
+Then open, edit, copy, or attach those files using your normal tools.
+
+## Documentation
+
+The docs cover setup, task discovery, CLI usage, and the web/TUI inspection flow:
+
+<https://steveasleep.com/localci/>
