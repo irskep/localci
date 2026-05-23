@@ -4,14 +4,13 @@ experimental_monorepo_root = true
 GOCACHE = "{{config_root}}/.cache/go-build"
 
 [monorepo]
-config_roots = ["web"]
+config_roots = ["web", "docs"]
 
 [tools]
 "aqua:terrastruct/d2" = "0.7.1"
 go = "1.26.3"
 node = "24.11.0"
 pnpm = "11.2.2"
-"pipx:zensical" = "0.0.43"
 
 [tasks.build]
 description = "Build the localci binary"
@@ -27,20 +26,6 @@ run = [
   "pnpm --dir web run build-only",
 ]
 
-[tasks.docs-build]
-description = "Build the Zensical documentation"
-run = [
-  "printf 'cwd: %s\\n' \"$(pwd)\"",
-  "zensical build",
-]
-
-[tasks.docs-serve]
-description = "Serve the Zensical documentation"
-run = [
-  "printf 'cwd: %s\\n' \"$(pwd)\"",
-  "zensical serve",
-]
-
 [tasks."localci:setup"]
 description = "Install dependencies for cloned localci runs"
 run = [
@@ -49,39 +34,6 @@ run = [
   "mise install",
   "pnpm --dir web install --frozen-lockfile",
 ]
-
-[tasks.run]
-description = "Run localci"
-usage = '''
-arg "[args]" var=#true
-'''
-run = '''
-printf 'cwd: %s\n' "$(pwd)"
-eval "set -- ${usage_args:-}"
-go run ./cmd/localci "$@"
-'''
-
-[tasks.postcommit]
-description = "Run localci postcommit"
-usage = '''
-arg "[args]" var=#true
-'''
-run = '''
-printf 'cwd: %s\n' "$(pwd)"
-eval "set -- ${usage_args:-}"
-go run ./cmd/localci postcommit "$@"
-'''
-
-[tasks.wait]
-description = "Wait for a localci run"
-usage = '''
-arg "[args]" var=#true
-'''
-run = '''
-printf 'cwd: %s\n' "$(pwd)"
-eval "set -- ${usage_args:-}"
-go run ./cmd/localci wait "$@"
-'''
 
 [tasks.daemon-start]
 description = "Start the localci daemon"

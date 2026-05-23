@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+printf 'cwd: %s\n' "$(pwd)"
+
+exec go run ./cmd/localci "$@"

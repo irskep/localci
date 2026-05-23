@@ -1,3 +1,4 @@
 [project]
 site_name = "localci"
+docs_dir = "src"
 nav = ["index.md"]

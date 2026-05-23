@@ -3,4 +3,5 @@
 bin/
 .pnpm-store/
 .rodney/
-site/
+docs/.cache/
+docs/site/

@@ -1,0 +1,23 @@
+[tools]
+"pipx:zensical" = "0.0.43"
+
+[tasks.build]
+description = "Build the Zensical documentation"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "zensical build",
+]
+
+[tasks.serve]
+description = "Serve the Zensical documentation"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "zensical serve",
+]
+
+[tasks."localci:build"]
+description = "Build the Zensical documentation"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "zensical build --strict",
+]

@@ -11,7 +11,7 @@ import {
 import type { CommitSummary, TaskStatusGroup, TaskSummary } from '@/lib/api'
 import { taskURL } from '@/lib/routes'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     run: CommitSummary
     repoPath: string
