@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
 
+import RepoLink from '@/components/RepoLink.vue'
+import RunLink from '@/components/RunLink.vue'
 import {
   annotationEntries,
   displayStatusSeverity,
-  shortCommit,
   taskStatusIcon,
   taskStatusGroups,
 } from '@/lib/api'
-import type { CommitSummary, QueueEntry, TaskStatusGroup, TaskSummary } from '@/lib/api'
-import { commitURL, taskURL } from '@/lib/routes'
+import type { CommitSummary, TaskStatusGroup, TaskSummary } from '@/lib/api'
+import { taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
 
@@ -21,10 +22,6 @@ const queueRows = computed(() => store.home?.queue.pending ?? [])
 const active = computed(() => store.home?.queue.active)
 
 useDocumentTitle('Overview')
-
-function queueLabel(entry: QueueEntry): string {
-  return `${entry.repo.repo_path} / ${shortCommit(entry.commit)} / ${entry.task}`
-}
 
 function activityTime(entry: CommitSummary): string {
   if (!entry.activity_at) return ''
@@ -58,17 +55,20 @@ onUnmounted(() => store.unsubscribePage())
     <template v-if="store.home">
       <section class="section-grid">
         <div class="stack">
-          <PDataTable :value="recentRows" data-key="commit" size="small" :show-headers="false">
+          <PDataTable
+            :value="recentRows"
+            data-key="commit"
+            size="small"
+            :show-headers="false"
+            class="table-surface run-table"
+          >
+            <template #header>Runs</template>
             <PColumn>
               <template #body="{ data }">
                 <div class="run-row">
                   <div class="run-meta">
-                    <RouterLink :to="`/repo/${data.repo.repo_path}`">
-                      {{ data.repo.repo_path }}
-                    </RouterLink>
-                    <RouterLink :to="commitURL(data.repo.repo_path, data.commit)" class="mono">
-                      {{ shortCommit(data.commit) }}
-                    </RouterLink>
+                    <RepoLink :repo-path="data.repo.repo_path" />
+                    <RunLink :repo-path="data.repo.repo_path" :commit="data.commit" />
                     <span class="attribute-list">
                       <PTag
                         v-for="attribute in annotationEntries(data.annotations)"
@@ -102,9 +102,11 @@ onUnmounted(() => store.unsubscribePage())
 
         <aside class="stack">
           <PPanel header="Active Now">
-            <div v-if="active">
+            <div v-if="active" class="inline-link-list">
+              <RepoLink :repo-path="active.repo.repo_path" />
+              <RunLink :repo-path="active.repo.repo_path" :commit="active.commit" />
               <RouterLink :to="taskURL(active.repo.repo_path, active.commit, active.task)">
-                {{ queueLabel(active) }}
+                {{ active.task }}
               </RouterLink>
             </div>
             <div v-else class="empty-state">No task is running.</div>
@@ -122,9 +124,13 @@ onUnmounted(() => store.unsubscribePage())
                 :key="`${entry.repo.repo_path}:${entry.commit}:${entry.task}`"
               >
                 <PTag severity="warn" value="pending" />
-                <RouterLink :to="taskURL(entry.repo.repo_path, entry.commit, entry.task)">
-                  {{ queueLabel(entry) }}
-                </RouterLink>
+                <span class="inline-link-list">
+                  <RepoLink :repo-path="entry.repo.repo_path" />
+                  <RunLink :repo-path="entry.repo.repo_path" :commit="entry.commit" />
+                  <RouterLink :to="taskURL(entry.repo.repo_path, entry.commit, entry.task)">
+                    {{ entry.task }}
+                  </RouterLink>
+                </span>
               </li>
             </ul>
             <div v-else class="empty-state">Queue is idle.</div>
@@ -133,8 +139,7 @@ onUnmounted(() => store.unsubscribePage())
           <PPanel header="Repo">
             <ul class="artifact-list">
               <li v-for="repo in repoRows" :key="repo.repo_path">
-                <i class="pi pi-folder" aria-hidden="true"></i>
-                <RouterLink :to="`/repo/${repo.repo_path}`">{{ repo.repo_path }}</RouterLink>
+                <RepoLink :repo-path="repo.repo_path" />
               </li>
             </ul>
           </PPanel>
@@ -183,7 +188,8 @@ onUnmounted(() => store.unsubscribePage())
 
 .run-meta,
 .run-status-row,
-.run-task-list {
+.run-task-list,
+.inline-link-list {
   display: flex;
   align-items: center;
   flex-wrap: wrap;

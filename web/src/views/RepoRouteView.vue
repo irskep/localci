@@ -3,15 +3,15 @@ import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import RunLink from '@/components/RunLink.vue'
 import {
   annotationEntries,
   displayStatusSeverity,
-  shortCommit,
   taskStatusIcon,
   taskStatusGroups,
 } from '@/lib/api'
 import type { CommitSummary, TaskStatusGroup, TaskSummary } from '@/lib/api'
-import { commitURL, parseRepoRoute, taskURL } from '@/lib/routes'
+import { parseRepoRoute, taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
 
@@ -69,15 +69,15 @@ onUnmounted(() => store.unsubscribePage())
       data-key="commit"
       size="small"
       :show-headers="false"
+      class="table-surface run-table"
     >
+      <template #header>Runs</template>
       <PColumn>
         <template #body="{ data }">
           <div class="run-row">
             <div class="run-meta">
               <span>{{ store.currentRepo?.repo.repo_path ?? parsed.repoPath }}</span>
-              <RouterLink :to="commitURL(parsed.repoPath, data.commit)" class="mono">
-                {{ shortCommit(data.commit) }}
-              </RouterLink>
+              <RunLink :repo-path="parsed.repoPath" :commit="data.commit" />
               <span class="attribute-list">
                 <PTag
                   v-for="attribute in annotationEntries(data.annotations)"

@@ -46,6 +46,24 @@ a:hover {
   text-decoration: underline;
 }
 
+.icon-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-1);
+  min-width: 0;
+}
+
+.table-surface {
+  overflow: hidden;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: var(--p-content-border-radius);
+}
+
+.run-table.p-datatable.p-datatable-sm .p-datatable-tbody > tr > [data-pc-section='bodycell'] {
+  padding-top: var(--app-space-5);
+  padding-bottom: var(--app-space-5);
+}
+
 code,
 pre,
 .mono {

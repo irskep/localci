@@ -57,7 +57,8 @@ onUnmounted(() => store.unsubscribePage())
     </div>
 
     <template v-if="commit">
-      <PDataTable :value="tasks" data-key="name" size="small">
+      <PDataTable :value="tasks" data-key="name" size="small" class="table-surface">
+        <template #header>Tasks</template>
         <PColumn header="Task">
           <template #body="{ data }">
             <RouterLink :to="taskURL(parsed.repoPath, commit.commit, data.name)">

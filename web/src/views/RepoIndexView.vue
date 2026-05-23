@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted } from 'vue'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import RepoLink from '@/components/RepoLink.vue'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
 
@@ -25,14 +26,16 @@ onUnmounted(() => store.unsubscribePage())
       <PProgressSpinner />
       <span>Loading repos</span>
     </div>
-    <PDataTable v-if="repos.length > 0" :value="repos" size="small">
-      <PColumn header="Name">
-        <template #body="{ data }">
-          <RouterLink :to="`/repo/${data.repo_path}`">{{ data.repo_path }}</RouterLink>
-        </template>
-      </PColumn>
-      <PColumn field="repo_path" header="Path" />
-    </PDataTable>
+    <PPanel v-if="repos.length > 0" header="Repos">
+      <PDataTable :value="repos" size="small" class="table-surface">
+        <PColumn header="Name">
+          <template #body="{ data }">
+            <RepoLink :repo-path="data.repo_path" />
+          </template>
+        </PColumn>
+        <PColumn field="repo_path" header="Path" />
+      </PDataTable>
+    </PPanel>
     <div v-else-if="store.homeLoaded && !store.error" class="empty-state">
       No repos have localci history yet.
     </div>
