@@ -1,4 +1,4 @@
-# How-to Guides
+# Usage
 
 These commands cover the common ways to run and inspect LocalCI checks.
 
@@ -33,19 +33,19 @@ localci web
 Open a specific commit:
 
 ```sh
-localci web . <commit>
+localci web <commit>
 ```
 
 Open a specific task:
 
 ```sh
-localci web . <commit> <task>
+localci web <commit> <task>
 ```
 
 Use `--no-clone` when viewing a no-clone run:
 
 ```sh
-localci web --no-clone . HEAD
+localci web --no-clone HEAD
 ```
 
 ## Wait for a post-commit run
