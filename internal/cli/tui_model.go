@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -97,6 +100,8 @@ type tuiKeyMap struct {
 	Retry     key.Binding
 	Cancel    key.Binding
 	Artifacts key.Binding
+	Edit      key.Binding
+	OpenFile  key.Binding
 }
 
 func defaultTUIKeys() tuiKeyMap {
@@ -120,11 +125,13 @@ func defaultTUIKeys() tuiKeyMap {
 		Retry:     key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "retry")),
 		Cancel:    key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "cancel")),
 		Artifacts: key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "artifacts")),
+		Edit:      key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit artifact")),
+		OpenFile:  key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "open artifact")),
 	}
 }
 
 func (k tuiKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Open, k.Back, k.PrevTab, k.NextTab, k.Help, k.Quit}
+	return []key.Binding{k.Open, k.Back, k.PrevTab, k.NextTab, k.Edit, k.OpenFile, k.Help, k.Quit}
 }
 
 func (k tuiKeyMap) FullHelp() [][]key.Binding {
@@ -132,7 +139,7 @@ func (k tuiKeyMap) FullHelp() [][]key.Binding {
 		{k.Open, k.Back, k.Quit, k.Help},
 		{k.Up, k.Down, k.PrevTab, k.NextTab, k.PageUp, k.PageDown, k.HomeKey, k.End},
 		{k.HomeView, k.Repos, k.Queue, k.Refresh},
-		{k.Retry, k.Cancel, k.Artifacts},
+		{k.Retry, k.Cancel, k.Artifacts, k.Edit, k.OpenFile},
 	}
 }
 
@@ -153,6 +160,12 @@ type tuiErrMsg struct {
 
 type tuiActionMsg struct {
 	notice string
+	err    error
+}
+
+type tuiExternalCommandMsg struct {
+	action string
+	path   string
 	err    error
 }
 
@@ -289,6 +302,12 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.loading = true
 		cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
+	case tuiExternalCommandMsg:
+		if msg.err != nil {
+			m.notice = fmt.Sprintf("%s failed: %v", msg.action, msg.err)
+		} else {
+			m.notice = fmt.Sprintf("%s: %s", msg.action, msg.path)
+		}
 	case tuiStreamStartedMsg:
 		m.socketState = "connected"
 	case tuiEventMsg:
@@ -385,6 +404,10 @@ func (m tuiModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m = m.gotoRoute(next, true)
 			cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
 		}
+	case key.Matches(msg, m.keys.Edit):
+		cmds = append(cmds, m.editSelectedArtifact())
+	case key.Matches(msg, m.keys.OpenFile):
+		cmds = append(cmds, m.openSelectedArtifact())
 	case key.Matches(msg, m.keys.Retry):
 		if cmd := m.retrySelected(); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -607,6 +630,57 @@ func (m tuiModel) cancelSelected() tea.Cmd {
 	}
 }
 
+func (m tuiModel) editSelectedArtifact() tea.Cmd {
+	path := m.selectedArtifactPath()
+	if path == "" {
+		return staticExternalCommandMsg("edit", "", fmt.Errorf("no artifact path selected"))
+	}
+	editor := strings.TrimSpace(os.Getenv("VISUAL"))
+	if editor == "" {
+		editor = strings.TrimSpace(os.Getenv("EDITOR"))
+	}
+	if editor == "" {
+		editor = "vi"
+	}
+	cmd := exec.Command(editor, path)
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return tuiExternalCommandMsg{action: "edit", path: path, err: err}
+	})
+}
+
+func (m tuiModel) openSelectedArtifact() tea.Cmd {
+	path := m.selectedArtifactPath()
+	if path == "" {
+		return staticExternalCommandMsg("open", "", fmt.Errorf("no artifact path selected"))
+	}
+	cmd, err := openPathCommand(path)
+	if err != nil {
+		return staticExternalCommandMsg("open", path, err)
+	}
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return tuiExternalCommandMsg{action: "open", path: path, err: err}
+	})
+}
+
+func staticExternalCommandMsg(action string, path string, err error) tea.Cmd {
+	return func() tea.Msg {
+		return tuiExternalCommandMsg{action: action, path: path, err: err}
+	}
+}
+
+func openPathCommand(path string) (*exec.Cmd, error) {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", path), nil
+	case "windows":
+		return exec.Command("cmd", "/c", "start", "", path), nil
+	case "linux", "freebsd", "openbsd", "netbsd":
+		return exec.Command("xdg-open", path), nil
+	default:
+		return nil, fmt.Errorf("opening files is not supported on %s", runtime.GOOS)
+	}
+}
+
 func (m tuiModel) actionTaskRoute() (tuiRoute, bool) {
 	switch m.route.view {
 	case tuiViewCommit:
@@ -664,6 +738,22 @@ func (m tuiModel) selectedTaskArtifactPath() string {
 		return ""
 	}
 	return m.task.Task.Artifacts[m.cursor].Path
+}
+
+func (m tuiModel) selectedArtifactPath() string {
+	switch m.route.view {
+	case tuiViewTask:
+		return m.selectedTaskArtifactPath()
+	case tuiViewArtifact:
+		if m.artifact != nil {
+			return m.artifact.Artifact.Path
+		}
+	case tuiViewArtifacts:
+		if m.artifacts != nil && m.cursor >= 0 && m.cursor < len(m.artifacts.Artifacts) {
+			return m.artifacts.Artifacts[m.cursor].Path
+		}
+	}
+	return ""
 }
 
 func (m *tuiModel) applyData(data any) {
