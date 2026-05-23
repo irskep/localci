@@ -6,7 +6,7 @@ These commands cover the common ways to run and inspect LocalCI checks.
 
 To enqueue tasks for the repository's current `HEAD` and wait for the result:
 
-```sh
+```sh title="Terminal"
 localci invoke --wait
 ```
 
@@ -16,7 +16,7 @@ This uses the normal clone-based execution path.
 
 To test uncommitted changes, use `--no-clone`:
 
-```sh
+```sh title="Terminal"
 localci invoke --no-clone --wait
 ```
 
@@ -26,25 +26,25 @@ No-clone runs are labeled with a trailing `*`. They intentionally see unstaged f
 
 Open the latest run for the current repository:
 
-```sh
+```sh title="Terminal"
 localci web
 ```
 
 Open a specific commit:
 
-```sh
+```sh title="Terminal"
 localci web . <commit>
 ```
 
 Open a specific task:
 
-```sh
+```sh title="Terminal"
 localci web . <commit> <task>
 ```
 
 Use `--no-clone` when viewing a no-clone run:
 
-```sh
+```sh title="Terminal"
 localci web --no-clone . HEAD
 ```
 
@@ -52,19 +52,19 @@ localci web --no-clone . HEAD
 
 After `localci postcommit` enqueues tasks, use the wait command it prints:
 
-```sh
+```sh title="Terminal"
 localci wait <repo> <commit>
 ```
 
 For the current repository's latest run:
 
-```sh
+```sh title="Terminal"
 localci wait
 ```
 
 For a no-clone run:
 
-```sh
+```sh title="Terminal"
 localci wait --no-clone
 ```
 
@@ -72,18 +72,18 @@ localci wait --no-clone
 
 Cancel queued or running work for the current repository:
 
-```sh
+```sh title="Terminal"
 localci cancel
 ```
 
 Cancel a specific task:
 
-```sh
+```sh title="Terminal"
 localci cancel <repo> <commit> <task>
 ```
 
 Use `--no-clone` for no-clone runs:
 
-```sh
+```sh title="Terminal"
 localci cancel --no-clone
 ```

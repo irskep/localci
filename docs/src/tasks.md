@@ -7,7 +7,7 @@ LocalCI tasks are mise tasks. The only naming convention LocalCI adds is the
 
 LocalCI discovers tasks by running:
 
-```sh
+```sh title="Terminal"
 mise tasks --json --all
 ```
 
@@ -23,7 +23,7 @@ LocalCI runs `localci:setup` first when it exists. Use it for dependency install
 
 Each task runs through mise:
 
-```sh
+```sh title="Terminal"
 mise run <task-name>
 ```
 
@@ -45,7 +45,7 @@ LocalCI captures task output into `combined.log`. Files written under `LOCALCI_T
 
 Prefer stable, descriptive artifact names:
 
-```sh
+```sh title="mise-tasks/localci/test"
 mkdir -p "$LOCALCI_TASK_OUTPUT_DIR"
 go test ./... >"$LOCALCI_TASK_OUTPUT_DIR/test.log" 2>&1
 ```
