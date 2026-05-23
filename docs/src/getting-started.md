@@ -4,14 +4,12 @@ This guide gets a repository to the point where LocalCI runs checks after each c
 
 ## Install LocalCI
 
-LocalCI requires mise. Install mise first, then add LocalCI as a pinned GitHub release tool:
+LocalCI requires [Mise](https://mise.en.dev). Install Mise first, then add LocalCI as a pinned GitHub release tool:
 
 ```toml title="mise.toml"
 [tools]
 "github:irskep/localci" = "VERSION"
 ```
-
-Use an exact released version rather than a floating version.
 
 ## Define setup
 
@@ -21,17 +19,16 @@ Add a `localci:setup` task if the repository needs dependencies installed before
 [tasks."localci:setup"]
 description = "Install dependencies for LocalCI runs"
 run = [
-  "printf 'cwd: %s\\n' \"$(pwd)\"",
-  "mise trust",
+  # 'mise trust' is run automatically, so you can usually just install dependencies immediately
   "mise install",
 ]
 ```
 
-The root setup task runs before validation tasks. Keep it deterministic and pinned.
+The root `localci:setup` task is always run before all other tasks. It runs once, not before every task.
 
 ## Define checks
 
-LocalCI discovers mise tasks in the `localci:` namespace. For simple shell checks, use script tasks:
+LocalCI discovers mise tasks in the `localci:` namespace. [File tasks](https://mise.en.dev/tasks/file-tasks.html) are usually a good fit:
 
 ```sh
 mkdir -p mise-tasks/localci
@@ -48,7 +45,7 @@ go test ./...
 
 Save that as `mise-tasks/localci/test` and make it executable.
 
-Monorepo tasks work too. Mise addresses child tasks as `//path:task`; LocalCI treats the task portion after the path as eligible when it starts with `localci:`.
+[Monorepo tasks](https://mise.en.dev/tasks/monorepo.html) work too. Mise addresses child tasks as `//path:task`; LocalCI treats the task portion after the path as eligible when it starts with `localci:`.
 
 ## Start the daemon
 
@@ -80,7 +77,7 @@ Or open the web UI:
 localci web
 ```
 
-For a compact terminal UI with the same daemon-backed data:
+Or open the TUI:
 
 ```sh
 localci dash

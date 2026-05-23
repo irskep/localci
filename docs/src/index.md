@@ -1,28 +1,20 @@
-# LocalCI
+# Overview
 
 LocalCI is an asynchronous post-commit validation runner for local development. It fills the gap between Git hooks and remote CI: checks run locally, but they run after the commit so the person or coding agent making the change does not have to block on the full suite before moving on.
 
-LocalCI is deliberately small. It discovers mise tasks, queues them in a daemon, runs them against an isolated checkout by default, and makes the results available from the CLI and a local web UI.
+LocalCI is deliberately small. It discovers mise tasks, queues them in a daemon, runs them against an isolated clone, and makes the results available from the CLI and a local web UI.
 
 ## What LocalCI is for
 
 <div class="grid cards" markdown>
 
--   :lucide-check:{ .lg .middle } __Post-commit validation__
+-   :lucide-check:{ .lg .middle } **Run all checks even if you forget**
 
-    Run the checks you already trust locally after every commit.
+    You or your agent might forget to keep one of your test suites green. LocalCI makes sure everything runs all the time.
 
--   :lucide-check:{ .lg .middle } __Agent accountability__
+-   :lucide-check:{ .lg .middle } **Browse results like GitHub Actions (but better)**
 
-    Make coding agents produce commits that automatically exercise the expected suite.
-
--   :lucide-check:{ .lg .middle } __Local task logs__
-
-    Keep logs and artifacts available without rerunning commands manually.
-
--   :lucide-check:{ .lg .middle } __Working-tree runs__
-
-    Use `--no-clone` when you want fast feedback on uncommitted changes.
+    Results, logs, and history are all available via one-shot commands, a web UI, and a terminal UI.
 
 </div>
 
@@ -30,29 +22,25 @@ LocalCI is deliberately small. It discovers mise tasks, queues them in a daemon,
 
 <div class="grid cards" markdown>
 
--   :lucide-x:{ .lg .middle } __Release gates__
+-   :lucide-x:{ .lg .middle } **GitHub Actions compatibility**
 
-    Keep remote CI for protected branches, release gates, and cross-platform checks.
+    LocalCI remains simple by sticking to running Mise tasks.
 
--   :lucide-x:{ .lg .middle } __GitHub YAML__
+-   :lucide-x:{ .lg .middle } **Projects without Mise**
 
-    LocalCI does not define another workflow format; it discovers mise tasks.
-
--   :lucide-x:{ .lg .middle } __Non-mise projects__
-
-    If a project cannot express its checks as mise tasks, it is not a good fit yet.
+    If a project cannot express its checks as mise tasks, it is not a good fit.
 
 </div>
 
-## Model
+## How it works
 
 The normal path is:
 
 1. The daemon is running.
-2. A Git post-commit hook calls `localci postcommit --repo <repo> <commit>`.
-3. LocalCI discovers every mise task whose task name starts with `localci:`, including monorepo tasks addressed with mise's `//path:task` syntax.
-4. The daemon runs the root `localci:setup`, when present, before other tasks.
-5. Each task receives output and cache directories through environment variables.
-6. Results can be inspected with `localci wait`, `localci status`, or `localci web`.
+2. A Git post-commit hook calls `localci postcommit <commit>`.
+3. The LocalCI daemon clones your project to a unique place and checks out the commit.
+4. The daemon discovers every mise task whose task name starts with `localci:`, including monorepo tasks addressed with mise's `//path:task` syntax, and puts them in a queue.
+5. One by one, the daemon runs each task.
+6. Results can be inspected with `localci wait`, `localci status`, `localci web`, or `localci dash`.
 
-By default, committed runs execute in an independent clone under LocalCI's data directory. `--no-clone` commands are available for explicitly running against the live working tree.
+By default, LocalCI runs everything in isolated clones, but you can pass `--no-clone` to run on your working tree.
