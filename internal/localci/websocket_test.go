@@ -81,7 +81,7 @@ func TestAPIEventWebSocketSendsSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial returned error: %v", err)
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "")
+	defer conn.CloseNow()
 
 	_, data, err := conn.Read(context.Background())
 	if err != nil {
@@ -183,14 +183,14 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial returned error: %v", err)
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "")
+	defer conn.CloseNow()
 
 	taskResource := "/api/repo/repo/commit/abc123/task/%2F%2F%3Alocalci%3Aslow-stream"
 	taskConn, _, err := websocket.Dial(context.Background(), "ws://"+listener.Addr().String()+taskResource+"/events", nil)
 	if err != nil {
 		t.Fatalf("Dial task returned error: %v", err)
 	}
-	defer taskConn.Close(websocket.StatusNormalClosure, "")
+	defer taskConn.CloseNow()
 
 	_, data, err := conn.Read(context.Background())
 	if err != nil {

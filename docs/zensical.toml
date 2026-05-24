@@ -1,6 +1,9 @@
 [project]
 site_name = "LocalCI"
 site_url = "https://steveasleep.com/localci/"
+repo_name = "irskep/localci"
+repo_url = "https://github.com/irskep/localci"
+edit_uri = "edit/main/docs/src/"
 docs_dir = "src"
 nav = [
   "index.md",

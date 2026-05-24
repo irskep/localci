@@ -35,13 +35,13 @@ func (s WebServer) handleAPIEvents(w http.ResponseWriter, r *http.Request, segme
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
 
+	events, unsubscribe := s.eventHub().Subscribe(resource)
+	defer unsubscribe()
+
 	if err := s.writeResourceSnapshot(r.Context(), conn, resource, EventTypeSnapshot); err != nil {
 		_ = conn.Close(websocket.StatusInternalError, err.Error())
 		return
 	}
-
-	events, unsubscribe := s.eventHub().Subscribe(resource)
-	defer unsubscribe()
 
 	for {
 		select {
