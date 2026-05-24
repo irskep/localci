@@ -300,7 +300,7 @@ func (m tuiModel) renderCommit(theme tuiTheme, height int) string {
 		left = append(left, selectableLine(theme, m.scroll+i == m.cursor, truncate(line, leftWidth-8)))
 	}
 	selected, ok := m.selectedCommitTask()
-	right := []string{theme.title().Render(shortCommit(m.commit.Commit.Commit))}
+	right := []string{}
 	if ok {
 		right = append(right,
 			"task: "+selected.Name,
