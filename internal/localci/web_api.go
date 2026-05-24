@@ -7,115 +7,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os/exec"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
-	"time"
 )
-
-type apiRepoSummary struct {
-	RepoDir  string `json:"repo_dir"`
-	RepoPath string `json:"repo_path"`
-}
-
-type apiCommitSummary struct {
-	Repo        apiRepoSummary    `json:"repo"`
-	Commit      string            `json:"commit"`
-	Annotations map[string]string `json:"annotations,omitempty"`
-	Tasks       []apiTaskSummary  `json:"tasks"`
-	ActivityAt  time.Time         `json:"activity_at"`
-}
-
-type apiTaskSummary struct {
-	Name                 string          `json:"name"`
-	ShortName            string          `json:"short_name"`
-	Attempt              int             `json:"attempt"`
-	AttemptCount         int             `json:"attempt_count"`
-	Status               ExecutionStatus `json:"status"`
-	DurationMilliseconds int64           `json:"duration_ms"`
-	Failure              string          `json:"failure"`
-}
-
-type apiQueueEntry struct {
-	Repo    apiRepoSummary `json:"repo"`
-	Commit  string         `json:"commit"`
-	Task    string         `json:"task"`
-	Attempt int            `json:"attempt"`
-}
-
-type apiQueueResponse struct {
-	Active  *apiQueueEntry  `json:"active,omitempty"`
-	Pending []apiQueueEntry `json:"pending"`
-}
-
-type apiHomeResponse struct {
-	Repos         []apiRepoSummary   `json:"repos"`
-	RecentCommits []apiCommitSummary `json:"recent_commits"`
-	Queue         apiQueueResponse   `json:"queue"`
-}
-
-type apiRepoResponse struct {
-	Repo    apiRepoSummary     `json:"repo"`
-	Commits []apiCommitSummary `json:"commits"`
-}
-
-type apiCommitResponse struct {
-	Repo   apiRepoSummary   `json:"repo"`
-	Commit CommitStatusView `json:"commit"`
-}
-
-type apiTaskResponse struct {
-	Repo            apiRepoSummary `json:"repo"`
-	Commit          string         `json:"commit"`
-	Task            TaskStatusView `json:"task"`
-	SelectedAttempt int            `json:"selected_attempt"`
-	IsLive          bool           `json:"is_live"`
-	PrimaryArtifact string         `json:"primary_artifact"`
-	PrimaryLog      string         `json:"primary_log"`
-}
-
-type apiArtifactListResponse struct {
-	Repo      apiRepoSummary `json:"repo"`
-	Commit    string         `json:"commit"`
-	Task      string         `json:"task"`
-	Attempt   int            `json:"attempt"`
-	Artifacts []ArtifactView `json:"artifacts"`
-}
-
-type apiArtifactResponse struct {
-	Repo     apiRepoSummary `json:"repo"`
-	Commit   string         `json:"commit"`
-	Task     string         `json:"task"`
-	Attempt  int            `json:"attempt"`
-	Artifact ArtifactView   `json:"artifact"`
-	Content  string         `json:"content"`
-}
-
-type apiRevealArtifactResponse struct {
-	Path string `json:"path"`
-	OK   bool   `json:"ok"`
-}
-
-type apiRetryResponse struct {
-	Repo     apiRepoSummary `json:"repo"`
-	Commit   string         `json:"commit"`
-	Task     string         `json:"task"`
-	Attempt  int            `json:"attempt"`
-	URL      string         `json:"url"`
-	Enqueued bool           `json:"enqueued"`
-}
-
-type apiCancelResponse struct {
-	Repo     apiRepoSummary `json:"repo"`
-	Commit   string         `json:"commit"`
-	Task     string         `json:"task"`
-	Active   bool           `json:"active"`
-	Pending  int            `json:"pending"`
-	Canceled bool           `json:"canceled"`
-}
 
 func (s WebServer) handleAPI(w http.ResponseWriter, r *http.Request) {
 	escapedPath := requestEscapedPath(r)
@@ -483,94 +379,6 @@ func (s WebServer) handleAPIAttemptRoutes(w http.ResponseWriter, r *http.Request
 	s.handleAPIArtifact(w, repoDir, commit, taskName, attempt, path.Join(segments[2:]...))
 }
 
-func (s WebServer) handleAPIArtifactIndex(w http.ResponseWriter, repoDir string, commit string, taskName string, attempt int) {
-	task, err := s.selectedTaskStatus(repoDir, commit, taskName, attempt)
-	if err != nil {
-		if errorsIsRecordNotFound(err) {
-			writeAPIError(w, http.StatusNotFound, err)
-			return
-		}
-		writeAPIError(w, http.StatusBadRequest, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, apiArtifactListResponse{
-		Repo:      s.apiRepoSummary(repoDir),
-		Commit:    commit,
-		Task:      task.Name,
-		Attempt:   task.Attempt,
-		Artifacts: task.Artifacts,
-	})
-}
-
-func (s WebServer) handleAPIRevealArtifact(w http.ResponseWriter, repoDir string, commit string, taskName string, attempt int, artifactPath string) {
-	_, artifact, err := s.artifactForRoute(repoDir, commit, taskName, attempt, artifactPath)
-	if err != nil {
-		if errorsIsRecordNotFound(err) {
-			writeAPIError(w, http.StatusNotFound, err)
-			return
-		}
-		writeAPIError(w, http.StatusBadRequest, err)
-		return
-	}
-	reveal := s.RevealArtifactInFinder
-	if reveal == nil {
-		reveal = defaultRevealArtifactInFinder
-	}
-	if err := reveal(artifact.Path); err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, apiRevealArtifactResponse{Path: artifact.Path, OK: true})
-}
-
-func (s WebServer) handleAPIArtifact(w http.ResponseWriter, repoDir string, commit string, taskName string, attempt int, artifactPath string) {
-	task, artifact, err := s.artifactForRoute(repoDir, commit, taskName, attempt, artifactPath)
-	if err != nil {
-		if errorsIsRecordNotFound(err) {
-			writeAPIError(w, http.StatusNotFound, err)
-			return
-		}
-		writeAPIError(w, http.StatusBadRequest, err)
-		return
-	}
-	data, err := readTextTaskArtifact(task, artifact.DisplayName)
-	if err != nil {
-		if errors.Is(err, ErrArtifactNotDisplayable) {
-			writeAPIError(w, http.StatusUnsupportedMediaType, err)
-			return
-		}
-		writeAPIError(w, http.StatusNotFound, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, apiArtifactResponse{
-		Repo:     s.apiRepoSummary(repoDir),
-		Commit:   commit,
-		Task:     task.Name,
-		Attempt:  task.Attempt,
-		Artifact: artifact,
-		Content:  string(data),
-	})
-}
-
-func (s WebServer) artifactForRoute(repoDir string, commit string, taskName string, attempt int, artifactPath string) (TaskStatusView, ArtifactView, error) {
-	task, err := s.selectedTaskStatus(repoDir, commit, taskName, attempt)
-	if err != nil {
-		return TaskStatusView{}, ArtifactView{}, err
-	}
-	artifact, ok := findArtifactByDisplayName(task.Artifacts, artifactPath)
-	if !ok {
-		return TaskStatusView{}, ArtifactView{}, ErrRecordNotFound
-	}
-	return task, artifact, nil
-}
-
-func defaultRevealArtifactInFinder(artifactPath string) error {
-	if runtime.GOOS != "darwin" {
-		return fmt.Errorf("show in finder is only supported on macOS")
-	}
-	return exec.Command("open", "-R", artifactPath).Run()
-}
-
 func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit string, taskName string) {
 	view, err := s.buildStatusView(repoDir, commit)
 	if err != nil {
@@ -897,15 +705,6 @@ func indexOfSegment(segments []string, target string) int {
 		}
 	}
 	return -1
-}
-
-func findArtifactByDisplayName(artifacts []ArtifactView, displayName string) (ArtifactView, bool) {
-	for _, artifact := range artifacts {
-		if artifact.DisplayName == displayName {
-			return artifact, true
-		}
-	}
-	return ArtifactView{}, false
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
