@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 env:
   MISE_EXPERIMENTAL: "true"
@@ -103,3 +105,37 @@ jobs:
         run: |
           set -eu
           gh release create "$TAG" dist/*.tar.gz dist/checksums.txt --title "$TAG" --notes-file release-notes.md --verify-tag
+
+  docs:
+    name: deploy docs
+    needs: release
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+        with:
+          cache: true
+          install: true
+
+      - name: Set up LocalCI task dependencies
+        run: mise run localci:setup
+
+      - name: Build docs
+        env:
+          LOCALCI_CACHE_DIR: ${{ runner.temp }}/localci/cache
+          LOCALCI_TASK_CACHE_DIR: ${{ runner.temp }}/localci/task-cache/docs
+          LOCALCI_TASK_OUTPUT_DIR: ${{ runner.temp }}/localci/out/docs
+        run: mise run //docs:localci:build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
