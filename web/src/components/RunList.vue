@@ -30,6 +30,8 @@ withDefaults(
 <style scoped>
 .run-list {
   display: grid;
+  align-content: start;
+  grid-auto-rows: max-content;
   gap: var(--app-space-5);
   min-width: 0;
 }
