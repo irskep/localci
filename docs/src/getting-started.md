@@ -8,7 +8,7 @@ LocalCI requires [Mise](https://mise.en.dev). Install Mise first, then add Local
 
 ```toml title="mise.toml"
 [tools]
-"github:irskep/localci" = "0.1.1"
+"github:irskep/localci" = "0.1.2"
 ```
 
 ```sh
