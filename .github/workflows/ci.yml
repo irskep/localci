@@ -10,7 +10,6 @@ permissions:
   contents: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   MISE_EXPERIMENTAL: "true"
 
 jobs:
@@ -44,10 +43,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: jdx/mise-action@v3
-        with:
-          cache: true
-          install: true
+      - name: Install mise
+        run: |
+          set -eu
+          curl https://mise.run | sh
+          echo "$HOME/.local/bin" >>"$GITHUB_PATH"
+          "$HOME/.local/bin/mise" install --yes
 
       - name: Set up LocalCI task dependencies
         run: mise run localci:setup
