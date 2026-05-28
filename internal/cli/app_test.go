@@ -115,6 +115,55 @@ func TestAppRunRecognizesInvokeUsage(t *testing.T) {
 	}
 }
 
+func TestAppRunRecognizesRunUsage(t *testing.T) {
+	t.Parallel()
+
+	app := App{
+		Stdout: io.Discard,
+		Stderr: io.Discard,
+		Cwd:    "/repo",
+		CheckRequirements: func() error {
+			return nil
+		},
+	}
+
+	err := app.Run([]string{"run", "abc123"})
+	if err == nil {
+		t.Fatalf("Run returned nil error, want usage error")
+	}
+
+	if got := err.Error(); !strings.Contains(got, "unexpected positional argument") {
+		t.Fatalf("error = %q, want positional argument error", got)
+	}
+}
+
+func TestRunNoCloneCommitLabel(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "repo")
+	if err := os.Mkdir(repoDir, 0o755); err != nil {
+		t.Fatalf("Mkdir returned error: %v", err)
+	}
+	writeGitMetadata(t, repoDir)
+
+	app := testApp(root, repoDir)
+	app.HeadCommit = func(repo string) (string, error) {
+		if repo != repoDir {
+			t.Fatalf("repo = %q, want %q", repo, repoDir)
+		}
+		return "abc123", nil
+	}
+
+	commit, err := app.resolveRunCommit(repoDir, cliFlags{NoClone: true})
+	if err != nil {
+		t.Fatalf("resolveRunCommit returned error: %v", err)
+	}
+	if commit != "abc123*" {
+		t.Fatalf("commit = %q, want abc123*", commit)
+	}
+}
+
 func TestResolveRunCommitDefaultsToHead(t *testing.T) {
 	t.Parallel()
 

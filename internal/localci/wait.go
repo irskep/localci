@@ -25,7 +25,11 @@ func (w Waiter) Wait(ctx context.Context, repoDir string, commit string) (Commit
 		if err != nil {
 			return CommitStatusView{}, err
 		}
-		if CommitComplete(view) {
+		live, err := w.hasLiveWork(ctx, repoDir, commit)
+		if err != nil {
+			return CommitStatusView{}, err
+		}
+		if !live && CommitComplete(view) {
 			return view, nil
 		}
 
@@ -35,6 +39,27 @@ func (w Waiter) Wait(ctx context.Context, repoDir string, commit string) (Commit
 		case <-ticker.C:
 		}
 	}
+}
+
+func (w Waiter) hasLiveWork(ctx context.Context, repoDir string, commit string) (bool, error) {
+	queue, err := w.Client.Queue(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range queue {
+		if entry.RepoDir == repoDir && entry.Commit == commit {
+			return true, nil
+		}
+	}
+
+	active, err := w.Client.ActiveTask(ctx)
+	if err != nil {
+		return false, err
+	}
+	if active != nil && active.RepoDir == repoDir && active.Commit == commit {
+		return true, nil
+	}
+	return false, nil
 }
 
 func CommitComplete(view CommitStatusView) bool {

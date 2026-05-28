@@ -27,6 +27,7 @@ Usage:
   localci restart
   localci stop
   localci postcommit [--repo DIR] [--commit REF] [--task TASK] [--annotation KEY=VALUE] [--json]
+  localci run [--repo DIR] [--commit REF] [--task TASK] [--wait] [--no-clone] [--annotation KEY=VALUE] [--json]
   localci status [--repo DIR] [--commit REF] [--task TASK] [--attempt N] [--no-clone] [--json]
   localci wait [--repo DIR] [--commit REF] [--task TASK] [--no-clone] [--json]
   localci history [--repo DIR] [--commit REF] [--task TASK] [--status STATUS] [--failed] [--limit N] [--json]
@@ -64,6 +65,23 @@ Examples:
   localci status --task noisy-fail
   localci status --commit HEAD
   localci status --commit 'HEAD*' --task test
+`, true
+	case "run":
+		return `Usage:
+  localci run [--repo DIR] [--commit REF] [--task TASK] [--wait] [--no-clone] [--annotation KEY=VALUE] [--json]
+
+Queue a daemon-managed LocalCI run. Use --no-clone for a working-tree run
+against the current checkout.
+
+Defaults:
+  --repo      nearest Git repo ancestor
+  --commit    HEAD
+  --task      all tasks
+
+Examples:
+  localci run --wait
+  localci run --no-clone --wait
+  localci run --no-clone --task test --wait
 `, true
 	case "artifacts":
 		return `Usage:

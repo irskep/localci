@@ -489,7 +489,7 @@ func (m DaemonManager) recoverInterruptedWork() error {
 	}()
 
 	if active.Kind == QueueEntryKindRun {
-		_, err := m.Scheduler.Queue.EnqueueRun(active.RepoDir, active.Commit, active.RequestedTasks)
+		_, err := m.Scheduler.Queue.EnqueueRunWithOptions(active.RepoDir, active.Commit, active.RequestedTasks, active.NoClone)
 		return err
 	}
 
@@ -501,7 +501,7 @@ func (m DaemonManager) recoverInterruptedWork() error {
 		return nil
 	}
 
-	_, err = m.Scheduler.Queue.EnqueueRun(active.RepoDir, active.Commit, []string{active.TaskName})
+	_, err = m.Scheduler.Queue.EnqueueRunWithOptions(active.RepoDir, active.Commit, []string{active.TaskName}, active.NoClone)
 	return err
 }
 

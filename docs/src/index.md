@@ -43,4 +43,4 @@ The normal path is:
 5. One by one, the daemon runs each task.
 6. Results can be inspected with `localci wait`, `localci status`, `localci web`, or `localci dash`.
 
-By default, LocalCI runs everything in isolated clones, but you can pass `--no-clone` to run on your working tree.
+By default, LocalCI runs everything in isolated clones. Use `localci run --no-clone --wait` when you intentionally want a daemon-managed run against your working tree.

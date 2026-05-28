@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -87,6 +88,72 @@ exit 1
 	}
 
 	run, err := readRunRecord(runner.Paths, InvokeRequest{RepoDir: repoDir, Commit: "abc123"})
+	if err != nil {
+		t.Fatalf("readRunRecord returned error: %v", err)
+	}
+	if run.Summary.Succeeded != 1 {
+		t.Fatalf("unexpected run summary: %#v", run.Summary)
+	}
+}
+
+func TestSchedulerRunNextExecutesNoCloneRunInRepoDir(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := t.TempDir()
+	binDir := t.TempDir()
+	paths := Paths{Root: root}
+	pwdFile := filepath.Join(root, "pwd.txt")
+
+	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
+set -eu
+if [ "$1" = "trust" ]; then
+  exit 0
+fi
+if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--all" ]; then
+  printf '%s\n' '[{"name":"localci:pwd"}]'
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "localci:pwd" ]; then
+  pwd >"`+pwdFile+`"
+  exit 0
+fi
+exit 1
+`)
+
+	queue := QueueStore{Paths: paths}
+	if _, err := queue.EnqueueRunWithOptions(repoDir, "abc123*", nil, true); err != nil {
+		t.Fatalf("EnqueueRunWithOptions returned error: %v", err)
+	}
+
+	runner := Runner{
+		Paths:        paths,
+		MiseBin:      filepath.Join(binDir, "mise"),
+		Env:          append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH")),
+		PollInterval: 10 * time.Millisecond,
+	}
+	scheduler := Scheduler{
+		Queue:  queue,
+		Runner: runner,
+	}
+
+	if _, err := scheduler.RunNext(context.Background()); err != nil {
+		t.Fatalf("RunNext expand returned error: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := scheduler.RunNext(context.Background()); err != nil {
+			t.Fatalf("RunNext task %d returned error: %v", i, err)
+		}
+	}
+
+	pwdBytes, err := os.ReadFile(pwdFile)
+	if err != nil {
+		t.Fatalf("ReadFile pwd marker returned error: %v", err)
+	}
+	if got := strings.TrimSpace(string(pwdBytes)); got != repoDir {
+		t.Fatalf("task pwd = %q, want %q", got, repoDir)
+	}
+	run, err := readRunRecord(paths, InvokeRequest{RepoDir: repoDir, Commit: "abc123*", NoClone: true})
 	if err != nil {
 		t.Fatalf("readRunRecord returned error: %v", err)
 	}

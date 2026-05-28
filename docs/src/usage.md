@@ -29,27 +29,29 @@ After `localci postcommit` enqueues tasks, use the wait command it prints:
 localci wait --repo <repo> --commit <commit>
 ```
 
-For a no-clone run:
+To inspect an existing no-clone run:
 
 ```sh
 localci wait --commit 'HEAD*'
 ```
 
-## Run an ad hoc check
+## Run an ad hoc daemon check
 
-Use `invoke` when you explicitly want to kick off a manual run outside the post-commit path.
+Use `run` when you explicitly want to queue a manual daemon-managed run outside the post-commit path.
 
 ```sh
-localci invoke --task test --wait
+localci run --task test --wait
 ```
 
-To test uncommitted changes, use `--no-clone`:
+To test uncommitted changes through the daemon queue, use `--no-clone`:
 
 ```sh
-localci invoke --no-clone --task test --wait
+localci run --no-clone --task test --wait
 ```
 
 No-clone runs are labeled with a trailing `*`. They intentionally see unstaged files and local edits.
+
+Use `invoke` only when you want to run checks directly in the current terminal instead of through the daemon.
 
 ## Check status
 

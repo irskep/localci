@@ -20,6 +20,10 @@ Enqueue tasks for a committed revision. This is the command the Git post-commit 
 
 When `--repo` is omitted, commands that operate on a repository use the nearest ancestor of the current directory that contains `.git`.
 
+## `localci run [--repo dir] [--commit ref] [--task task] [--wait] [--no-clone] [--annotation key=value]`
+
+Queue a daemon-managed run manually. Use `--no-clone` to run against the live working tree.
+
 ## `localci status [--repo dir] [--commit ref] [--task task] [--attempt n] [--no-clone]`
 
 Print a bounded status summary for the selected run.
@@ -50,7 +54,7 @@ Cancel queued and active work.
 
 ## `localci invoke [--repo dir] [--commit ref] [--task task] [--wait] [--no-clone] [--annotation key=value]`
 
-Run an ad hoc check manually. Use `--wait` to block for results and `--no-clone` to run against the live working tree.
+Run an ad hoc check directly in the current terminal. Use `run` when you want daemon-managed queueing.
 
 ## `localci install-hooks [--repo dir]`
 

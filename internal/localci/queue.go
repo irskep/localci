@@ -26,6 +26,7 @@ type QueueEntry struct {
 	RepoDir        string         `json:"repo_dir"`
 	RepoID         string         `json:"repo_id"`
 	Commit         string         `json:"commit"`
+	NoClone        bool           `json:"no_clone,omitempty"`
 	TaskName       string         `json:"task_name,omitempty"`
 	TaskKey        string         `json:"task_key,omitempty"`
 	RequestedTasks []string       `json:"requested_tasks,omitempty"`
@@ -54,26 +55,35 @@ const (
 var queueMutationMu sync.Mutex
 
 func (s QueueStore) Enqueue(repoDir string, commit string, taskName string) (QueueEntry, error) {
+	return s.EnqueueWithOptions(repoDir, commit, taskName, false)
+}
+
+func (s QueueStore) EnqueueWithOptions(repoDir string, commit string, taskName string, noClone bool) (QueueEntry, error) {
 	queueMutationMu.Lock()
 	defer queueMutationMu.Unlock()
 
-	return s.enqueueTaskLocked(repoDir, commit, taskName)
+	return s.enqueueTaskLocked(repoDir, commit, taskName, noClone)
 }
 
 func (s QueueStore) EnqueueRun(repoDir string, commit string, requestedTasks []string) (QueueEntry, error) {
+	return s.EnqueueRunWithOptions(repoDir, commit, requestedTasks, false)
+}
+
+func (s QueueStore) EnqueueRunWithOptions(repoDir string, commit string, requestedTasks []string, noClone bool) (QueueEntry, error) {
 	queueMutationMu.Lock()
 	defer queueMutationMu.Unlock()
 
-	return s.enqueueRunLocked(repoDir, commit, requestedTasks)
+	return s.enqueueRunLocked(repoDir, commit, requestedTasks, noClone)
 }
 
-func (s QueueStore) enqueueRunLocked(repoDir string, commit string, requestedTasks []string) (QueueEntry, error) {
+func (s QueueStore) enqueueRunLocked(repoDir string, commit string, requestedTasks []string, noClone bool) (QueueEntry, error) {
 	enqueuedAt := s.now()
 	entry := QueueEntry{
 		Kind:           QueueEntryKindRun,
 		RepoDir:        repoDir,
 		RepoID:         normalizeRepoDir(repoDir),
 		Commit:         commit,
+		NoClone:        noClone,
 		TaskKey:        "run",
 		RequestedTasks: append([]string{}, requestedTasks...),
 		EnqueuedAt:     enqueuedAt,
@@ -89,7 +99,7 @@ func (s QueueStore) enqueueRunLocked(repoDir string, commit string, requestedTas
 	return entry, nil
 }
 
-func (s QueueStore) enqueueTaskLocked(repoDir string, commit string, taskName string) (QueueEntry, error) {
+func (s QueueStore) enqueueTaskLocked(repoDir string, commit string, taskName string, noClone bool) (QueueEntry, error) {
 	enqueuedAt := s.now()
 	attempt, err := s.nextAttemptLocked(repoDir, commit, taskName)
 	if err != nil {
@@ -100,6 +110,7 @@ func (s QueueStore) enqueueTaskLocked(repoDir string, commit string, taskName st
 		RepoDir:    repoDir,
 		RepoID:     normalizeRepoDir(repoDir),
 		Commit:     commit,
+		NoClone:    noClone,
 		TaskName:   taskName,
 		TaskKey:    sanitizeTaskName(taskName),
 		Attempt:    attempt,

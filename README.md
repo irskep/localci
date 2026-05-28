@@ -49,10 +49,10 @@ localci web
 localci dash
 ```
 
-For an ad hoc working-tree check, use `invoke` explicitly:
+For an ad hoc daemon-managed working-tree check, use `run --no-clone` explicitly:
 
 ```sh
-localci invoke --no-clone --task test --wait
+localci run --no-clone --task test --wait
 ```
 
 ## Artifacts

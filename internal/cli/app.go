@@ -67,6 +67,8 @@ func (a App) Run(args []string) error {
 		return a.runStop(args[1:])
 	case "postcommit":
 		return a.runPostcommit(args[1:])
+	case "run":
+		return a.runRun(args[1:])
 	case "invoke":
 		return a.runInvoke(args[1:])
 	case "cancel":
@@ -162,6 +164,80 @@ func (a App) runPostcommit(args []string) error {
 
 func postcommitWaitInstruction(repo string, commit string) string {
 	return fmt.Sprintf("Wait: localci wait --repo %s --commit %s", shellQuote(repo), shellQuote(commit))
+}
+
+func (a App) runRun(args []string) error {
+	flags, err := parseCLIFlags(args, flagSpec{
+		"repo": true, "commit": true, "task": true, "wait": true, "no-clone": true, "annotation": true, "json": true,
+	})
+	if err != nil {
+		return err
+	}
+	repo, err := a.resolveSelectorRepo(flags.Repo)
+	if err != nil {
+		return err
+	}
+	commit, err := a.resolveRunCommit(repo, flags)
+	if err != nil {
+		return err
+	}
+	if commit == "" {
+		return fmt.Errorf("commit must not be empty")
+	}
+
+	runner, err := a.newRunner()
+	if err != nil {
+		return err
+	}
+	requestedTasks, err := a.resolveRequestedTasks(context.Background(), runner, repo, flags.Task)
+	if err != nil {
+		return err
+	}
+
+	client := localci.DaemonClient{Paths: runner.Paths}
+	annotations := mergedAnnotations(localci.GitAnnotations(context.Background(), repo), flags.Annotation)
+	enqueued, err := client.EnqueueRun(context.Background(), repo, commit, annotations, requestedTasks, flags.NoClone)
+	if err != nil {
+		return err
+	}
+	if flags.Wait {
+		view, err := (localci.Waiter{Client: client}).Wait(context.Background(), repo, commit)
+		if err != nil {
+			return err
+		}
+		if flags.Task != "" {
+			taskName := ""
+			if len(requestedTasks) == 1 {
+				taskName = requestedTasks[0]
+			} else {
+				var err error
+				taskName, err = resolveTaskName(view.Tasks, flags.Task)
+				if err != nil {
+					return err
+				}
+			}
+			view.Tasks = filterStatusTasks(view.Tasks, taskName, false)
+		}
+		if flags.JSON {
+			return writeJSON(a.Stdout, view)
+		}
+		return a.printWaitSummary(view)
+	}
+	if flags.JSON {
+		return writeJSON(a.Stdout, map[string]any{
+			"repo":     repo,
+			"commit":   commit,
+			"enqueued": enqueued,
+		})
+	}
+
+	fmt.Fprintf(a.Stdout, "Enqueued run for %s at %s\n", repo, commit)
+	fmt.Fprintf(a.Stdout, "Status: localci status --repo %s --commit %s\n", shellQuote(repo), shellQuote(commit))
+	if resultURL, err := a.postcommitResultURL(client, repo, commit); err == nil && resultURL != "" {
+		fmt.Fprintf(a.Stdout, "Results: %s\n", resultURL)
+	}
+	fmt.Fprintln(a.Stdout, postcommitWaitInstruction(repo, commit))
+	return nil
 }
 
 func (a App) runStatus(args []string) error {

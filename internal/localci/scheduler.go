@@ -56,15 +56,18 @@ func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
 		return s.expandRun(ctx, entry)
 	}
 
-	taskRecord, runErr := s.Runner.runTask(ctx, InvokeRequest{
+	req := InvokeRequest{
 		RepoDir: entry.RepoDir,
 		Commit:  entry.Commit,
-	}, s.Runner.Paths.CloneWorktreeDir(entry.RepoDir, entry.Commit), Task{Name: entry.TaskName}, entry.Attempt)
+		NoClone: entry.NoClone,
+	}
+	workDir := s.Runner.Paths.CloneWorktreeDir(entry.RepoDir, entry.Commit)
+	if entry.NoClone {
+		workDir = entry.RepoDir
+	}
+	taskRecord, runErr := s.Runner.runTask(ctx, req, workDir, Task{Name: entry.TaskName}, entry.Attempt)
 
-	runRecord, writeErr := upsertTaskRecord(s.Runner.Paths, InvokeRequest{
-		RepoDir: entry.RepoDir,
-		Commit:  entry.Commit,
-	}, taskRecord, s.Runner.now())
+	runRecord, writeErr := upsertTaskRecord(s.Runner.Paths, req, taskRecord, s.Runner.now())
 	if writeErr != nil {
 		return RunNextResult{}, writeErr
 	}
@@ -87,6 +90,9 @@ func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
 }
 
 func (s Scheduler) expandRun(ctx context.Context, entry QueueEntry) (RunNextResult, error) {
+	if entry.NoClone {
+		return s.expandNoCloneRun(ctx, entry)
+	}
 	clones := s.cloneManager()
 	info, err := clones.Prepare(ctx, entry.RepoDir, entry.Commit)
 	if err != nil {
@@ -178,6 +184,78 @@ func (s Scheduler) expandRun(ctx context.Context, entry QueueEntry) (RunNextResu
 	return RunNextResult{DidWork: true, Entry: entry, Task: setupRecord, Run: run}, nil
 }
 
+func (s Scheduler) expandNoCloneRun(ctx context.Context, entry QueueEntry) (RunNextResult, error) {
+	req := InvokeRequest{
+		RepoDir: entry.RepoDir,
+		Commit:  entry.Commit,
+		NoClone: true,
+	}
+	if err := s.Runner.Trust(ctx, entry.RepoDir); err != nil {
+		task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
+		if recordErr != nil {
+			return RunNextResult{}, recordErr
+		}
+		return RunNextResult{DidWork: true, Entry: entry, Task: task, Run: run}, errTaskFailed
+	}
+
+	tasks, err := s.Runner.DiscoverTasks(ctx, entry.RepoDir)
+	if err != nil {
+		task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
+		if recordErr != nil {
+			return RunNextResult{}, recordErr
+		}
+		return RunNextResult{DidWork: true, Entry: entry, Task: task, Run: run}, errTaskFailed
+	}
+	tasks = filterRequestedTasks(tasks, entry.RequestedTasks)
+
+	setup, userTasks, hasSetup := splitSetupTask(tasks)
+	run, err := ensureRunRecordWithTasks(s.Runner.Paths, req, tasks, s.Runner.now())
+	if err != nil {
+		return RunNextResult{}, err
+	}
+
+	var setupRecord TaskRecord
+	if hasSetup {
+		var setupErr error
+		setupRecord, setupErr = s.Runner.runTask(ctx, req, entry.RepoDir, setup, 0)
+		run, err = upsertTaskRecord(s.Runner.Paths, req, setupRecord, s.Runner.now())
+		if err != nil {
+			return RunNextResult{}, err
+		}
+		if setupErr != nil {
+			return RunNextResult{DidWork: true, Entry: entry, Task: setupRecord, Run: run}, setupErr
+		}
+	}
+
+	requested := map[string]bool{}
+	for _, task := range entry.RequestedTasks {
+		requested[task] = true
+	}
+	for _, task := range userTasks {
+		if len(requested) > 0 && !requested[task.Name] {
+			continue
+		}
+		active, err := s.Queue.IsTaskActive(entry.RepoDir, entry.Commit, task.Name)
+		if err != nil {
+			return RunNextResult{}, err
+		}
+		if active {
+			continue
+		}
+		queued, err := s.Queue.EnqueueWithOptions(entry.RepoDir, entry.Commit, task.Name, true)
+		if err != nil {
+			return RunNextResult{}, err
+		}
+		if s.Events != nil {
+			s.Events.EntryChanged(queued)
+		}
+	}
+	if s.Events != nil {
+		s.Events.EntryChanged(entry)
+	}
+	return RunNextResult{DidWork: true, Entry: entry, Task: setupRecord, Run: run}, nil
+}
+
 func recordSetupFailure(paths Paths, req InvokeRequest, cause error, now time.Time) (TaskRecord, RunRecord, error) {
 	task := newTaskRecord(paths, req, Task{Name: setupTaskName}, 1, now)
 	if err := os.MkdirAll(task.OutputDir, 0o755); err != nil {
@@ -212,6 +290,9 @@ func (s Scheduler) cloneManager() CloneManager {
 }
 
 func (s Scheduler) cleanupCloneIfDrained(entry QueueEntry) error {
+	if entry.NoClone {
+		return nil
+	}
 	live, err := s.Queue.LiveRefs()
 	if err != nil {
 		return err

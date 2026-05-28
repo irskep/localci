@@ -16,6 +16,7 @@ type DaemonRequest struct {
 	Method         string            `json:"method"`
 	RepoDir        string            `json:"repo_dir,omitempty"`
 	Commit         string            `json:"commit,omitempty"`
+	NoClone        bool              `json:"no_clone,omitempty"`
 	TaskName       string            `json:"task_name,omitempty"`
 	RequestedTasks []string          `json:"requested_tasks,omitempty"`
 	Annotations    map[string]string `json:"annotations,omitempty"`
@@ -69,10 +70,15 @@ func (c DaemonClient) ActiveTask(ctx context.Context) (*ActiveTask, error) {
 }
 
 func (c DaemonClient) Postcommit(ctx context.Context, repoDir string, commit string, annotations map[string]string, requestedTasks []string) ([]QueueEntry, error) {
+	return c.EnqueueRun(ctx, repoDir, commit, annotations, requestedTasks, false)
+}
+
+func (c DaemonClient) EnqueueRun(ctx context.Context, repoDir string, commit string, annotations map[string]string, requestedTasks []string, noClone bool) ([]QueueEntry, error) {
 	resp, err := c.call(ctx, DaemonRequest{
 		Method:         "postcommit",
 		RepoDir:        repoDir,
 		Commit:         commit,
+		NoClone:        noClone,
 		Annotations:    annotations,
 		RequestedTasks: requestedTasks,
 	})
@@ -255,7 +261,7 @@ func (s *DaemonServer) dispatch(req DaemonRequest) DaemonResponse {
 		}
 		return DaemonResponse{OK: true}
 	case "postcommit":
-		entries, err := s.enqueuePostcommit(req.RepoDir, req.Commit, req.Annotations, req.RequestedTasks)
+		entries, err := s.enqueuePostcommit(req.RepoDir, req.Commit, req.Annotations, req.RequestedTasks, req.NoClone)
 		if err != nil {
 			return errorResponse(err)
 		}
@@ -365,7 +371,7 @@ func (s *DaemonServer) buildStatusView(repoDir string, commit string) (CommitSta
 	return BuildCommitStatusView(s.Paths, repoDir, commit, nil, queue, activePtr)
 }
 
-func (s *DaemonServer) enqueuePostcommit(repoDir string, commit string, annotations map[string]string, requestedTasks []string) ([]QueueEntry, error) {
+func (s *DaemonServer) enqueuePostcommit(repoDir string, commit string, annotations map[string]string, requestedTasks []string, noClone bool) ([]QueueEntry, error) {
 	if repoDir == "" {
 		return nil, fmt.Errorf("repo_dir is required")
 	}
@@ -376,7 +382,7 @@ func (s *DaemonServer) enqueuePostcommit(repoDir string, commit string, annotati
 		return nil, err
 	}
 
-	entry, err := s.Queue.EnqueueRun(repoDir, commit, requestedTasks)
+	entry, err := s.Queue.EnqueueRunWithOptions(repoDir, commit, requestedTasks, noClone)
 	if err != nil {
 		return nil, err
 	}
