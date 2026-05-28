@@ -41,9 +41,9 @@ jobs:
           - task: //web:localci:typecheck
             slug: web-typecheck
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v3
         with:
           cache: true
           install: true

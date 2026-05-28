@@ -20,7 +20,7 @@ jobs:
     env:
       LOCALCI_CACHE_DIR: /tmp/localci/cache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -35,7 +35,7 @@ jobs:
           printf 'TAG=%s\n' "$tag" >>"$GITHUB_ENV"
           printf 'VERSION=%s\n' "${tag#v}" >>"$GITHUB_ENV"
 
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v3
         with:
           cache: true
           install: true
@@ -114,9 +114,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v3
         with:
           cache: true
           install: true
