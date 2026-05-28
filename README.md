@@ -21,7 +21,7 @@ Install LocalCI with mise, then start the daemon and install the post-commit hoo
 
 ```toml
 [tools]
-"github:irskep/localci" = "0.1.2"
+"github:irskep/localci" = "0.1.3"
 ```
 
 ```sh
