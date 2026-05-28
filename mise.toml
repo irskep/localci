@@ -4,7 +4,7 @@ experimental_monorepo_root = true
 GOCACHE = "{{config_root}}/.cache/go-build"
 
 [monorepo]
-config_roots = ["web", "docs"]
+config_roots = ["web", "docs", "packages/localci-demo-core", "packages/localci-demo-ui"]
 
 [tools]
 "aqua:terrastruct/d2" = "0.7.1"
@@ -77,6 +77,13 @@ description = "Format Go sources"
 run = [
   "printf 'cwd: %s\\n' \"$(pwd)\"",
   "gofmt -w ./cmd ./internal",
+]
+
+[tasks.format]
+description = "Format all sources"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "mise run //...:fmt",
 ]
 
 [tasks.check]

@@ -1,3 +1,10 @@
+[tasks.fmt]
+description = "Format Vue sources"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "pnpm exec oxfmt src/",
+]
+
 [tasks."localci:build"]
 description = "Build the Vue UI"
 run = [

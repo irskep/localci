@@ -23,6 +23,7 @@ withDefaults(
       :run="run"
       :repo-path="repoPath ?? run.repo.repo_path"
       :show-repo="showRepo"
+      summary-mode
     />
   </TransitionGroup>
 </template>
