@@ -67,4 +67,51 @@ describe('localci store', () => {
     expect(store.repoLoaded).toBe(true)
     expect(store.currentRepo?.repo.repo_path).toBe('cli/localci')
   })
+
+  it('loads repo subscriptions from HTTP while waiting for the websocket snapshot', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          repo: { repo_dir: '/repo', repo_path: 'cli/localci' },
+          commits: [],
+        }),
+      })),
+    )
+    const store = useLocalciStore()
+
+    store.subscribeRepo('/api/repo/cli/localci')
+
+    await vi.waitFor(() => expect(store.repoLoaded).toBe(true))
+    expect(store.currentRepo?.repo.repo_path).toBe('cli/localci')
+    expect(store.loading).toBe(false)
+    expect(FakeWebSocket.instances).toHaveLength(1)
+    expect(fetch).toHaveBeenCalledWith('/api/repo/cli/localci')
+  })
+
+  it('keeps newer page subscriptions when stale routes unmount', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    )
+    const store = useLocalciStore()
+    const snapshot = {
+      type: 'snapshot',
+      resource: '/api/repo/cli/localci',
+      data: {
+        repo: { repo_dir: '/repo', repo_path: 'cli/localci' },
+        commits: [],
+      },
+    }
+
+    store.subscribeCommit('/api/repo/cli/localci/commit/abc123')
+    store.subscribeRepo('/api/repo/cli/localci')
+    store.unsubscribePage('/api/repo/cli/localci/commit/abc123')
+    store.unsubscribePage('')
+    FakeWebSocket.instances[1]?.message(snapshot)
+
+    expect(store.repoLoaded).toBe(true)
+    expect(store.currentRepo?.repo.repo_path).toBe('cli/localci')
+  })
 })

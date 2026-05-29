@@ -18,8 +18,5 @@ export function useDocumentTitle(title: MaybeRefOrGetter<string>): void {
     { immediate: true },
   )
 
-  onUnmounted(() => {
-    stop()
-    document.title = suffix
-  })
+  onUnmounted(stop)
 }

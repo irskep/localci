@@ -529,42 +529,59 @@ func TestWebServerHomeAndRepoPages(t *testing.T) {
 	}()
 
 	baseURL := "http://" + listener.Addr().String()
-	resp, err := http.Get(baseURL + "/")
+	resp, err := http.Get(baseURL + "/api")
 	if err != nil {
-		t.Fatalf("GET home returned error: %v", err)
+		t.Fatalf("GET home api returned error: %v", err)
 	}
-	body, _ := io.ReadAll(resp.Body)
+	var home apiHomeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&home); err != nil {
+		t.Fatalf("Decode home returned error: %v", err)
+	}
 	_ = resp.Body.Close()
-	rendered := string(body)
-	if !strings.Contains(rendered, "repo-a") || !strings.Contains(rendered, "repo-b") {
-		t.Fatalf("home page missing repo links: %s", rendered)
+
+	if len(home.Repos) != 2 || !hasAPIRepo(home.Repos, "repo-a") || !hasAPIRepo(home.Repos, "repo-b") {
+		t.Fatalf("unexpected home repos: %#v", home.Repos)
 	}
-	if !strings.Contains(rendered, "bbb222") || !strings.Contains(rendered, "1 passed") {
-		t.Fatalf("home page missing run summary: %s", rendered)
+	if len(home.RecentCommits) != 2 || home.RecentCommits[0].Commit != "bbb222" {
+		t.Fatalf("unexpected recent commits: %#v", home.RecentCommits)
 	}
-	if !strings.Contains(rendered, "Recent Commit Activity") || !strings.Contains(rendered, "Queue") {
-		t.Fatalf("home page missing section headings: %s", rendered)
+	if len(home.RecentCommits[0].Tasks) != 1 || home.RecentCommits[0].Tasks[0].Status != ExecutionStatusSucceeded {
+		t.Fatalf("unexpected recent commit tasks: %#v", home.RecentCommits[0].Tasks)
 	}
-	if !strings.Contains(rendered, "active") || !strings.Contains(rendered, "queued123") {
-		t.Fatalf("home page missing active queue item: %s", rendered)
+	if home.Queue.Active == nil || home.Queue.Active.Commit != "queued123" {
+		t.Fatalf("unexpected active queue item: %#v", home.Queue.Active)
 	}
-	if !strings.Contains(rendered, "pending") || !strings.Contains(rendered, "queued456") {
-		t.Fatalf("home page missing pending queue item: %s", rendered)
-	}
-	if strings.Contains(rendered, ">test</a> — succeeded") {
-		t.Fatalf("home page should not inline commit task rows: %s", rendered)
+	if len(home.Queue.Pending) != 1 || home.Queue.Pending[0].Commit != "queued456" {
+		t.Fatalf("unexpected pending queue items: %#v", home.Queue.Pending)
 	}
 
-	resp, err = http.Get(baseURL + "/repo?repo=" + url.QueryEscape("/repo-b"))
+	resp, err = http.Get(baseURL + "/api/repo/repo-b")
 	if err != nil {
-		t.Fatalf("GET repo returned error: %v", err)
+		t.Fatalf("GET repo api returned error: %v", err)
 	}
-	body, _ = io.ReadAll(resp.Body)
+	var repo apiRepoResponse
+	if err := json.NewDecoder(resp.Body).Decode(&repo); err != nil {
+		t.Fatalf("Decode repo returned error: %v", err)
+	}
 	_ = resp.Body.Close()
-	rendered = string(body)
-	if !strings.Contains(rendered, "bbb222") || !strings.Contains(rendered, ">test<") {
-		t.Fatalf("repo page missing commit/task info: %s", rendered)
+	if repo.Repo.RepoPath != "repo-b" {
+		t.Fatalf("unexpected repo summary: %#v", repo.Repo)
 	}
+	if len(repo.Commits) != 1 || repo.Commits[0].Commit != "bbb222" {
+		t.Fatalf("unexpected repo commits: %#v", repo.Commits)
+	}
+	if len(repo.Commits[0].Tasks) != 1 || repo.Commits[0].Tasks[0].ShortName != "test" {
+		t.Fatalf("unexpected repo tasks: %#v", repo.Commits[0].Tasks)
+	}
+}
+
+func hasAPIRepo(repos []apiRepoSummary, repoPath string) bool {
+	for _, repo := range repos {
+		if repo.RepoPath == repoPath {
+			return true
+		}
+	}
+	return false
 }
 
 func isTCPPermissionError(err error) bool {

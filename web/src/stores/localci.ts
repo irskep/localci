@@ -194,7 +194,7 @@ export const useLocalciStore = defineStore('localci', () => {
     unsubscribePage()
     loading.value = true
     error.value = ''
-    pageStream = openReconnectingEventStream(apiPath, {
+    const stream = openReconnectingEventStream(apiPath, {
       onMessage(message) {
         try {
           const event = parseAPIEvent(JSON.parse(message.data as string) as unknown, validateData)
@@ -218,9 +218,22 @@ export const useLocalciStore = defineStore('localci', () => {
         if (error.value === 'Reconnecting to daemon') error.value = ''
       },
     })
+    pageStream = stream
+    void getJSON(apiPath, validateData)
+      .then((data) => {
+        if (pageStream !== stream) return
+        apply(data)
+        loading.value = false
+      })
+      .catch((err) => {
+        if (pageStream !== stream) return
+        error.value = err instanceof Error ? err.message : String(err)
+        loading.value = false
+      })
   }
 
-  function unsubscribePage(): void {
+  function unsubscribePage(key?: string): void {
+    if (key !== undefined && pageStream?.key !== key) return
     closeEventStream(pageStream)
     pageStream = null
   }

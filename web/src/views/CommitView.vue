@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
@@ -19,6 +19,7 @@ const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
 const commit = computed(() => store.currentCommit?.commit)
 const tasks = computed(() => commit.value?.tasks ?? [])
+const subscribedPage = ref('')
 const title = computed(() => {
   const commitLabel = parsed.value.commit ? shortCommit(parsed.value.commit) : 'Commit'
   const repoLabel = store.currentCommit?.repo.repo_path ?? parsed.value.repoPath
@@ -29,12 +30,13 @@ useDocumentTitle(title)
 
 function subscribe(): void {
   if (parsed.value.kind !== 'commit') return
+  subscribedPage.value = parsed.value.apiPath
   store.subscribeCommit(parsed.value.apiPath)
 }
 
 onMounted(subscribe)
 watch(() => route.path, subscribe)
-onUnmounted(() => store.unsubscribePage())
+onUnmounted(() => store.unsubscribePage(subscribedPage.value))
 </script>
 
 <template>

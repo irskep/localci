@@ -28,11 +28,12 @@ const olderPage = computed(() => {
   return before ? { path: route.path, query: { before } } : undefined
 })
 const loadingPage = ref(false)
+const subscribedPage = ref('')
 
 useDocumentTitle('Overview')
 
 watch(() => route.query.before, loadCurrentPage, { immediate: true })
-onUnmounted(() => store.unsubscribePage())
+onUnmounted(() => store.unsubscribePage(subscribedPage.value))
 
 function queryString(value: unknown): string | undefined {
   if (typeof value === 'string' && value !== '') return value
@@ -44,9 +45,11 @@ async function loadCurrentPage(): Promise<void> {
   loadingPage.value = true
   try {
     if (currentBefore.value) {
-      store.unsubscribePage()
+      store.unsubscribePage(subscribedPage.value)
+      subscribedPage.value = ''
       await store.loadHomePage(currentBefore.value)
     } else {
+      subscribedPage.value = '/api'
       store.subscribeHome()
     }
   } finally {

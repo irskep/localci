@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import RepoLink from '@/components/RepoLink.vue'
@@ -8,13 +8,15 @@ import { useLocalciStore } from '@/stores/localci'
 
 const store = useLocalciStore()
 const repos = computed(() => store.home?.repos ?? [])
+const subscribedPage = ref('')
 
 useDocumentTitle('Repos')
 
 onMounted(() => {
+  subscribedPage.value = '/api'
   store.subscribeHome()
 })
-onUnmounted(() => store.unsubscribePage())
+onUnmounted(() => store.unsubscribePage(subscribedPage.value))
 </script>
 
 <template>

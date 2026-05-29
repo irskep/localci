@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import RepoLink from '@/components/RepoLink.vue'
@@ -10,13 +10,15 @@ import { useLocalciStore } from '@/stores/localci'
 const store = useLocalciStore()
 const pending = computed(() => store.queue?.pending ?? [])
 const active = computed(() => store.queue?.active)
+const subscribedPage = ref('')
 
 useDocumentTitle('Queue')
 
 onMounted(() => {
+  subscribedPage.value = '/api/queue'
   store.subscribeQueue()
 })
-onUnmounted(() => store.unsubscribePage())
+onUnmounted(() => store.unsubscribePage(subscribedPage.value))
 </script>
 
 <template>
