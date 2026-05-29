@@ -3,4 +3,13 @@ set -eu
 
 printf 'cwd: %s\n' "$(pwd)"
 
-exec go run ./cmd/localci wait "$@"
+case "${1:-}" in
+  ""|--*)
+    exec go run ./cmd/localci wait "$@"
+    ;;
+  *)
+    commit=$1
+    shift
+    exec go run ./cmd/localci wait --commit "$commit" "$@"
+    ;;
+esac
