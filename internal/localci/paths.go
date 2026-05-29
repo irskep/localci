@@ -11,20 +11,42 @@ import (
 // Paths centralizes the on-disk layout so later implementation work can
 // tighten the details without spreading path logic across the codebase.
 type Paths struct {
+	ConfigRoot           string
+	CacheRoot            string
 	Root                 string
 	DaemonSocketOverride string
 }
 
+func (p Paths) configRoot() string {
+	if strings.TrimSpace(p.ConfigRoot) != "" {
+		return filepath.Clean(p.ConfigRoot)
+	}
+	if strings.TrimSpace(p.Root) == "" {
+		return ""
+	}
+	return filepath.Clean(p.Root)
+}
+
+func (p Paths) cacheRoot() string {
+	if strings.TrimSpace(p.CacheRoot) != "" {
+		return filepath.Clean(p.CacheRoot)
+	}
+	if strings.TrimSpace(p.Root) == "" {
+		return ""
+	}
+	return filepath.Clean(p.Root)
+}
+
 func (p Paths) GlobalCacheRoot() string {
-	return filepath.Join(p.Root, "cache")
+	return filepath.Join(p.cacheRoot(), "cache")
 }
 
 func (p Paths) HistoryDBPath() string {
-	return filepath.Join(p.Root, "history.db")
+	return filepath.Join(p.configRoot(), "history.db")
 }
 
 func (p Paths) RepoRoot(repoDir string) string {
-	return filepath.Join(p.Root, normalizeRepoDir(repoDir))
+	return filepath.Join(p.cacheRoot(), normalizeRepoDir(repoDir))
 }
 
 func (p Paths) RepoCacheRoot(repoDir string) string {

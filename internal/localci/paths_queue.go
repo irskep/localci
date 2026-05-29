@@ -7,11 +7,11 @@ import (
 )
 
 func (p Paths) QueueRoot() string {
-	return filepath.Join(p.Root, "queue")
+	return filepath.Join(p.configRoot(), "queue")
 }
 
 func (p Paths) ActiveRoot() string {
-	return filepath.Join(p.Root, "active")
+	return filepath.Join(p.configRoot(), "active")
 }
 
 func (p Paths) QueueEntryPath(entry QueueEntry, enqueuedAt time.Time) string {

@@ -9,6 +9,7 @@ nav = [
   "index.md",
   "getting-started.md",
   "usage.md",
+  "defining-tasks.md",
   "tasks.md",
   "cli.md",
 ]

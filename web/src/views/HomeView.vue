@@ -6,6 +6,7 @@ import TopBar from '@/components/TopBar.vue'
 import RepoLink from '@/components/RepoLink.vue'
 import RunLink from '@/components/RunLink.vue'
 import RunList from '@/components/RunList.vue'
+import SetupEmptyState from '@/components/SetupEmptyState.vue'
 import WebsocketStatus from '@/components/WebsocketStatus.vue'
 import { taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
@@ -18,6 +19,14 @@ const recentRows = computed(() => store.home?.recent_commits ?? [])
 const repoRows = computed(() => store.home?.repos ?? [])
 const queueRows = computed(() => store.home?.queue.pending ?? [])
 const active = computed(() => store.home?.queue.active)
+const isFreshEmpty = computed(
+  () =>
+    !!store.home &&
+    recentRows.value.length === 0 &&
+    repoRows.value.length === 0 &&
+    queueRows.value.length === 0 &&
+    !active.value,
+)
 const currentBefore = computed(() => queryString(route.query.before))
 const newerPage = computed(() => {
   if (!currentBefore.value) return undefined
@@ -69,7 +78,11 @@ async function loadCurrentPage(): Promise<void> {
       <span>Loading localci state</span>
     </div>
 
-    <template v-if="store.home">
+    <div v-if="isFreshEmpty" class="fresh-empty-wrap">
+      <SetupEmptyState />
+    </div>
+
+    <template v-else-if="store.home">
       <section class="section-grid">
         <div class="stack">
           <RunList
@@ -136,6 +149,12 @@ async function loadCurrentPage(): Promise<void> {
   gap: var(--app-space-5);
   align-items: start;
   min-width: 0;
+}
+
+.fresh-empty-wrap {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - var(--app-page-block-padding) * 4);
 }
 
 .artifact-list {

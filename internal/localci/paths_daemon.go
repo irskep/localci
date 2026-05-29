@@ -6,7 +6,7 @@ import (
 )
 
 func (p Paths) DaemonRoot() string {
-	return filepath.Join(p.Root, "daemon")
+	return filepath.Join(p.configRoot(), "daemon")
 }
 
 func (p Paths) DaemonStatePath() string {
@@ -18,7 +18,7 @@ func (p Paths) DaemonSocketPath() string {
 		return p.DaemonSocketOverride
 	}
 
-	return filepath.Join(os.TempDir(), "localci-"+normalizeRepoDir(p.Root)+".sock")
+	return filepath.Join(os.TempDir(), "localci-"+normalizeRepoDir(p.configRoot())+".sock")
 }
 
 func (p Paths) DaemonLogPath() string {

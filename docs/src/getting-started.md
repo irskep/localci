@@ -39,17 +39,14 @@ mkdir -p mise-tasks/localci
 ```
 
 ```sh title="mise-tasks/localci/test"
-#!/bin/sh
-set -eu
-
-printf 'cwd: %s\n' "$(pwd)"
-
 go test ./...
 ```
 
 Save that as `mise-tasks/localci/test` and make it executable.
 
 [Monorepo tasks](https://mise.en.dev/tasks/monorepo.html) work too. Mise addresses child tasks as `//path:task`; LocalCI treats the task portion after the path as eligible when it starts with `localci:`.
+
+See [Defining Tasks](defining-tasks.md) for more examples.
 
 ## Start the daemon
 

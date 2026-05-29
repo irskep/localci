@@ -283,7 +283,7 @@ func recordSetupFailure(paths Paths, req InvokeRequest, cause error, now time.Ti
 }
 
 func (s Scheduler) cloneManager() CloneManager {
-	if s.Clones.Paths.Root != "" {
+	if s.Clones.Paths.Root != "" || s.Clones.Paths.ConfigRoot != "" || s.Clones.Paths.CacheRoot != "" {
 		return s.Clones
 	}
 	return CloneManager{Paths: s.Runner.Paths, Now: s.Runner.Now}

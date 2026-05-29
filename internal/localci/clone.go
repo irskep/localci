@@ -81,7 +81,7 @@ func (m CloneManager) CleanupUnreferenced(queue QueueStore) error {
 		return err
 	}
 
-	infos, err := filepath.Glob(filepath.Join(m.Paths.Root, "*", "clones", "*.info.json"))
+	infos, err := filepath.Glob(filepath.Join(m.Paths.cacheRoot(), "*", "clones", "*.info.json"))
 	if err != nil {
 		return err
 	}

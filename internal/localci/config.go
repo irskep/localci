@@ -44,11 +44,11 @@ func LoadConfigOrDefault(path string) (Config, error) {
 }
 
 func DefaultConfigPath() (string, error) {
-	home, err := os.UserHomeDir()
+	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("resolve user home: %w", err)
+		return "", fmt.Errorf("resolve user config directory: %w", err)
 	}
-	return filepath.Join(home, ".localci", "config.toml"), nil
+	return filepath.Join(configDir, "localci", "config.toml"), nil
 }
 
 func ResolveRepoDir(root string, repoPath string) (string, error) {

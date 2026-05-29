@@ -595,25 +595,34 @@ func noCloneCommitLabel(commit string) string {
 }
 
 func (a App) newRunner() (localci.Runner, error) {
-	root, err := a.localCIRoot()
+	paths, err := a.localCIPaths()
 	if err != nil {
 		return localci.Runner{}, err
 	}
 
 	return localci.Runner{
-		Paths:  localci.Paths{Root: root},
+		Paths:  paths,
 		Stdout: a.Stdout,
 		Stderr: a.Stderr,
 	}, nil
 }
 
-func defaultLocalCIRoot() (string, error) {
-	home, err := os.UserHomeDir()
+func defaultLocalCIConfigRoot() (string, error) {
+	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("resolve user home: %w", err)
+		return "", fmt.Errorf("resolve user config directory: %w", err)
 	}
 
-	return filepath.Join(home, ".localci"), nil
+	return filepath.Join(configDir, "localci"), nil
+}
+
+func defaultLocalCICacheRoot() (string, error) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user cache directory: %w", err)
+	}
+
+	return filepath.Join(cacheDir, "localci"), nil
 }
 
 func formatTaskSummary(task localci.TaskStatusView) string {
@@ -747,11 +756,11 @@ func (a App) discoverRepoFromCwd() (string, error) {
 func (a App) loadConfig() (localci.Config, error) {
 	path := a.ConfigPath
 	if path == "" {
-		root, err := a.localCIRoot()
+		var err error
+		path, err = localci.DefaultConfigPath()
 		if err != nil {
 			return localci.Config{}, err
 		}
-		path = filepath.Join(root, "config.toml")
 	}
 
 	if a.LoadConfig != nil {
@@ -765,12 +774,12 @@ func (a App) latestCommitForRepo(repoDir string) (string, error) {
 		return a.LatestCommit(repoDir)
 	}
 
-	root, err := a.localCIRoot()
+	paths, err := a.localCIPaths()
 	if err != nil {
 		return "", err
 	}
 
-	commits, err := (localci.HistoryReader{Paths: localci.Paths{Root: root}}).ListRepoCommits(repoDir)
+	commits, err := (localci.HistoryReader{Paths: paths}).ListRepoCommits(repoDir)
 	if err != nil {
 		if errors.Is(err, localci.ErrRecordNotFound) {
 			return "", fmt.Errorf("no localci runs found for %s", repoDir)
@@ -783,11 +792,19 @@ func (a App) latestCommitForRepo(repoDir string) (string, error) {
 	return commits[0].Commit, nil
 }
 
-func (a App) localCIRoot() (string, error) {
+func (a App) localCIPaths() (localci.Paths, error) {
 	if strings.TrimSpace(a.LocalCIRoot) != "" {
-		return a.LocalCIRoot, nil
+		return localci.Paths{Root: a.LocalCIRoot}, nil
 	}
-	return defaultLocalCIRoot()
+	configRoot, err := defaultLocalCIConfigRoot()
+	if err != nil {
+		return localci.Paths{}, err
+	}
+	cacheRoot, err := defaultLocalCICacheRoot()
+	if err != nil {
+		return localci.Paths{}, err
+	}
+	return localci.Paths{ConfigRoot: configRoot, CacheRoot: cacheRoot}, nil
 }
 
 func (a App) resolveCommitAlias(repoDir string, commit string) (string, error) {

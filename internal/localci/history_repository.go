@@ -315,11 +315,11 @@ func (r RunRepository) WriteRun(run RunRecord) error {
 }
 
 func (r RunRepository) open() (*sql.DB, error) {
-	if strings.TrimSpace(r.Paths.Root) == "" {
-		return nil, fmt.Errorf("history root is required")
+	if strings.TrimSpace(r.Paths.configRoot()) == "" {
+		return nil, fmt.Errorf("history config root is required")
 	}
-	if err := os.MkdirAll(r.Paths.Root, 0o755); err != nil {
-		return nil, fmt.Errorf("create history root: %w", err)
+	if err := os.MkdirAll(r.Paths.configRoot(), 0o755); err != nil {
+		return nil, fmt.Errorf("create history config root: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(r.Paths.HistoryDBPath()), 0o755); err != nil {
 		return nil, fmt.Errorf("create history database directory: %w", err)
