@@ -25,10 +25,14 @@ const model = computed<MenuItem[]>(() =>
     <template #item="{ item, props }">
       <RouterLink v-if="item.route" v-slot="{ href, navigate }" :to="item.route" custom>
         <a :href="href" v-bind="props.action" @click="navigate">
+          <img v-if="item.label === 'Home'" src="/logo.svg" alt="" class="breadcrumb-logo" />
           <span v-bind="props.label">{{ item.label }}</span>
         </a>
       </RouterLink>
-      <span v-else v-bind="props.action">{{ item.label }}</span>
+      <span v-else v-bind="props.action">
+        <img v-if="item.label === 'Home'" src="/logo.svg" alt="" class="breadcrumb-logo" />
+        <span v-bind="props.label">{{ item.label }}</span>
+      </span>
     </template>
     <template #separator>/</template>
   </PBreadcrumb>
@@ -39,5 +43,11 @@ const model = computed<MenuItem[]>(() =>
   margin-bottom: var(--app-space-4);
   padding: 0;
   background: transparent;
+}
+
+.breadcrumb-logo {
+  width: 1em;
+  height: 1em;
+  flex: none;
 }
 </style>

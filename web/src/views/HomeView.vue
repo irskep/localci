@@ -2,6 +2,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import RepoLink from '@/components/RepoLink.vue'
 import RunLink from '@/components/RunLink.vue'
 import RunList from '@/components/RunList.vue'
@@ -60,6 +61,8 @@ async function loadCurrentPage(): Promise<void> {
 
 <template>
   <main class="page">
+    <AppBreadcrumbs :items="[{ label: 'Home' }]" />
+
     <PMessage v-if="store.error" severity="error" :closable="false">{{ store.error }}</PMessage>
     <div v-if="store.loading && !store.home" class="loading-state">
       <PProgressSpinner />
