@@ -8,11 +8,7 @@ import (
 	"localci/internal/localci"
 )
 
-func (a App) runStart(args []string) error {
-	if len(args) != 0 {
-		return fmt.Errorf("start takes no arguments")
-	}
-
+func (a App) runStart() error {
 	manager, err := a.newDaemonManager()
 	if err != nil {
 		return err
@@ -32,11 +28,7 @@ func (a App) runStart(args []string) error {
 	return nil
 }
 
-func (a App) runRestart(args []string) error {
-	if len(args) != 0 {
-		return fmt.Errorf("restart takes no arguments")
-	}
-
+func (a App) runRestart() error {
 	manager, err := a.newDaemonManager()
 	if err != nil {
 		return err
@@ -51,11 +43,7 @@ func (a App) runRestart(args []string) error {
 	return nil
 }
 
-func (a App) runStop(args []string) error {
-	if len(args) != 0 {
-		return fmt.Errorf("stop takes no arguments")
-	}
-
+func (a App) runStop() error {
 	manager, err := a.newDaemonManager()
 	if err != nil {
 		return err
@@ -89,11 +77,7 @@ func (a App) newDaemonManager() (localci.DaemonManager, error) {
 	}, nil
 }
 
-func (a App) runDaemon(args []string) error {
-	if len(args) != 1 || args[0] != "run" {
-		return fmt.Errorf("usage: localci daemon run")
-	}
-
+func (a App) runDaemon() error {
 	manager, err := a.newDaemonManager()
 	if err != nil {
 		return err

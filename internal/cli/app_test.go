@@ -110,8 +110,8 @@ func TestAppRunRecognizesInvokeUsage(t *testing.T) {
 		t.Fatalf("Run returned nil error, want usage error")
 	}
 
-	if got := err.Error(); !strings.Contains(got, "unexpected positional argument") {
-		t.Fatalf("error = %q, want positional argument error", got)
+	if got := err.Error(); !strings.Contains(got, "unknown command") {
+		t.Fatalf("error = %q, want cobra positional argument error", got)
 	}
 }
 
@@ -132,8 +132,8 @@ func TestAppRunRecognizesRunUsage(t *testing.T) {
 		t.Fatalf("Run returned nil error, want usage error")
 	}
 
-	if got := err.Error(); !strings.Contains(got, "unexpected positional argument") {
-		t.Fatalf("error = %q, want positional argument error", got)
+	if got := err.Error(); !strings.Contains(got, "unknown command") {
+		t.Fatalf("error = %q, want cobra positional argument error", got)
 	}
 }
 
@@ -326,11 +326,25 @@ func TestResolveQueryCommitNoCloneRepoFlagDefaultsToPathHead(t *testing.T) {
 	}
 }
 
-func TestParseCLIFlagsRejectsInvalidAnnotations(t *testing.T) {
+func TestAppRunRejectsInvalidAnnotations(t *testing.T) {
 	t.Parallel()
 
-	if _, err := parseCLIFlags([]string{"--annotation", "missing-value"}, flagSpec{"annotation": true}); err == nil {
-		t.Fatalf("parseCLIFlags returned nil error, want invalid annotation error")
+	app := App{
+		Stdout: io.Discard,
+		Stderr: io.Discard,
+		Cwd:    "/repo",
+		CheckRequirements: func() error {
+			t.Fatalf("requirements check should not run before flag validation")
+			return nil
+		},
+	}
+
+	err := app.Run([]string{"postcommit", "--annotation", "missing-value"})
+	if err == nil {
+		t.Fatalf("Run returned nil error, want invalid annotation error")
+	}
+	if got := err.Error(); !strings.Contains(got, "--annotation requires key=value") {
+		t.Fatalf("error = %q, want invalid annotation error", got)
 	}
 }
 
@@ -360,17 +374,18 @@ func TestAppRunRecognizesRestart(t *testing.T) {
 		t.Fatalf("Run returned nil error, want usage error")
 	}
 
-	if got, want := err.Error(), "restart takes no arguments"; got != want {
-		t.Fatalf("error = %q, want %q", got, want)
+	if got := err.Error(); !strings.Contains(got, "unknown command") {
+		t.Fatalf("error = %q, want cobra positional argument error", got)
 	}
 }
 
 func TestAppRunSkipsRequirementsForHelp(t *testing.T) {
 	t.Parallel()
 
+	var stdout bytes.Buffer
 	called := false
 	app := App{
-		Stdout: io.Discard,
+		Stdout: &stdout,
 		Stderr: io.Discard,
 		Cwd:    "/repo",
 		CheckRequirements: func() error {
@@ -384,6 +399,38 @@ func TestAppRunSkipsRequirementsForHelp(t *testing.T) {
 	}
 	if called {
 		t.Fatalf("requirements checker should not run for help")
+	}
+	rendered := stdout.String()
+	for _, want := range []string{"localci is a local post-commit validation runner.", "Starting Tasks", "Viewing Status/History", "completion"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("help missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestAppRunExposesCompletionHelp(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	called := false
+	app := App{
+		Stdout: &stdout,
+		Stderr: io.Discard,
+		Cwd:    "/repo",
+		CheckRequirements: func() error {
+			called = true
+			return nil
+		},
+	}
+
+	if err := app.Run([]string{"completion", "--help"}); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if called {
+		t.Fatalf("requirements checker should not run for completion help")
+	}
+	if rendered := stdout.String(); !strings.Contains(rendered, "Generate the autocompletion script") {
+		t.Fatalf("completion help missing generated description: %s", rendered)
 	}
 }
 
@@ -409,14 +456,14 @@ func TestAppRunInstallHooksHelpSkipsRequirementsCheck(t *testing.T) {
 		t.Fatalf("requirements checker should not run for command help")
 	}
 	rendered := stdout.String()
-	if !strings.Contains(rendered, "Usage:\n  localci install-hooks [--repo DIR]") {
+	if !strings.Contains(rendered, "Usage:\n  localci install-hooks [flags]") {
 		t.Fatalf("help missing usage: %s", rendered)
 	}
-	if !strings.Contains(rendered, "modern Git hook.* config") {
+	if !strings.Contains(rendered, "Install LocalCI's Git post-commit hook") {
 		t.Fatalf("help missing behavior summary: %s", rendered)
 	}
-	if !strings.Contains(rendered, `localci postcommit --repo "$repo" --commit "$commit"`) {
-		t.Fatalf("help missing installed command: %s", rendered)
+	if !strings.Contains(rendered, "--repo string") {
+		t.Fatalf("help missing repo flag: %s", rendered)
 	}
 }
 
@@ -432,7 +479,7 @@ func TestAppRunChecksRequirementsForCommands(t *testing.T) {
 		},
 	}
 
-	err := app.Run([]string{"status", "abc123"})
+	err := app.Run([]string{"status"})
 	if err == nil {
 		t.Fatalf("Run returned nil error, want requirements error")
 	}
@@ -458,20 +505,29 @@ func TestAppRunRecognizesInstallHooks(t *testing.T) {
 		t.Fatalf("Run returned nil error, want usage error")
 	}
 
-	if got := err.Error(); !strings.Contains(got, "unexpected positional argument") {
-		t.Fatalf("error = %q, want positional argument error", got)
+	if got := err.Error(); !strings.Contains(got, "unknown command") {
+		t.Fatalf("error = %q, want cobra positional argument error", got)
 	}
 }
 
-func TestExplicitFlagParserRejectsPositionals(t *testing.T) {
+func TestAppRunRejectsPositionals(t *testing.T) {
 	t.Parallel()
 
-	_, err := parseCLIFlags([]string{"abc123"}, flagSpec{"commit": true})
-	if err == nil {
-		t.Fatalf("parseCLIFlags returned nil error, want positional error")
+	app := App{
+		Stdout: io.Discard,
+		Stderr: io.Discard,
+		Cwd:    "/repo",
+		CheckRequirements: func() error {
+			return nil
+		},
 	}
-	if got := err.Error(); !strings.Contains(got, "unexpected positional argument") {
-		t.Fatalf("error = %q, want positional argument error", got)
+
+	err := app.Run([]string{"status", "abc123"})
+	if err == nil {
+		t.Fatalf("Run returned nil error, want positional error")
+	}
+	if got := err.Error(); !strings.Contains(got, "unknown command") {
+		t.Fatalf("error = %q, want cobra positional argument error", got)
 	}
 }
 

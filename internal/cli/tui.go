@@ -13,14 +13,7 @@ import (
 	"localci/internal/localci"
 )
 
-func (a App) runDash(args []string) error {
-	flags, err := parseCLIFlags(args, flagSpec{
-		"repo": true, "commit": true, "task": true, "attempt": true, "artifact": true, "no-clone": true,
-	})
-	if err != nil {
-		return err
-	}
-
+func (a App) runDash(flags cliFlags) error {
 	runner, err := a.newRunner()
 	if err != nil {
 		return err

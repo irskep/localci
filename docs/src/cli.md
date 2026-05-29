@@ -18,6 +18,10 @@ Stop the daemon.
 
 Install LocalCI's Git post-commit hook entry for a repository.
 
+### `localci completion`
+
+Generate shell completion scripts.
+
 ## Starting Tasks
 
 ### `localci postcommit [--repo dir] [--commit ref] [--task task] [--annotation key=value]`

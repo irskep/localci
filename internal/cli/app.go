@@ -42,64 +42,9 @@ func Run(args []string) int {
 }
 
 func (a App) Run(args []string) error {
-	if len(args) == 0 {
-		return usageError()
-	}
-
-	if isHelpCommand(args[0]) {
-		a.printUsage()
-		return nil
-	}
-	if len(args) == 2 && isHelpCommand(args[1]) {
-		return a.printCommandHelp(args[0])
-	}
-	if err := a.checkRequirements(); err != nil {
-		return err
-	}
-
-	switch args[0] {
-	case "daemon":
-		return a.runDaemon(args[1:])
-	case "start":
-		return a.runStart(args[1:])
-	case "restart":
-		return a.runRestart(args[1:])
-	case "stop":
-		return a.runStop(args[1:])
-	case "postcommit":
-		return a.runPostcommit(args[1:])
-	case "run":
-		return a.runRun(args[1:])
-	case "invoke":
-		return a.runInvoke(args[1:])
-	case "cancel":
-		return a.runCancel(args[1:])
-	case "wait":
-		return a.runWait(args[1:])
-	case "status":
-		return a.runStatus(args[1:])
-	case "history":
-		return a.runHistory(args[1:])
-	case "artifacts":
-		return a.runArtifacts(args[1:])
-	case "web":
-		return a.runWeb(args[1:])
-	case "dash":
-		return a.runDash(args[1:])
-	case "install-hooks":
-		return a.runInstallHooks(args[1:])
-	default:
-		return fmt.Errorf("unknown command %q\n\n%s", args[0], usageText())
-	}
-}
-
-func isHelpCommand(arg string) bool {
-	switch arg {
-	case "help", "-h", "--help":
-		return true
-	default:
-		return false
-	}
+	cmd := a.newRootCommand()
+	cmd.SetArgs(args)
+	return cmd.Execute()
 }
 
 func (a App) checkRequirements() error {
@@ -109,13 +54,7 @@ func (a App) checkRequirements() error {
 	return localci.RequirementsChecker{}.Check()
 }
 
-func (a App) runPostcommit(args []string) error {
-	flags, err := parseCLIFlags(args, flagSpec{
-		"repo": true, "commit": true, "task": true, "annotation": true, "json": true,
-	})
-	if err != nil {
-		return err
-	}
+func (a App) runPostcommit(flags cliFlags) error {
 	repo, err := a.resolveSelectorRepo(flags.Repo)
 	if err != nil {
 		return err
@@ -167,13 +106,7 @@ func postcommitWaitInstruction(repo string, commit string) string {
 	return fmt.Sprintf("Wait: localci wait --repo %s --commit %s", shellQuote(repo), shellQuote(commit))
 }
 
-func (a App) runRun(args []string) error {
-	flags, err := parseCLIFlags(args, flagSpec{
-		"repo": true, "commit": true, "task": true, "wait": true, "no-clone": true, "annotation": true, "json": true,
-	})
-	if err != nil {
-		return err
-	}
+func (a App) runRun(flags cliFlags) error {
 	repo, err := a.resolveSelectorRepo(flags.Repo)
 	if err != nil {
 		return err
@@ -241,13 +174,7 @@ func (a App) runRun(args []string) error {
 	return nil
 }
 
-func (a App) runStatus(args []string) error {
-	flags, err := parseCLIFlags(args, flagSpec{
-		"repo": true, "commit": true, "task": true, "attempt": true, "no-clone": true, "json": true,
-	})
-	if err != nil {
-		return err
-	}
+func (a App) runStatus(flags cliFlags) error {
 	runner, err := a.newRunner()
 	if err != nil {
 		return err
@@ -294,13 +221,7 @@ func (a App) runStatus(args []string) error {
 	return nil
 }
 
-func (a App) runWeb(args []string) error {
-	flags, err := parseCLIFlags(args, flagSpec{
-		"repo": true, "commit": true, "task": true, "attempt": true, "artifact": true, "no-clone": true,
-	})
-	if err != nil {
-		return err
-	}
+func (a App) runWeb(flags cliFlags) error {
 	repo, err := a.resolveSelectorRepo(flags.Repo)
 	if err != nil {
 		return err
@@ -347,13 +268,7 @@ func (a App) runWeb(args []string) error {
 	return a.openWeb(spec, state)
 }
 
-func (a App) runInvoke(args []string) error {
-	flags, err := parseCLIFlags(args, flagSpec{
-		"repo": true, "commit": true, "task": true, "wait": true, "no-clone": true, "annotation": true, "json": true,
-	})
-	if err != nil {
-		return err
-	}
+func (a App) runInvoke(flags cliFlags) error {
 	repo, err := a.resolveSelectorRepo(flags.Repo)
 	if err != nil {
 		return err
@@ -405,13 +320,7 @@ func (a App) runInvoke(args []string) error {
 	return nil
 }
 
-func (a App) runCancel(args []string) error {
-	flags, err := parseCLIFlags(args, flagSpec{
-		"repo": true, "commit": true, "task": true, "no-clone": true, "json": true,
-	})
-	if err != nil {
-		return err
-	}
+func (a App) runCancel(flags cliFlags) error {
 	runner, err := a.newRunner()
 	if err != nil {
 		return err
@@ -476,13 +385,7 @@ func (a App) runCancel(args []string) error {
 	return nil
 }
 
-func (a App) runWait(args []string) error {
-	flags, err := parseCLIFlags(args, flagSpec{
-		"repo": true, "commit": true, "task": true, "no-clone": true, "json": true,
-	})
-	if err != nil {
-		return err
-	}
+func (a App) runWait(flags cliFlags) error {
 	runner, err := a.newRunner()
 	if err != nil {
 		return err
@@ -674,12 +577,7 @@ func artifactPathByDisplayName(task localci.TaskStatusView, displayName string) 
 	return ""
 }
 
-func (a App) runInstallHooks(args []string) error {
-	flags, err := parseCLIFlags(args, flagSpec{"repo": true})
-	if err != nil {
-		return err
-	}
-
+func (a App) runInstallHooks(flags cliFlags) error {
 	repoDir, err := a.repoFromFlagOrCwd(flags.Repo)
 	if err != nil {
 		return err

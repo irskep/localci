@@ -25,13 +25,7 @@ type cliArtifactsOutput struct {
 	Artifacts []cliArtifactRow `json:"artifacts"`
 }
 
-func (a App) runArtifacts(args []string) error {
-	flags, err := parseCLIFlags(args, flagSpec{
-		"repo": true, "commit": true, "task": true, "attempt": true, "failed": true, "primary": true, "paths-only": true, "json": true,
-	})
-	if err != nil {
-		return err
-	}
+func (a App) runArtifacts(flags cliFlags) error {
 	if flags.JSON && flags.PathsOnly {
 		return fmt.Errorf("--json and --paths-only cannot be used together")
 	}
@@ -167,13 +161,7 @@ type cliHistoryOutput struct {
 	History []cliHistoryRow `json:"history"`
 }
 
-func (a App) runHistory(args []string) error {
-	flags, err := parseCLIFlags(args, flagSpec{
-		"repo": true, "commit": true, "task": true, "status": true, "failed": true, "limit": true, "json": true,
-	})
-	if err != nil {
-		return err
-	}
+func (a App) runHistory(flags cliFlags) error {
 	repo, err := a.resolveSelectorRepo(flags.Repo)
 	if err != nil {
 		return err
