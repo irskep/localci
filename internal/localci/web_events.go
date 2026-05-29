@@ -9,6 +9,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/coder/websocket"
 )
@@ -135,15 +136,19 @@ func (s WebServer) apiSnapshot(resource string) (any, error) {
 }
 
 func (s WebServer) apiHomeSnapshot() (apiHomeResponse, error) {
-	repos, err := HistoryReader{Paths: s.Paths}.ListRepos()
+	repository := RunRepository{Paths: s.Paths}
+	repos, err := repository.ListRepoSummaries()
 	if err != nil {
 		return apiHomeResponse{}, err
 	}
-	views, err := s.buildHomeCommitSummaries(repos)
+	runPage, err := repository.ListRecentRunPage(time.Time{}, defaultRunListLimit)
 	if err != nil {
 		return apiHomeResponse{}, err
 	}
-	views, cursors := pageCommitSummaries(views, runListPageParams{Limit: defaultRunListLimit})
+	views, err := s.buildRunCommitSummaries(runPage.Runs)
+	if err != nil {
+		return apiHomeResponse{}, err
+	}
 	queueResponse, err := s.apiQueueResponse()
 	if err != nil {
 		return apiHomeResponse{}, err
@@ -152,8 +157,8 @@ func (s WebServer) apiHomeSnapshot() (apiHomeResponse, error) {
 		Repos:         make([]apiRepoSummary, 0, len(repos)),
 		RecentCommits: make([]apiCommitSummary, 0, len(views)),
 		Queue:         queueResponse,
-		NextBefore:    cursors.NextBefore,
-		NewerBefore:   cursors.NewerBefore,
+		NextBefore:    runPage.NextBefore,
+		NewerBefore:   runPage.NewerBefore,
 	}
 	for _, repo := range repos {
 		resp.Repos = append(resp.Repos, s.apiRepoSummary(repo.RepoDir))
@@ -164,7 +169,7 @@ func (s WebServer) apiHomeSnapshot() (apiHomeResponse, error) {
 
 func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 	if len(segments) == 0 {
-		repos, err := HistoryReader{Paths: s.Paths}.ListRepos()
+		repos, err := (RunRepository{Paths: s.Paths}).ListRepoSummaries()
 		if err != nil {
 			return nil, err
 		}
@@ -190,20 +195,19 @@ func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 		return nil, err
 	}
 	if len(tail) == 0 {
-		commits, err := HistoryReader{Paths: s.Paths}.ListRepoCommits(repoDir)
+		runPage, err := (RunRepository{Paths: s.Paths}).ListRepoRunPage(repoDir, time.Time{}, defaultRunListLimit)
 		if err != nil {
 			return nil, err
 		}
-		views, err := s.buildRepoCommitSummaries(repoDir, commits)
+		views, err := s.buildRunCommitSummaries(runPage.Runs)
 		if err != nil {
 			return nil, err
 		}
-		views, cursors := pageCommitSummaries(views, runListPageParams{Limit: defaultRunListLimit})
 		return apiRepoResponse{
 			Repo:        s.apiRepoSummary(repoDir),
 			Commits:     views,
-			NextBefore:  cursors.NextBefore,
-			NewerBefore: cursors.NewerBefore,
+			NextBefore:  runPage.NextBefore,
+			NewerBefore: runPage.NewerBefore,
 		}, nil
 	}
 	if len(tail) < 2 || tail[0] != "commit" {

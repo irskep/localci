@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -89,18 +88,23 @@ func (s WebServer) handleAPIHome(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	repos, err := HistoryReader{Paths: s.Paths}.ListRepos()
+	repository := RunRepository{Paths: s.Paths}
+	repos, err := repository.ListRepoSummaries()
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	views, err := s.buildHomeCommitSummaries(repos)
+	runPage, err := repository.ListRecentRunPage(page.Before, page.Limit)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	views, cursors := pageCommitSummaries(views, page)
+	views, err := s.buildRunCommitSummaries(runPage.Runs)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
 
 	queueResponse, err := s.apiQueueResponse()
 	if err != nil {
@@ -112,8 +116,8 @@ func (s WebServer) handleAPIHome(w http.ResponseWriter, r *http.Request) {
 		Repos:         make([]apiRepoSummary, 0, len(repos)),
 		RecentCommits: make([]apiCommitSummary, 0, len(views)),
 		Queue:         queueResponse,
-		NextBefore:    cursors.NextBefore,
-		NewerBefore:   cursors.NewerBefore,
+		NextBefore:    runPage.NextBefore,
+		NewerBefore:   runPage.NewerBefore,
 	}
 	for _, repo := range repos {
 		resp.Repos = append(resp.Repos, s.apiRepoSummary(repo.RepoDir))
@@ -239,7 +243,7 @@ func (s WebServer) handleAPIRepoRoutes(w http.ResponseWriter, r *http.Request, s
 }
 
 func (s WebServer) handleAPIRepoIndex(w http.ResponseWriter, _ *http.Request) {
-	repos, err := HistoryReader{Paths: s.Paths}.ListRepos()
+	repos, err := (RunRepository{Paths: s.Paths}).ListRepoSummaries()
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
@@ -257,7 +261,7 @@ func (s WebServer) handleAPIRepo(w http.ResponseWriter, r *http.Request, repoDir
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	commits, err := HistoryReader{Paths: s.Paths}.ListRepoCommits(repoDir)
+	runPage, err := (RunRepository{Paths: s.Paths}).ListRepoRunPage(repoDir, page.Before, page.Limit)
 	if err != nil {
 		if errorsIsRecordNotFound(err) {
 			writeAPIError(w, http.StatusNotFound, fmt.Errorf("repo not found"))
@@ -266,17 +270,16 @@ func (s WebServer) handleAPIRepo(w http.ResponseWriter, r *http.Request, repoDir
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	views, err := s.buildRepoCommitSummaries(repoDir, commits)
+	views, err := s.buildRunCommitSummaries(runPage.Runs)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	views, cursors := pageCommitSummaries(views, page)
 	writeJSON(w, http.StatusOK, apiRepoResponse{
 		Repo:        s.apiRepoSummary(repoDir),
 		Commits:     views,
-		NextBefore:  cursors.NextBefore,
-		NewerBefore: cursors.NewerBefore,
+		NextBefore:  runPage.NextBefore,
+		NewerBefore: runPage.NewerBefore,
 	})
 }
 
@@ -311,63 +314,6 @@ func parseRunListPageParams(r *http.Request) (runListPageParams, error) {
 	}
 
 	return page, nil
-}
-
-type runListCursors struct {
-	NextBefore  string
-	NewerBefore string
-}
-
-func pageCommitSummaries(commits []apiCommitSummary, page runListPageParams) ([]apiCommitSummary, runListCursors) {
-	sortAPICommitSummaries(commits)
-
-	start := 0
-	if !page.Before.IsZero() {
-		start = len(commits)
-		for index, commit := range commits {
-			if commit.ActivityAt.Before(page.Before) {
-				start = index
-				break
-			}
-		}
-	}
-
-	end := start + page.Limit
-	if end > len(commits) {
-		end = len(commits)
-	}
-	if start > len(commits) {
-		start = len(commits)
-	}
-	pageItems := commits[start:end]
-
-	cursors := runListCursors{}
-	if end < len(commits) && len(pageItems) > 0 {
-		cursors.NextBefore = pageItems[len(pageItems)-1].ActivityAt.Format(time.RFC3339Nano)
-	}
-	if start > 0 {
-		previousStart := start - page.Limit
-		if previousStart <= 0 {
-			cursors.NewerBefore = ""
-		} else {
-			cursors.NewerBefore = commits[previousStart-1].ActivityAt.Format(time.RFC3339Nano)
-		}
-	}
-	return pageItems, cursors
-}
-
-func sortAPICommitSummaries(commits []apiCommitSummary) {
-	sort.Slice(commits, func(i int, j int) bool {
-		left := commits[i]
-		right := commits[j]
-		if left.ActivityAt.Equal(right.ActivityAt) {
-			if left.Repo.RepoPath == right.Repo.RepoPath {
-				return left.Commit > right.Commit
-			}
-			return left.Repo.RepoPath < right.Repo.RepoPath
-		}
-		return left.ActivityAt.After(right.ActivityAt)
-	})
 }
 
 func (s WebServer) handleAPICommit(w http.ResponseWriter, repoDir string, commit string) {
@@ -611,19 +557,16 @@ func (s WebServer) apiRepoSummary(repoDir string) apiRepoSummary {
 	}
 }
 
-func (s WebServer) buildHomeCommitSummaries(repos []RepoHistory) ([]apiCommitSummary, error) {
-	views := []apiCommitSummary{}
-	for _, repo := range repos {
-		commitViews, err := s.buildRepoCommitSummaries(repo.RepoDir, repo.Commits)
-		if err != nil {
-			return nil, err
+func (s WebServer) buildRepoCommitSummaries(repoDir string, commits []RunRecord) ([]apiCommitSummary, error) {
+	for index := range commits {
+		if commits[index].RepoDir == "" {
+			commits[index].RepoDir = repoDir
 		}
-		views = append(views, commitViews...)
 	}
-	return views, nil
+	return s.buildRunCommitSummaries(commits)
 }
 
-func (s WebServer) buildRepoCommitSummaries(repoDir string, commits []RunRecord) ([]apiCommitSummary, error) {
+func (s WebServer) buildRunCommitSummaries(runs []RunRecord) ([]apiCommitSummary, error) {
 	queue, err := s.Queue.List()
 	if err != nil {
 		return nil, err
@@ -638,9 +581,9 @@ func (s WebServer) buildRepoCommitSummaries(repoDir string, commits []RunRecord)
 		activePtr = &active
 	}
 
-	views := make([]apiCommitSummary, 0, len(commits))
-	for _, commit := range commits {
-		views = append(views, s.buildCommitSummary(repoDir, commit, commit.DiscoveredTasks, queue, activePtr))
+	views := make([]apiCommitSummary, 0, len(runs))
+	for _, run := range runs {
+		views = append(views, s.buildCommitSummary(run.RepoDir, run, run.DiscoveredTasks, queue, activePtr))
 	}
 	return views, nil
 }

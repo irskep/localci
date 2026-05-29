@@ -20,6 +20,57 @@ type RunRepository struct {
 	Paths Paths
 }
 
+type RunPage struct {
+	Runs        []RunRecord
+	NextBefore  string
+	NewerBefore string
+}
+
+func (r RunRepository) ListRepoSummaries() ([]RepoHistory, error) {
+	db, err := r.open()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	if err := r.importFilesystemRuns(context.Background(), db); err != nil {
+		return nil, err
+	}
+
+	rows, err := db.QueryContext(context.Background(), `
+		select repo_dir, max(repo_id), max(activity_at) as latest_activity
+		from runs
+		group by repo_dir
+		order by latest_activity desc, repo_dir asc
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list repo summaries: %w", err)
+	}
+	defer rows.Close()
+
+	repos := []RepoHistory{}
+	for rows.Next() {
+		var repo RepoHistory
+		var latestActivity string
+		if err := rows.Scan(&repo.RepoDir, &repo.RepoID, &latestActivity); err != nil {
+			return nil, fmt.Errorf("scan repo summary: %w", err)
+		}
+		repos = append(repos, repo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list repo summaries: %w", err)
+	}
+	return repos, nil
+}
+
+func (r RunRepository) ListRecentRunPage(before time.Time, limit int) (RunPage, error) {
+	return r.listRunPage("", before, limit)
+}
+
+func (r RunRepository) ListRepoRunPage(repoDir string, before time.Time, limit int) (RunPage, error) {
+	return r.listRunPage(repoDir, before, limit)
+}
+
 func (r RunRepository) ListRepos() ([]RepoHistory, error) {
 	runs, err := r.ListRuns()
 	if err != nil {
@@ -59,6 +110,118 @@ func (r RunRepository) ListRepos() ([]RepoHistory, error) {
 	return repos, nil
 }
 
+func (r RunRepository) listRunPage(repoDir string, before time.Time, limit int) (RunPage, error) {
+	db, err := r.open()
+	if err != nil {
+		return RunPage{}, err
+	}
+	defer db.Close()
+
+	if err := r.importFilesystemRuns(context.Background(), db); err != nil {
+		return RunPage{}, err
+	}
+
+	if limit <= 0 {
+		limit = 20
+	}
+	runs, err := queryRunPage(context.Background(), db, repoDir, before, limit+1)
+	if err != nil {
+		return RunPage{}, err
+	}
+	if repoDir != "" && len(runs) == 0 && before.IsZero() {
+		return RunPage{}, ErrRecordNotFound
+	}
+
+	page := RunPage{Runs: runs}
+	if len(page.Runs) > limit {
+		page.NextBefore = formatDBTime(RunActivityAt(page.Runs[limit-1]))
+		page.Runs = page.Runs[:limit]
+	}
+	if !before.IsZero() {
+		newerBefore, err := queryNewerBefore(context.Background(), db, repoDir, before, limit)
+		if err != nil {
+			return RunPage{}, err
+		}
+		page.NewerBefore = newerBefore
+	}
+
+	return page, nil
+}
+
+func queryRunPage(ctx context.Context, db *sql.DB, repoDir string, before time.Time, limit int) ([]RunRecord, error) {
+	args := []any{}
+	where := ""
+	if repoDir != "" {
+		where = "where repo_dir = ?"
+		args = append(args, repoDir)
+	}
+	if !before.IsZero() {
+		if where == "" {
+			where = "where activity_at < ?"
+		} else {
+			where += " and activity_at < ?"
+		}
+		args = append(args, formatDBTime(before))
+	}
+	args = append(args, limit)
+
+	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+		select run_json
+		from runs
+		%s
+		order by activity_at desc, repo_dir asc, commit_ref desc
+		limit ?
+	`, where), args...)
+	if err != nil {
+		return nil, fmt.Errorf("query run page: %w", err)
+	}
+	defer rows.Close()
+	return scanRunRows(rows)
+}
+
+func queryNewerBefore(ctx context.Context, db *sql.DB, repoDir string, before time.Time, limit int) (string, error) {
+	args := []any{}
+	where := "where activity_at >= ?"
+	args = append(args, formatDBTime(before))
+	if repoDir != "" {
+		where += " and repo_dir = ?"
+		args = append(args, repoDir)
+	}
+
+	var newerCount int
+	if err := db.QueryRowContext(ctx, fmt.Sprintf(`select count(*) from runs %s`, where), args...).Scan(&newerCount); err != nil {
+		return "", fmt.Errorf("count newer runs: %w", err)
+	}
+	if newerCount <= limit {
+		return "", nil
+	}
+
+	offset := newerCount - limit - 1
+	args = []any{}
+	where = ""
+	if repoDir != "" {
+		where = "where repo_dir = ?"
+		args = append(args, repoDir)
+	}
+	args = append(args, 1, offset)
+
+	var activityAt string
+	err := db.QueryRowContext(ctx, fmt.Sprintf(`
+		select activity_at
+		from runs
+		%s
+		order by activity_at desc, repo_dir asc, commit_ref desc
+		limit ? offset ?
+	`, where), args...).Scan(&activityAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("query newer cursor: %w", err)
+	}
+	return activityAt, nil
+}
+
 func (r RunRepository) ListRuns() ([]RunRecord, error) {
 	db, err := r.open()
 	if err != nil {
@@ -79,23 +242,7 @@ func (r RunRepository) ListRuns() ([]RunRecord, error) {
 		return nil, fmt.Errorf("list runs: %w", err)
 	}
 	defer rows.Close()
-
-	runs := []RunRecord{}
-	for rows.Next() {
-		var raw string
-		if err := rows.Scan(&raw); err != nil {
-			return nil, fmt.Errorf("scan run: %w", err)
-		}
-		var run RunRecord
-		if err := json.Unmarshal([]byte(raw), &run); err != nil {
-			return nil, fmt.Errorf("decode run history: %w", err)
-		}
-		runs = append(runs, run)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list runs: %w", err)
-	}
-	return runs, nil
+	return scanRunRows(rows)
 }
 
 func (r RunRepository) ListRepoCommits(repoDir string) ([]RunRecord, error) {
@@ -119,24 +266,31 @@ func (r RunRepository) ListRepoCommits(repoDir string) ([]RunRecord, error) {
 		return nil, fmt.Errorf("list repo runs: %w", err)
 	}
 	defer rows.Close()
+	runs, err := scanRunRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(runs) == 0 {
+		return nil, ErrRecordNotFound
+	}
+	return runs, nil
+}
 
+func scanRunRows(rows *sql.Rows) ([]RunRecord, error) {
 	runs := []RunRecord{}
 	for rows.Next() {
 		var raw string
 		if err := rows.Scan(&raw); err != nil {
-			return nil, fmt.Errorf("scan repo run: %w", err)
+			return nil, fmt.Errorf("scan run: %w", err)
 		}
 		var run RunRecord
 		if err := json.Unmarshal([]byte(raw), &run); err != nil {
-			return nil, fmt.Errorf("decode repo run history: %w", err)
+			return nil, fmt.Errorf("decode run history: %w", err)
 		}
 		runs = append(runs, run)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list repo runs: %w", err)
-	}
-	if len(runs) == 0 {
-		return nil, ErrRecordNotFound
+		return nil, fmt.Errorf("scan runs: %w", err)
 	}
 	return runs, nil
 }

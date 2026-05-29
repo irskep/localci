@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -441,73 +440,6 @@ func TestWebServerAPI(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Fatalf("queue after cancel = %#v, want empty", entries)
-	}
-}
-
-func TestPageCommitSummariesUsesDateCursors(t *testing.T) {
-	t.Parallel()
-
-	base := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
-	commits := make([]apiCommitSummary, 0, 45)
-	for index := range 45 {
-		commits = append(commits, apiCommitSummary{
-			Repo:       apiRepoSummary{RepoPath: "repo"},
-			Commit:     fmt.Sprintf("c%02d", index),
-			ActivityAt: base.Add(-time.Duration(index) * time.Minute),
-		})
-	}
-
-	firstPage, firstCursors := pageCommitSummaries(commits, runListPageParams{Limit: defaultRunListLimit})
-	if len(firstPage) != defaultRunListLimit {
-		t.Fatalf("first page length = %d, want %d", len(firstPage), defaultRunListLimit)
-	}
-	if firstPage[0].Commit != "c00" || firstPage[len(firstPage)-1].Commit != "c19" {
-		t.Fatalf("first page commits = %q..%q, want c00..c19", firstPage[0].Commit, firstPage[len(firstPage)-1].Commit)
-	}
-	if firstCursors.NextBefore == "" {
-		t.Fatalf("first page omitted next cursor")
-	}
-	if firstCursors.NewerBefore != "" {
-		t.Fatalf("first page newer cursor = %q, want empty", firstCursors.NewerBefore)
-	}
-
-	before, err := time.Parse(time.RFC3339Nano, firstCursors.NextBefore)
-	if err != nil {
-		t.Fatalf("Parse next cursor returned error: %v", err)
-	}
-	secondPage, secondCursors := pageCommitSummaries(commits, runListPageParams{
-		Limit:  defaultRunListLimit,
-		Before: before,
-	})
-	if len(secondPage) != defaultRunListLimit {
-		t.Fatalf("second page length = %d, want %d", len(secondPage), defaultRunListLimit)
-	}
-	if secondPage[0].Commit != "c20" || secondPage[len(secondPage)-1].Commit != "c39" {
-		t.Fatalf("second page commits = %q..%q, want c20..c39", secondPage[0].Commit, secondPage[len(secondPage)-1].Commit)
-	}
-	if secondCursors.NextBefore != "" {
-		before, err := time.Parse(time.RFC3339Nano, secondCursors.NextBefore)
-		if err != nil {
-			t.Fatalf("Parse second next cursor returned error: %v", err)
-		}
-		thirdPage, thirdCursors := pageCommitSummaries(commits, runListPageParams{
-			Limit:  defaultRunListLimit,
-			Before: before,
-		})
-		if len(thirdPage) != 5 {
-			t.Fatalf("third page length = %d, want 5", len(thirdPage))
-		}
-		if thirdPage[0].Commit != "c40" || thirdPage[len(thirdPage)-1].Commit != "c44" {
-			t.Fatalf("third page commits = %q..%q, want c40..c44", thirdPage[0].Commit, thirdPage[len(thirdPage)-1].Commit)
-		}
-		if thirdCursors.NewerBefore != firstCursors.NextBefore {
-			t.Fatalf("third page newer cursor = %q, want %q", thirdCursors.NewerBefore, firstCursors.NextBefore)
-		}
-	} else {
-		t.Fatalf("second page omitted next cursor")
-	}
-	if secondCursors.NewerBefore != "" {
-		t.Fatalf("second page newer cursor = %q, want empty root cursor", secondCursors.NewerBefore)
 	}
 }
 
