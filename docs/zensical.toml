@@ -9,7 +9,6 @@ nav = [
   "index.md",
   "getting-started.md",
   "usage.md",
-  "defining-tasks.md",
   "tasks.md",
   "cli.md",
 ]
@@ -30,6 +29,8 @@ anchor_linenums = true
 line_spans = "__span"
 pygments_lang_class = true
 
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.pymdownx.details]
 [project.markdown_extensions.pymdownx.superfences]
 
 [[project.theme.palette]]

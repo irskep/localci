@@ -8,16 +8,17 @@ LocalCI requires [Mise](https://mise.en.dev). Install Mise first, then add Local
 
 ```toml title="mise.toml"
 [tools]
-"github:irskep/localci" = "0.1.4"
+"github:irskep/localci" = "0.1.5"
 ```
 
 ```sh
 mise install
 ```
 
-## Define setup
+## Define tasks
 
-Add a `localci:setup` task if the repository needs dependencies installed before checks run:
+LocalCI executes all tasks with `localci:` in their name, and always executes `localci:setup` first.
+
 
 ```toml title="mise.toml"
 [tasks."localci:setup"]
@@ -26,27 +27,11 @@ run = [
   # 'mise trust' is run automatically, so you can usually just install dependencies immediately
   "mise install",
 ]
+
+[tasks."localci:test"]
+description = "go test"
+run = "go test ./..."
 ```
-
-The root `localci:setup` task is always run before all other tasks. It runs once, not before every task.
-
-## Define checks
-
-LocalCI discovers mise tasks in the `localci:` namespace. [File tasks](https://mise.en.dev/tasks/file-tasks.html) are usually a good fit:
-
-```sh
-mkdir -p mise-tasks/localci
-```
-
-```sh title="mise-tasks/localci/test"
-go test ./...
-```
-
-Save that as `mise-tasks/localci/test` and make it executable.
-
-[Monorepo tasks](https://mise.en.dev/tasks/monorepo.html) work too. Mise addresses child tasks as `//path:task`; LocalCI treats the task portion after the path as eligible when it starts with `localci:`.
-
-See [Defining Tasks](defining-tasks.md) for more examples.
 
 ## Start the daemon
 

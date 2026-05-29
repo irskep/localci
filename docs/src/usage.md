@@ -1,4 +1,4 @@
-# Usage
+# Command Line Usage
 
 These commands cover the common ways to run and inspect LocalCI checks.
 
