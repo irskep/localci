@@ -19,6 +19,10 @@ func (p Paths) GlobalCacheRoot() string {
 	return filepath.Join(p.Root, "cache")
 }
 
+func (p Paths) HistoryDBPath() string {
+	return filepath.Join(p.Root, "history.db")
+}
+
 func (p Paths) RepoRoot(repoDir string) string {
 	return filepath.Join(p.Root, normalizeRepoDir(repoDir))
 }

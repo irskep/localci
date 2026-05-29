@@ -478,7 +478,7 @@ func TestExplicitFlagParserRejectsPositionals(t *testing.T) {
 func TestLatestCommitForRepoReturnsHelpfulErrorWhenMissing(t *testing.T) {
 	t.Parallel()
 
-	app := App{}
+	app := App{LocalCIRoot: t.TempDir()}
 	_, err := app.latestCommitForRepo("/definitely/missing/repo")
 	if err == nil {
 		t.Fatalf("latestCommitForRepo returned nil error, want missing-run error")

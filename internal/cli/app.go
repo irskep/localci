@@ -20,6 +20,7 @@ type App struct {
 	OpenURL           func(string) error
 	CheckRequirements func() error
 	ConfigPath        string
+	LocalCIRoot       string
 	LoadConfig        func(string) (localci.Config, error)
 	LatestCommit      func(string) (string, error)
 	HeadCommit        func(string) (string, error)
@@ -594,7 +595,7 @@ func noCloneCommitLabel(commit string) string {
 }
 
 func (a App) newRunner() (localci.Runner, error) {
-	root, err := defaultLocalCIRoot()
+	root, err := a.localCIRoot()
 	if err != nil {
 		return localci.Runner{}, err
 	}
@@ -746,7 +747,7 @@ func (a App) discoverRepoFromCwd() (string, error) {
 func (a App) loadConfig() (localci.Config, error) {
 	path := a.ConfigPath
 	if path == "" {
-		root, err := defaultLocalCIRoot()
+		root, err := a.localCIRoot()
 		if err != nil {
 			return localci.Config{}, err
 		}
@@ -764,7 +765,7 @@ func (a App) latestCommitForRepo(repoDir string) (string, error) {
 		return a.LatestCommit(repoDir)
 	}
 
-	root, err := defaultLocalCIRoot()
+	root, err := a.localCIRoot()
 	if err != nil {
 		return "", err
 	}
@@ -780,6 +781,13 @@ func (a App) latestCommitForRepo(repoDir string) (string, error) {
 		return "", fmt.Errorf("no localci runs found for %s", repoDir)
 	}
 	return commits[0].Commit, nil
+}
+
+func (a App) localCIRoot() (string, error) {
+	if strings.TrimSpace(a.LocalCIRoot) != "" {
+		return a.LocalCIRoot, nil
+	}
+	return defaultLocalCIRoot()
 }
 
 func (a App) resolveCommitAlias(repoDir string, commit string) (string, error) {

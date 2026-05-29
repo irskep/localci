@@ -31,6 +31,9 @@ func (r StatusReader) ReadCommit(repoDir string, commit string) (CommitStatus, e
 	if err != nil {
 		return CommitStatus{}, err
 	}
+	if len(tasks) == 0 && len(run.TaskResults) > 0 {
+		tasks = append([]TaskRecord{}, run.TaskResults...)
+	}
 
 	run.TaskResults = tasks
 	run.RefreshSummary()
@@ -68,6 +71,18 @@ func (r StatusReader) readTaskRecords(repoDir string, commit string) ([]TaskReco
 	})
 	if err != nil {
 		return nil, err
+	}
+	if len(taskRecords) == 0 {
+		run, err := (RunRepository{Paths: r.Paths}).ReadRun(repoDir, commit)
+		if err != nil {
+			if errors.Is(err, ErrRecordNotFound) {
+				return []TaskRecord{}, nil
+			}
+			return nil, err
+		}
+		for _, record := range run.TaskResults {
+			taskRecords[record.Name] = record
+		}
 	}
 
 	records := make([]TaskRecord, 0, len(taskRecords))

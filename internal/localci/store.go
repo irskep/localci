@@ -13,7 +13,10 @@ func writeRunRecord(paths Paths, req InvokeRequest, record RunRecord) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create run record directory: %w", err)
 	}
-	return writeJSONFile(path, record)
+	if err := writeJSONFile(path, record); err != nil {
+		return err
+	}
+	return (RunRepository{Paths: paths}).WriteRun(record)
 }
 
 func writeTaskRecord(record TaskRecord) error {
@@ -24,11 +27,18 @@ func writeTaskRecord(record TaskRecord) error {
 var ErrRecordNotFound = errors.New("record not found")
 
 func readRunRecord(paths Paths, req InvokeRequest) (RunRecord, error) {
-	var record RunRecord
-	if err := readJSONFile(paths.RunRecordPath(req.RepoDir, req.Commit), &record); err != nil {
+	record, err := (RunRepository{Paths: paths}).ReadRun(req.RepoDir, req.Commit)
+	if err == nil {
+		return record, nil
+	}
+	if !errors.Is(err, ErrRecordNotFound) {
 		return RunRecord{}, err
 	}
-	return record, nil
+	var fallback RunRecord
+	if err := readJSONFile(paths.RunRecordPath(req.RepoDir, req.Commit), &fallback); err != nil {
+		return RunRecord{}, err
+	}
+	return fallback, nil
 }
 
 func readTaskRecord(path string) (TaskRecord, error) {
