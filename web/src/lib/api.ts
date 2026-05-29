@@ -139,6 +139,9 @@ export type TaskAttemptView = {
 export type ArtifactView = {
   display_name: string
   path: string
+  is_text?: boolean
+  raw_url?: string
+  download_url?: string
 }
 
 type Validator<T> = (value: unknown) => T
@@ -374,6 +377,9 @@ function parseArtifactView(value: unknown): ArtifactView {
   return {
     display_name: asString(data.display_name, 'artifact.display_name'),
     path: asString(data.path, 'artifact.path'),
+    is_text: optionalBoolean(data.is_text, 'artifact.is_text'),
+    raw_url: optionalString(data.raw_url, 'artifact.raw_url'),
+    download_url: optionalString(data.download_url, 'artifact.download_url'),
   }
 }
 
@@ -410,6 +416,11 @@ function asString(value: unknown, name: string): string {
 function optionalString(value: unknown, name: string): string | undefined {
   if (value === undefined || value === null || value === '') return undefined
   return asString(value, name)
+}
+
+function optionalBoolean(value: unknown, name: string): boolean | undefined {
+  if (value === undefined || value === null) return undefined
+  return asBoolean(value, name)
 }
 
 function asNumber(value: unknown, name: string): number {

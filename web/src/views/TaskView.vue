@@ -13,7 +13,8 @@ import {
   taskURL,
 } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
-import { displayStatusSeverity, displayTaskStatus, formatDuration } from '@/lib/api'
+import type { ArtifactView } from '@/lib/api'
+import { displayStatusSeverity, displayTaskStatus, formatDuration, shortCommit } from '@/lib/api'
 import { useLocalciStore } from '@/stores/localci'
 
 const route = useRoute()
@@ -29,7 +30,7 @@ const canCancel = computed(
   () => task.value?.status === 'running' || task.value?.status === 'queued',
 )
 const title = computed(() => {
-  const commitLabel = parsed.value.commit ? parsed.value.commit.slice(0, 12) : ''
+  const commitLabel = parsed.value.commit ? shortCommit(parsed.value.commit) : ''
   return commitLabel ? `${taskName.value} ${commitLabel}` : taskName.value
 })
 
@@ -77,6 +78,28 @@ function artifactApiPath(displayName: string): string {
   return `/api${artifactPath(displayName)}`
 }
 
+function isWebArtifact(displayName: string): boolean {
+  return /\.(html?|svg|png|jpe?g|gif|webp|css|js|json|pdf)$/i.test(displayName)
+}
+
+function artifactPrimaryIcon(artifact: ArtifactView): string {
+  if (artifact.raw_url && isWebArtifact(artifact.display_name)) return 'pi pi-globe'
+  if (artifact.is_text) return 'pi pi-align-left'
+  return 'pi pi-download'
+}
+
+function artifactPrimaryHref(artifact: ArtifactView): string {
+  if (artifact.raw_url && isWebArtifact(artifact.display_name)) return artifact.raw_url
+  if (!artifact.is_text && artifact.download_url) return artifact.download_url
+  return artifactPath(artifact.display_name)
+}
+
+function artifactPrimaryLabel(artifact: ArtifactView): string {
+  if (artifact.raw_url && isWebArtifact(artifact.display_name)) return 'Open webpage artifact'
+  if (artifact.is_text) return 'Open live log artifact'
+  return 'Download artifact'
+}
+
 onMounted(subscribe)
 watch(
   () => route.path,
@@ -101,7 +124,7 @@ onUnmounted(() => store.unsubscribeTask())
           to: repoPathURL(parsed.repoPath),
         },
         {
-          label: parsed.commit ? parsed.commit.slice(0, 12) : 'Commit',
+          label: parsed.commit ? shortCommit(parsed.commit) : 'Commit',
           to: parsed.commit ? commitURL(parsed.repoPath, parsed.commit) : undefined,
         },
         {
@@ -165,14 +188,19 @@ onUnmounted(() => store.unsubscribeTask())
           <PPanel header="Artifacts">
             <ul v-if="task.artifacts.length > 0" class="artifact-list">
               <li v-for="artifact in task.artifacts" :key="artifact.display_name">
-                <i class="pi pi-file" aria-hidden="true"></i>
-                <RouterLink :to="artifactPath(artifact.display_name)">
+                <i :class="artifactPrimaryIcon(artifact)" aria-hidden="true"></i>
+                <a
+                  :href="artifactPrimaryHref(artifact)"
+                  :aria-label="`${artifactPrimaryLabel(artifact)}: ${artifact.display_name}`"
+                >
                   {{ artifact.display_name }}
-                </RouterLink>
+                </a>
                 <ArtifactActions
                   :path="artifact.path"
                   :api-path="artifactApiPath(artifact.display_name)"
-                  compact
+                  :raw-url="artifact.raw_url"
+                  :download-url="artifact.download_url"
+                  mode="menu"
                 />
               </li>
             </ul>
@@ -299,7 +327,8 @@ onUnmounted(() => store.unsubscribeTask())
   min-width: 0;
   padding: var(--app-space-3) 0;
   overflow: hidden;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-log-view {

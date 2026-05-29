@@ -53,6 +53,9 @@ type ArtifactView struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
 	Path        string `json:"path"`
+	IsText      bool   `json:"is_text,omitempty"`
+	RawURL      string `json:"raw_url,omitempty"`
+	DownloadURL string `json:"download_url,omitempty"`
 }
 
 type TaskAttemptView struct {

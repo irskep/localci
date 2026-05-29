@@ -55,7 +55,16 @@ describe('api validation', () => {
         status: 'succeeded',
         failure: '',
         duration_ms: 10,
-        artifacts: [{ display_name: 'combined.log', path: '/tmp/combined.log' }],
+        artifacts: [
+          {
+            display_name: 'combined.log',
+            path: '/tmp/combined.log',
+            is_text: true,
+            raw_url: '/artifacts/repo/repo/commit/abc/task/localci:test/attempt/1/combined.log',
+            download_url:
+              '/artifacts/repo/repo/commit/abc/task/localci:test/attempt/1/combined.log?download=1',
+          },
+        ],
         attempts: [{ attempt: 1, status: 'succeeded', failure: '', duration_ms: 10 }],
       },
       selected_attempt: 1,
@@ -65,7 +74,14 @@ describe('api validation', () => {
     })
 
     expect(response.task.artifacts).toEqual([
-      { display_name: 'combined.log', path: '/tmp/combined.log' },
+      {
+        display_name: 'combined.log',
+        path: '/tmp/combined.log',
+        is_text: true,
+        raw_url: '/artifacts/repo/repo/commit/abc/task/localci:test/attempt/1/combined.log',
+        download_url:
+          '/artifacts/repo/repo/commit/abc/task/localci:test/attempt/1/combined.log?download=1',
+      },
     ])
   })
 

@@ -347,6 +347,7 @@ func (s WebServer) handleAPITask(w http.ResponseWriter, repoDir string, commit s
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
+	task = s.enrichTaskArtifacts(repoDir, commit, task)
 	primaryArtifact, primaryLog := LoadPrimaryLog(task)
 	writeJSON(w, http.StatusOK, apiTaskResponse{
 		Repo:            s.apiRepoSummary(repoDir),

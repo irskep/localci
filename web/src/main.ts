@@ -8,6 +8,7 @@ import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import MeterGroup from 'primevue/metergroup'
+import Menu from 'primevue/menu'
 import Message from 'primevue/message'
 import Panel from 'primevue/panel'
 import ProgressSpinner from 'primevue/progressspinner'
@@ -54,6 +55,7 @@ app.component('PButton', Button)
 app.component('PColumn', Column)
 app.component('PDataTable', DataTable)
 app.component('PMeterGroup', MeterGroup)
+app.component('PMenu', Menu)
 app.component('PMessage', Message)
 app.component('PPanel', Panel)
 app.component('PProgressSpinner', ProgressSpinner)

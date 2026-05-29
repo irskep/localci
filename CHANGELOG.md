@@ -5,6 +5,8 @@
 ## 0.1.5 - Unreleased
 
 - Use platform-standard config and cache directories for LocalCI state and artifacts.
+- Use shallow local fetches for per-commit clones.
+- Serve task artifacts through the web UI with browser-compatible raw URLs and downloads.
 - Add first-run setup guidance to the web home page.
 - Add a Defining Tasks docs guide for TOML and file-based Mise tasks.
 - Remove legacy `run.json` history import and fallback code now that run history is SQLite-backed.

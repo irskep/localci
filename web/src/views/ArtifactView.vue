@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 
 import TopBar from '@/components/TopBar.vue'
 import ArtifactActions from '@/components/ArtifactActions.vue'
+import { shortCommit } from '@/lib/api'
 import { attemptURL, commitURL, parseRepoRoute, repoPathURL, taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
@@ -40,7 +41,7 @@ onUnmounted(() => store.unsubscribeArtifact())
           to: repoPathURL(parsed.repoPath),
         },
         {
-          label: parsed.commit ? parsed.commit.slice(0, 12) : 'Commit',
+          label: parsed.commit ? shortCommit(parsed.commit) : 'Commit',
           to: parsed.commit ? commitURL(parsed.repoPath, parsed.commit) : undefined,
         },
         {
@@ -74,9 +75,23 @@ onUnmounted(() => store.unsubscribeArtifact())
         <span class="artifact-path mono" :title="store.currentArtifact.artifact.path">{{
           store.currentArtifact.artifact.path
         }}</span>
-        <ArtifactActions :path="store.currentArtifact.artifact.path" :api-path="parsed.apiPath" />
+        <ArtifactActions
+          :path="store.currentArtifact.artifact.path"
+          :api-path="parsed.apiPath"
+          :raw-url="store.currentArtifact.artifact.raw_url"
+          :download-url="store.currentArtifact.artifact.download_url"
+        />
       </div>
-      <pre class="artifact-log-view">{{ store.currentArtifact.content }}</pre>
+      <pre v-if="store.currentArtifact.artifact.is_text" class="artifact-log-view">{{
+        store.currentArtifact.content
+      }}</pre>
+      <div v-else class="artifact-fallback">
+        <i class="pi pi-file" aria-hidden="true"></i>
+        <div>
+          <p>This artifact is not a text file.</p>
+          <p class="muted">Open it in the browser or download it.</p>
+        </div>
+      </div>
     </div>
   </main>
 </template>
@@ -129,5 +144,20 @@ onUnmounted(() => store.unsubscribeArtifact())
   font-size: var(--app-log-font-size);
   line-height: var(--app-log-line-height);
   white-space: pre-wrap;
+}
+
+.artifact-fallback {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-3);
+  min-width: 0;
+  padding: var(--app-space-5);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: var(--p-content-border-radius);
+  background: var(--p-surface-0);
+}
+
+.artifact-fallback p {
+  margin: 0;
 }
 </style>

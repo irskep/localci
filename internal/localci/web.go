@@ -67,6 +67,7 @@ func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealth)
+	mux.HandleFunc("/artifacts/", s.handleRawArtifact)
 	mux.HandleFunc("/api", s.handleAPI)
 	mux.HandleFunc("/api/", s.handleAPI)
 	if servesFrontendApp(assetFS) {

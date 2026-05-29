@@ -444,6 +444,136 @@ func TestWebServerAPI(t *testing.T) {
 	}
 }
 
+func TestWebServerServesRawArtifacts(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoRoot := t.TempDir()
+	paths := Paths{Root: root}
+	repoDir := filepath.Join(repoRoot, "team", "repo")
+	commit := "abc123"
+	req := InvokeRequest{RepoDir: repoDir, Commit: commit}
+
+	record := newTaskRecord(paths, req, Task{Name: "//web:localci:static-artifacts"}, 1, time.Now().UTC())
+	record.Status = TaskStatusSucceeded
+	if err := os.MkdirAll(filepath.Join(record.OutputDir, "static-site"), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	files := map[string][]byte{
+		"static-site/index.html": []byte(`<!doctype html><link rel="stylesheet" href="style.css"><img src="mark.svg">`),
+		"static-site/style.css":  []byte(`body { color: rebeccapurple; }`),
+		"static-site/mark.svg":   []byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>`),
+		"static-site/blob.bin":   {0, 1, 2, 3},
+	}
+	for name, data := range files {
+		if err := os.WriteFile(filepath.Join(record.OutputDir, filepath.FromSlash(name)), data, 0o644); err != nil {
+			t.Fatalf("WriteFile %s returned error: %v", name, err)
+		}
+	}
+	if err := writeTaskRecord(record); err != nil {
+		t.Fatalf("writeTaskRecord returned error: %v", err)
+	}
+
+	run := newRunRecord(req, record.StartedAt)
+	run.FinishedAt = record.StartedAt.Add(time.Second)
+	run.DiscoveredTasks = []Task{{Name: record.Name}}
+	run.TaskResults = []TaskRecord{record}
+	run.RefreshSummary()
+	if err := writeRunRecord(paths, run); err != nil {
+		t.Fatalf("writeRunRecord returned error: %v", err)
+	}
+
+	server := WebServer{
+		Paths:    paths,
+		Queue:    QueueStore{Paths: paths},
+		RepoRoot: repoRoot,
+		DiscoverTasks: func(context.Context, string) ([]Task, error) {
+			return []Task{{Name: record.Name}}, nil
+		},
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		if isTCPPermissionError(err) {
+			t.Skip("tcp listeners are not permitted in this environment")
+		}
+		t.Fatalf("Listen returned error: %v", err)
+	}
+	defer listener.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	errs := make(chan error, 1)
+	go func() {
+		errs <- server.Serve(ctx, listener)
+	}()
+	defer func() {
+		cancel()
+		<-errs
+	}()
+
+	rawPath, err := RawArtifactRoutePath(repoRoot, repoDir, commit, record.Name, record.Attempt, "static-site/index.html")
+	if err != nil {
+		t.Fatalf("RawArtifactRoutePath returned error: %v", err)
+	}
+	baseURL := "http://" + listener.Addr().String()
+	noRedirectClient := &http.Client{
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := noRedirectClient.Get(baseURL + rawPath)
+	if err != nil {
+		t.Fatalf("GET raw index without redirect returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("raw index status = %d, want 200 without redirect", resp.StatusCode)
+	}
+	assertRawArtifact(t, baseURL+rawPath, "text/html", files["static-site/index.html"])
+
+	assertRawArtifact(t, baseURL+strings.Replace(rawPath, "index.html", "style.css", 1), "text/css", files["static-site/style.css"])
+	assertRawArtifact(t, baseURL+strings.Replace(rawPath, "index.html", "mark.svg", 1), "image/svg+xml", files["static-site/mark.svg"])
+	assertRawArtifact(t, baseURL+strings.Replace(rawPath, "index.html", "blob.bin", 1), "application/octet-stream", files["static-site/blob.bin"])
+
+	resp, err = http.Get(baseURL + rawPath + "?download=1")
+	if err != nil {
+		t.Fatalf("GET download returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if got := resp.Header.Get("Content-Disposition"); !strings.Contains(got, "attachment") || !strings.Contains(got, "index.html") {
+		t.Fatalf("Content-Disposition = %q, want attachment index.html", got)
+	}
+
+	resp, err = http.Get(baseURL + strings.Replace(rawPath, "static-site/index.html", "task.json", 1))
+	if err != nil {
+		t.Fatalf("GET internal artifact returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("internal artifact status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func assertRawArtifact(t *testing.T, rawURL string, contentTypePrefix string, want []byte) {
+	t.Helper()
+
+	resp, err := http.Get(rawURL)
+	if err != nil {
+		t.Fatalf("GET %s returned error: %v", rawURL, err)
+	}
+	got, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s returned status %d: %s", rawURL, resp.StatusCode, string(got))
+	}
+	if string(got) != string(want) {
+		t.Fatalf("GET %s body = %q, want %q", rawURL, got, want)
+	}
+	if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, contentTypePrefix) {
+		t.Fatalf("GET %s Content-Type = %q, want prefix %q", rawURL, contentType, contentTypePrefix)
+	}
+}
+
 func TestWebServerHomeAndRepoPages(t *testing.T) {
 	t.Parallel()
 

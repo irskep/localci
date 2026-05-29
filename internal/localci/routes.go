@@ -74,6 +74,25 @@ func ArtifactRoutePath(root string, repoDir string, commit string, taskName stri
 	if err != nil {
 		return "", err
 	}
+	artifactPath := escapedArtifactPath(artifact)
+	return path.Join(append([]string{attemptPath, "artifact"}, artifactPath...)...), nil
+}
+
+func RawArtifactRoutePath(root string, repoDir string, commit string, taskName string, attempt int, artifact string) (string, error) {
+	repoPath, err := RouteRepoPath(root, repoDir)
+	if err != nil {
+		return "", err
+	}
+	artifactPath := escapedArtifactPath(artifact)
+	prefix := []string{"/artifacts", "repo"}
+	if repoPath != "" {
+		prefix = append(prefix, strings.Split(repoPath, "/")...)
+	}
+	prefix = append(prefix, "commit", url.PathEscape(commit), "task", url.PathEscape(taskName), "attempt", fmt.Sprintf("%d", attempt))
+	return path.Join(append(prefix, artifactPath...)...), nil
+}
+
+func escapedArtifactPath(artifact string) []string {
 	segments := strings.Split(filepath.ToSlash(artifact), "/")
 	escaped := make([]string, 0, len(segments))
 	for _, segment := range segments {
@@ -82,5 +101,5 @@ func ArtifactRoutePath(root string, repoDir string, commit string, taskName stri
 		}
 		escaped = append(escaped, url.PathEscape(segment))
 	}
-	return path.Join(append([]string{attemptPath, "artifact"}, escaped...)...), nil
+	return escaped
 }

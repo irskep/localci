@@ -409,6 +409,14 @@ func (m tuiModel) renderArtifact(theme tuiTheme, height int) string {
 		}
 		return loadingText(m.loading)
 	}
+	if !m.artifact.Artifact.IsText {
+		lines := []string{theme.title().Render(m.artifact.Artifact.DisplayName)}
+		if m.artifact.Artifact.Path != "" {
+			lines = append(lines, theme.muted().Render(m.artifact.Artifact.Path), "")
+		}
+		lines = append(lines, "This artifact is not a text file.", "Use o to open it or e to edit it.")
+		return renderTUIPanel(theme, m.width, height, strings.Join(lines, "\n"))
+	}
 	logViewport := m.artifactLog
 	logViewport.Width = max(1, m.width-4)
 	logViewport.Height = max(1, height-4)

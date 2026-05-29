@@ -1,0 +1,54 @@
+#!/bin/sh
+set -eu
+
+printf 'cwd: %s\n' "$(pwd)"
+
+: "${LOCALCI_TASK_OUTPUT_DIR:?}"
+
+site_dir="$LOCALCI_TASK_OUTPUT_DIR/static-site"
+mkdir -p "$site_dir"
+
+cat >"$site_dir/index.html" <<'HTML'
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>LocalCI static artifact</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main>
+      <img src="mark.svg" alt="LocalCI mark">
+      <h1>Static artifact</h1>
+      <p>This HTML, CSS, and SVG are served by LocalCI.</p>
+    </main>
+  </body>
+</html>
+HTML
+
+cat >"$site_dir/style.css" <<'CSS'
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  color: #2e3a4f;
+  background: #f8f7fb;
+}
+
+main {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+img {
+  width: 96px;
+}
+CSS
+
+cat >"$site_dir/mark.svg" <<'SVG'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img">
+  <rect width="96" height="96" rx="18" fill="#a855f7"/>
+  <path d="M22 50l16 16 36-40" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+SVG
+

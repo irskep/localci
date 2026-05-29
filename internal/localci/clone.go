@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,11 +49,19 @@ func (m CloneManager) Prepare(ctx context.Context, repoDir string, commit string
 	if err := os.MkdirAll(filepath.Dir(info.Worktree), 0o755); err != nil {
 		return CloneInfo{}, err
 	}
-	if err := runCloneGit(ctx, "", "clone", "--no-checkout", repoDir, info.Worktree); err != nil {
+	if err := runCloneGit(ctx, "", "init", info.Worktree); err != nil {
 		_ = os.RemoveAll(info.CloneDir)
-		return CloneInfo{}, fmt.Errorf("clone repo: %w", err)
+		return CloneInfo{}, fmt.Errorf("init clone: %w", err)
 	}
-	if err := runCloneGit(ctx, info.Worktree, "checkout", "--detach", commit); err != nil {
+	if err := runCloneGit(ctx, info.Worktree, "remote", "add", "origin", localFileURL(repoDir)); err != nil {
+		_ = os.RemoveAll(info.CloneDir)
+		return CloneInfo{}, fmt.Errorf("add clone remote: %w", err)
+	}
+	if err := runCloneGit(ctx, info.Worktree, "fetch", "--depth", "1", "--no-tags", "origin", commit); err != nil {
+		_ = os.RemoveAll(info.CloneDir)
+		return CloneInfo{}, fmt.Errorf("fetch commit: %w", err)
+	}
+	if err := runCloneGit(ctx, info.Worktree, "checkout", "--detach", "FETCH_HEAD"); err != nil {
 		_ = os.RemoveAll(info.CloneDir)
 		return CloneInfo{}, fmt.Errorf("checkout commit: %w", err)
 	}
@@ -105,6 +114,14 @@ func (m CloneManager) now() time.Time {
 		return m.Now()
 	}
 	return time.Now().UTC()
+}
+
+func localFileURL(path string) string {
+	u := url.URL{
+		Scheme: "file",
+		Path:   filepath.ToSlash(filepath.Clean(path)),
+	}
+	return u.String()
 }
 
 func runCloneGit(ctx context.Context, dir string, args ...string) error {

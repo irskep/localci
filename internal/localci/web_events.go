@@ -3,6 +3,7 @@ package localci
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -255,6 +256,7 @@ func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
+		task = s.enrichTaskArtifacts(repoDir, commit, task)
 		return apiArtifactListResponse{
 			Repo:      s.apiRepoSummary(repoDir),
 			Commit:    commit,
@@ -271,6 +273,7 @@ func (s WebServer) apiTaskSnapshot(repoDir string, commit string, taskName strin
 	if err != nil {
 		return apiTaskResponse{}, err
 	}
+	task = s.enrichTaskArtifacts(repoDir, commit, task)
 	primaryArtifact, primaryLog := LoadPrimaryLog(task)
 	return apiTaskResponse{
 		Repo:            s.apiRepoSummary(repoDir),
@@ -288,13 +291,18 @@ func (s WebServer) apiArtifactSnapshot(repoDir string, commit string, taskName s
 	if err != nil {
 		return apiArtifactResponse{}, err
 	}
+	task = s.enrichTaskArtifacts(repoDir, commit, task)
 	artifact, ok := findArtifactByDisplayName(task.Artifacts, artifactPath)
 	if !ok {
 		return apiArtifactResponse{}, fmt.Errorf("artifact not found")
 	}
 	data, err := readTextTaskArtifact(task, artifact.DisplayName)
 	if err != nil {
-		return apiArtifactResponse{}, err
+		if errors.Is(err, ErrArtifactNotDisplayable) {
+			data = nil
+		} else {
+			return apiArtifactResponse{}, err
+		}
 	}
 	return apiArtifactResponse{
 		Repo:     s.apiRepoSummary(repoDir),
