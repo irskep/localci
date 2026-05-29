@@ -21,10 +21,18 @@ LocalCI releases are driven by Git tags. A push of `vX.Y.Z` starts `.github/work
    - Keep only sections that have entries.
    - Release notes should be useful to users, not a raw commit log.
 
-4. Update pinned install versions.
+4. Update pinned install versions everywhere they appear.
 
-   - Update the `github:irskep/localci` version in `README.md`.
-   - Update the `github:irskep/localci` version in `docs/src/getting-started.md`.
+   - First find the old version in the whole repo so no install snippet is missed:
+
+     ```sh
+     rg 'github:irskep/localci|0\.1\.0|v0\.1\.0'
+     ```
+
+     Replace `0.1.0` and `v0.1.0` with the previous release version you are
+     replacing.
+   - Update every intentional pinned LocalCI install version, including
+     `README.md` and `docs/src/getting-started.md`.
    - Use the plain version, for example `0.1.0`, not `v0.1.0`.
 
 5. Run local validation.
