@@ -8,7 +8,6 @@ docs_dir = "src"
 nav = [
   "index.md",
   "getting-started.md",
-  "usage.md",
   "tasks.md",
   "cli.md",
 ]
