@@ -2,7 +2,7 @@
 
 <!-- loosely based on https://keepachangelog.com/en/1.0.0/ -->
 
-## 0.2.1 - Unreleased
+## 0.2.1 - 2026-05-29
 
 - Remove vestigial repo root setting.
 
