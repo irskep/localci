@@ -297,10 +297,16 @@ func loadingText(loading bool) string {
 }
 
 func shortCommit(commit string) string {
-	if len(commit) <= 12 {
-		return commit
+	suffix := ""
+	commitHash := commit
+	if strings.HasSuffix(commit, "*") {
+		suffix = "*"
+		commitHash = strings.TrimSuffix(commit, "*")
 	}
-	return commit[:12]
+	if len(commitHash) > 12 {
+		commitHash = commitHash[:12]
+	}
+	return commitHash + suffix
 }
 
 func trimTaskLabel(name string) string {

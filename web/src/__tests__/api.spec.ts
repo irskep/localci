@@ -6,6 +6,7 @@ import {
   displayTaskStatus,
   parseAPIEvent,
   parseTaskResponse,
+  shortCommit,
   summarizeCommit,
 } from '@/lib/api'
 
@@ -94,5 +95,11 @@ describe('api validation', () => {
         ],
       }),
     ).toBe('1 failed, 1 canceled, 1/3 passed')
+  })
+
+  it('shortens no-clone commits without counting the marker', () => {
+    expect(shortCommit('3a974feb300e734293a95d7bea0809c11293f2c9')).toBe('3a974feb300e')
+    expect(shortCommit('3a974feb300e734293a95d7bea0809c11293f2c9*')).toBe('3a974feb300e*')
+    expect(shortCommit('abc123*')).toBe('abc123*')
   })
 })

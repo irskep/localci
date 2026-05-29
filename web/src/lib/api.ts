@@ -534,7 +534,10 @@ export function formatDuration(durationMs: number): string {
 }
 
 export function shortCommit(commit: string): string {
-  return commit.length > 12 ? commit.slice(0, 12) : commit
+  const suffix = commit.endsWith('*') ? '*' : ''
+  const commitHash = suffix ? commit.slice(0, -1) : commit
+  const shortHash = commitHash.length > 12 ? commitHash.slice(0, 12) : commitHash
+  return `${shortHash}${suffix}`
 }
 
 export function formatAnnotations(annotations?: Record<string, string>): string {
