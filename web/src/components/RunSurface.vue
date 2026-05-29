@@ -403,39 +403,114 @@ function taskSummaryStatusLabel(status: string): string {
         </span>
       </div>
     </div>
-    <div v-if="summaryMode && !runHasLiveTasks(run) && usePackageGroups(run)" class="run-summary">
-      <template v-if="completedRunIssueGroups(run).length === 0">
-        <i class="pi pi-check run-task-icon run-task-icon-success" aria-hidden="true"></i>
-        <RouterLink :to="commitURL(repoPath, run.commit)">all passed</RouterLink>
-      </template>
-      <template v-else>
+    <details
+      v-if="summaryMode && !runHasLiveTasks(run) && usePackageGroups(run)"
+      class="run-summary-disclosure"
+    >
+      <summary class="run-summary run-summary-expandable">
+        <i class="pi pi-chevron-right run-package-toggle" aria-hidden="true"></i>
         <span>
-          {{ completedRunIssueGroups(run).length }}
-          {{ pluralize(completedRunIssueGroups(run).length, 'package') }} with issues:
-        </span>
-        <template
-          v-for="(packageGroup, packageIndex) in visibleIssueGroups(run)"
-          :key="packageGroup.name"
-        >
-          <span>{{ packageIndex === 0 ? ' ' : '' }}{{ packageGroup.name }} (</span>
-          <template
-            v-for="(item, taskIndex) in visibleIssueTasks(packageGroup)"
-            :key="item.task.name"
-          >
-            <span v-if="taskIndex > 0">, </span>
-            <RouterLink :to="taskURL(repoPath, run.commit, item.task.name)">
-              {{ item.label }}
-            </RouterLink>
+          <template v-if="completedRunIssueGroups(run).length === 0">
+            <i class="pi pi-check run-task-icon run-task-icon-success" aria-hidden="true"></i>
+            <RouterLink :to="commitURL(repoPath, run.commit)">all passed</RouterLink>
           </template>
-          <span v-if="issueTaskMoreCount(packageGroup) > 0">
-            , +{{ issueTaskMoreCount(packageGroup) }} more</span
-          >
-          <span>)</span>
-          <span v-if="packageIndex < visibleIssueGroups(run).length - 1">, </span>
+          <template v-else>
+            <span>
+              {{ completedRunIssueGroups(run).length }}
+              {{ pluralize(completedRunIssueGroups(run).length, 'package') }} with issues:
+            </span>
+            <template
+              v-for="(packageGroup, packageIndex) in visibleIssueGroups(run)"
+              :key="packageGroup.name"
+            >
+              <span>{{ packageIndex === 0 ? ' ' : '' }}{{ packageGroup.name }} (</span>
+              <template
+                v-for="(item, taskIndex) in visibleIssueTasks(packageGroup)"
+                :key="item.task.name"
+              >
+                <span v-if="taskIndex > 0">, </span>
+                <RouterLink :to="taskURL(repoPath, run.commit, item.task.name)">
+                  {{ item.label }}
+                </RouterLink>
+              </template>
+              <span v-if="issueTaskMoreCount(packageGroup) > 0">
+                , +{{ issueTaskMoreCount(packageGroup) }} more</span
+              >
+              <span>)</span>
+              <span v-if="packageIndex < visibleIssueGroups(run).length - 1">, </span>
+            </template>
+            <span v-if="packageIssueMoreCount(run) > 0"
+              >, +{{ packageIssueMoreCount(run) }} more</span
+            >
+          </template>
+        </span>
+      </summary>
+      <div class="run-package-list run-summary-package-list">
+        <template v-for="packageGroup in packageGroups(run)" :key="packageGroup.name">
+          <details v-if="packageNeedsLongForm(packageGroup)" class="run-package">
+            <summary class="run-package-summary run-package-summary-expandable">
+              <i class="pi pi-chevron-right run-package-toggle" aria-hidden="true"></i>
+              <span class="run-package-title">
+                <PTag
+                  :severity="packageSeverity(packageGroup)"
+                  :value="packageSummary(packageGroup)"
+                />
+                <span>{{ packageGroup.name }}</span>
+              </span>
+              <span class="run-package-detail">
+                {{ packageProgressSummary(packageGroup) }}
+              </span>
+              <span v-if="packageHasIncompleteTasks(packageGroup)" class="run-package-progress">
+                <PMeterGroup
+                  :value="packageProgressItems(packageGroup)"
+                  :max="packageGroup.tasks.length"
+                  :aria-label="`${packageGroup.name} progress`"
+                >
+                  <template #label></template>
+                </PMeterGroup>
+              </span>
+            </summary>
+            <div class="run-package-tasks">
+              <div
+                v-for="group in taskGroupsForPackage(packageGroup)"
+                :key="group.label"
+                class="run-status-row"
+              >
+                <PTag :severity="taskGroupSeverity(group)" :value="group.label" />
+                <span class="run-task-list">
+                  <RouterLink
+                    v-for="item in group.tasks"
+                    :key="item.task.name"
+                    :to="taskURL(repoPath, run.commit, item.task.name)"
+                  >
+                    <i :class="taskGroupIcon(group)" aria-hidden="true"></i>
+                    {{ item.label }}
+                  </RouterLink>
+                </span>
+              </div>
+            </div>
+          </details>
+          <div v-else class="run-package run-package-summary run-package-summary-static">
+            <span class="run-package-title">
+              <PTag
+                v-if="packageStatus(packageGroup) !== 'succeeded'"
+                :severity="packageSeverity(packageGroup)"
+                :value="packageSummary(packageGroup)"
+              />
+              <span>{{ packageGroup.name }}</span>
+            </span>
+            <span class="run-package-task-summary">
+              <template v-for="(item, taskIndex) in packageGroup.tasks" :key="item.task.name">
+                <span v-if="taskIndex > 0">, </span>
+                <RouterLink :to="taskURL(repoPath, run.commit, item.task.name)">
+                  {{ item.label }}
+                </RouterLink>
+              </template>
+            </span>
+          </div>
         </template>
-        <span v-if="packageIssueMoreCount(run) > 0">, +{{ packageIssueMoreCount(run) }} more</span>
-      </template>
-    </div>
+      </div>
+    </details>
     <div v-else-if="hasIncompleteTasks(run)" class="run-progress">
       <PMeterGroup :value="progressItems(run)" :max="run.tasks.length" aria-label="Run progress">
         <template #label></template>
@@ -673,8 +748,32 @@ function taskSummaryStatusLabel(status: string): string {
 }
 
 .run-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-3);
   color: var(--p-text-muted-color);
   overflow-wrap: anywhere;
+}
+
+.run-summary-disclosure {
+  min-width: 0;
+}
+
+.run-summary-expandable {
+  cursor: pointer;
+  list-style: none;
+}
+
+.run-summary-expandable::-webkit-details-marker {
+  display: none;
+}
+
+.run-summary-disclosure[open] > .run-summary .run-package-toggle {
+  transform: rotate(90deg);
+}
+
+.run-summary-package-list {
+  margin-top: var(--app-space-3);
 }
 
 .run-summary .run-task-icon {

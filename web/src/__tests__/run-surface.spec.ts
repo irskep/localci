@@ -165,7 +165,8 @@ describe('RunSurface', () => {
     expect(wrapper.text()).toContain('all passed')
     expect(wrapper.find('.run-task-icon-success').exists()).toBe(true)
     expect(wrapper.find('.run-status-list').exists()).toBe(false)
-    expect(wrapper.find('.run-package-list').exists()).toBe(false)
+    expect(wrapper.find('.run-summary-disclosure').exists()).toBe(true)
+    expect(wrapper.find('.run-package-list').exists()).toBe(true)
     expect(wrapper.find('a[data-to="/repo/cli/localci/commit/abc123def456"]').exists()).toBe(true)
   })
 
@@ -194,7 +195,9 @@ describe('RunSurface', () => {
       '4 packages with issues: root (noisy-fail), //web (lint), //docs (build), +1 more',
     )
     expect(wrapper.find('.run-status-list').exists()).toBe(false)
-    expect(wrapper.findAll('a[data-to]')).toHaveLength(3)
+    expect(wrapper.find('.run-summary-disclosure').exists()).toBe(true)
+    expect(wrapper.find('.run-package-list').exists()).toBe(true)
+    expect(wrapper.find('.run-summary').findAll('a[data-to]')).toHaveLength(3)
     expect(wrapper.find('a[data-to*="noisy-fail"]').exists()).toBe(true)
   })
 })
