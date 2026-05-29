@@ -109,7 +109,7 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 		record.FinishedAt = r.now()
 		record.RefreshSummary()
 
-		if writeErr := writeRunRecord(r.Paths, req, record); writeErr != nil {
+		if writeErr := writeRunRecord(r.Paths, record); writeErr != nil {
 			return RunRecord{}, writeErr
 		}
 
@@ -121,7 +121,7 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 	if record.FinishedAt.IsZero() {
 		record.FinishedAt = r.now()
 		record.RefreshSummary()
-		if err := writeRunRecord(r.Paths, req, record); err != nil {
+		if err := writeRunRecord(r.Paths, record); err != nil {
 			return RunRecord{}, err
 		}
 	}

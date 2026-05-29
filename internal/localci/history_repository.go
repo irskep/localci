@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,10 +31,6 @@ func (r RunRepository) ListRepoSummaries() ([]RepoHistory, error) {
 		return nil, err
 	}
 	defer db.Close()
-
-	if err := r.importFilesystemRuns(context.Background(), db); err != nil {
-		return nil, err
-	}
 
 	rows, err := db.QueryContext(context.Background(), `
 		select repo_dir, max(repo_id), max(activity_at) as latest_activity
@@ -116,10 +111,6 @@ func (r RunRepository) listRunPage(repoDir string, before time.Time, limit int) 
 		return RunPage{}, err
 	}
 	defer db.Close()
-
-	if err := r.importFilesystemRuns(context.Background(), db); err != nil {
-		return RunPage{}, err
-	}
 
 	if limit <= 0 {
 		limit = 20
@@ -229,10 +220,6 @@ func (r RunRepository) ListRuns() ([]RunRecord, error) {
 	}
 	defer db.Close()
 
-	if err := r.importFilesystemRuns(context.Background(), db); err != nil {
-		return nil, err
-	}
-
 	rows, err := db.QueryContext(context.Background(), `
 		select run_json
 		from runs
@@ -251,10 +238,6 @@ func (r RunRepository) ListRepoCommits(repoDir string) ([]RunRecord, error) {
 		return nil, err
 	}
 	defer db.Close()
-
-	if err := r.importFilesystemRuns(context.Background(), db); err != nil {
-		return nil, err
-	}
 
 	rows, err := db.QueryContext(context.Background(), `
 		select run_json
@@ -301,10 +284,6 @@ func (r RunRepository) ReadRun(repoDir string, commit string) (RunRecord, error)
 		return RunRecord{}, err
 	}
 	defer db.Close()
-
-	if err := r.importFilesystemRuns(context.Background(), db); err != nil {
-		return RunRecord{}, err
-	}
 
 	var raw string
 	err = db.QueryRowContext(context.Background(), `
@@ -374,59 +353,8 @@ func ensureHistorySchema(ctx context.Context, db *sql.DB) error {
 		);
 		create index if not exists runs_activity_at_idx on runs (activity_at desc);
 		create index if not exists runs_repo_activity_at_idx on runs (repo_dir, activity_at desc);
-		create table if not exists metadata (
-			key text primary key,
-			value text not null
-		);
 	`); err != nil {
 		return fmt.Errorf("initialize history database: %w", err)
-	}
-	return nil
-}
-
-func (r RunRepository) importFilesystemRuns(ctx context.Context, db *sql.DB) error {
-	var importedAt string
-	err := db.QueryRowContext(ctx, `select value from metadata where key = 'filesystem_imported_at'`).Scan(&importedAt)
-	if err == nil {
-		return nil
-	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("read history import marker: %w", err)
-	}
-
-	err = filepath.WalkDir(r.Paths.Root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				return nil
-			}
-			return err
-		}
-		if d.IsDir() || d.Name() != "run.json" {
-			return nil
-		}
-		rel, err := filepath.Rel(r.Paths.Root, path)
-		if err != nil {
-			return err
-		}
-		if len(strings.Split(filepath.ToSlash(rel), "/")) != 3 {
-			return nil
-		}
-
-		var run RunRecord
-		if err := readJSONFile(path, &run); err != nil {
-			return err
-		}
-		return upsertRun(ctx, db, run)
-	})
-	if err != nil {
-		return fmt.Errorf("import filesystem history: %w", err)
-	}
-	if _, err := db.ExecContext(ctx, `
-		insert into metadata (key, value)
-		values ('filesystem_imported_at', ?)
-		on conflict(key) do update set value = excluded.value
-	`, formatDBTime(time.Now())); err != nil {
-		return fmt.Errorf("write history import marker: %w", err)
 	}
 	return nil
 }

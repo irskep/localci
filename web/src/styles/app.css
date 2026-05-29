@@ -7,8 +7,9 @@
   --app-space-4: var(--p-overlay-popover-padding);
   --app-space-5: var(--p-overlay-modal-padding);
   --app-space-6: calc(var(--p-overlay-modal-padding) + var(--p-anchor-gutter));
-  --app-page-padding: calc(var(--p-overlay-modal-padding) + var(--p-navigation-item-gap))
-    var(--p-overlay-modal-padding) calc(var(--p-overlay-modal-padding) * 2);
+  --app-page-block-padding: calc(var(--p-overlay-modal-padding) + var(--p-navigation-item-gap));
+  --app-page-padding: var(--app-page-block-padding) var(--p-overlay-modal-padding)
+    calc(var(--p-overlay-modal-padding) * 2);
   --app-item-padding: var(--p-list-option-padding);
   --app-log-font-size: var(--p-form-field-sm-font-size);
   --app-log-line-height: 1.45;

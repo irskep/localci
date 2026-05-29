@@ -97,9 +97,7 @@ async function loadCurrentPage(): Promise<void> {
 
           <PPanel header="Queue">
             <template #icons>
-              <RouterLink to="/queue">
-                <PButton label="Open" text size="small" icon="pi pi-arrow-right" icon-pos="right" />
-              </RouterLink>
+              <RouterLink to="/queue">See more</RouterLink>
             </template>
             <ul v-if="queueRows.length > 0" class="artifact-list">
               <li

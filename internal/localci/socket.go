@@ -404,7 +404,7 @@ func (s *DaemonServer) ensureRunRecord(repoDir string, commit string, annotation
 			return err
 		}
 		run = newRunRecord(req, time.Now().UTC())
-		return writeRunRecord(s.Paths, req, run)
+		return writeRunRecord(s.Paths, run)
 	}
 	if len(annotations) == 0 {
 		return nil
@@ -415,7 +415,7 @@ func (s *DaemonServer) ensureRunRecord(repoDir string, commit string, annotation
 	for key, value := range annotations {
 		run.Annotations[key] = value
 	}
-	return writeRunRecord(s.Paths, req, run)
+	return writeRunRecord(s.Paths, run)
 }
 
 func errorResponse(err error) DaemonResponse {

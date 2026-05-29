@@ -28,7 +28,7 @@ defineProps<{
   align-items: center;
   justify-content: space-between;
   gap: var(--app-space-4);
-  margin-bottom: var(--app-space-4);
+  margin-bottom: var(--app-page-block-padding);
   min-width: 0;
 }
 

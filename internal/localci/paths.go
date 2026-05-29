@@ -51,10 +51,6 @@ func (p Paths) CloneInfoPath(repoDir string, commit string) string {
 	return filepath.Join(p.CloneRoot(repoDir), commit+".info.json")
 }
 
-func (p Paths) RunRecordPath(repoDir string, commit string) string {
-	return filepath.Join(p.CommitRoot(repoDir, commit), "run.json")
-}
-
 func (p Paths) CommitCacheDir(repoDir string, commit string) string {
 	return filepath.Join(p.CommitRoot(repoDir, commit), "cache")
 }

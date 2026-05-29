@@ -108,9 +108,12 @@ exit 1
 		t.Fatalf("serial execution order = %q, want %q", got, want)
 	}
 
-	runPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "run.json")
-	if _, err := os.Stat(runPath); err != nil {
-		t.Fatalf("run metadata missing at %s: %v", runPath, err)
+	persistedRun, err := (RunRepository{Paths: runner.Paths}).ReadRun(repoDir, "abc123")
+	if err != nil {
+		t.Fatalf("ReadRun returned error: %v", err)
+	}
+	if persistedRun.Commit != "abc123" {
+		t.Fatalf("persisted run commit = %q, want abc123", persistedRun.Commit)
 	}
 
 	if result.Status != RunStatusSucceeded {
@@ -235,9 +238,12 @@ exit 1
 		t.Fatalf("task pwd = %q, want %q", got, repoDir)
 	}
 
-	runPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123*", "run.json")
-	if _, err := os.Stat(runPath); err != nil {
-		t.Fatalf("run metadata missing at %s: %v", runPath, err)
+	persistedRun, err := (RunRepository{Paths: runner.Paths}).ReadRun(repoDir, "abc123*")
+	if err != nil {
+		t.Fatalf("ReadRun returned error: %v", err)
+	}
+	if persistedRun.Commit != "abc123*" {
+		t.Fatalf("persisted run commit = %q, want abc123*", persistedRun.Commit)
 	}
 	cloneDir := filepath.Join(rootDir, normalizeRepoDir(repoDir), "clones", "abc123*")
 	if _, err := os.Stat(cloneDir); !os.IsNotExist(err) {

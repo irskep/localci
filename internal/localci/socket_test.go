@@ -208,7 +208,7 @@ func TestDaemonServerStatusView(t *testing.T) {
 	}
 	run.TaskResults = []TaskRecord{taskRecord}
 	run.RefreshSummary()
-	if err := writeRunRecord(paths, req, run); err != nil {
+	if err := writeRunRecord(paths, run); err != nil {
 		t.Fatalf("writeRunRecord returned error: %v", err)
 	}
 

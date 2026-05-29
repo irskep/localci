@@ -12,17 +12,15 @@ func TestHistoryReaderListsReposAndCommitsNewestFirst(t *testing.T) {
 
 	root := t.TempDir()
 	paths := Paths{Root: root}
+	repository := RunRepository{Paths: paths}
 
 	writeRun := func(repoDir string, commit string, startedAt time.Time) {
 		t.Helper()
-		if err := os.MkdirAll(paths.CommitRoot(repoDir, commit), 0o755); err != nil {
-			t.Fatalf("MkdirAll returned error: %v", err)
-		}
 		run := newRunRecord(InvokeRequest{RepoDir: repoDir, Commit: commit}, startedAt)
 		run.FinishedAt = startedAt.Add(time.Minute)
 		run.RefreshSummary()
-		if err := writeRunRecord(paths, InvokeRequest{RepoDir: repoDir, Commit: commit}, run); err != nil {
-			t.Fatalf("writeRunRecord returned error: %v", err)
+		if err := repository.WriteRun(run); err != nil {
+			t.Fatalf("WriteRun returned error: %v", err)
 		}
 	}
 
@@ -63,33 +61,31 @@ func TestHistoryReaderListsReposAndCommitsNewestFirst(t *testing.T) {
 	}
 }
 
-func TestHistoryReaderKeepsImportedRunsAfterRunFilesAreDeleted(t *testing.T) {
+func TestHistoryReaderKeepsRunsAfterOutputFilesAreDeleted(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
 	paths := Paths{Root: root}
+	repository := RunRepository{Paths: paths}
 	req := InvokeRequest{RepoDir: "/repo-a", Commit: "aaa111"}
 	run := newRunRecord(req, time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC))
 	run.FinishedAt = run.StartedAt.Add(time.Minute)
 	run.RefreshSummary()
-	if err := writeRunRecord(paths, req, run); err != nil {
-		t.Fatalf("writeRunRecord returned error: %v", err)
+	if err := repository.WriteRun(run); err != nil {
+		t.Fatalf("WriteRun returned error: %v", err)
 	}
 
 	reader := HistoryReader{Paths: paths}
-	if _, err := reader.ListRepos(); err != nil {
-		t.Fatalf("initial ListRepos returned error: %v", err)
-	}
-	if err := os.Remove(paths.RunRecordPath(req.RepoDir, req.Commit)); err != nil {
-		t.Fatalf("Remove run record returned error: %v", err)
+	if err := os.RemoveAll(paths.CommitRoot(req.RepoDir, req.Commit)); err != nil {
+		t.Fatalf("RemoveAll commit output returned error: %v", err)
 	}
 
 	commits, err := reader.ListRepoCommits(req.RepoDir)
 	if err != nil {
-		t.Fatalf("ListRepoCommits after deleting run file returned error: %v", err)
+		t.Fatalf("ListRepoCommits after deleting output files returned error: %v", err)
 	}
 	if len(commits) != 1 || commits[0].Commit != req.Commit {
-		t.Fatalf("commits after deleting run file = %#v, want persisted run", commits)
+		t.Fatalf("commits after deleting output files = %#v, want persisted run", commits)
 	}
 }
 

@@ -4,6 +4,9 @@
 
 ## 0.1.5 - Unreleased
 
+- Remove legacy `run.json` history import and fallback code now that run history is SQLite-backed.
+- Visual improvements.
+
 ## 0.1.4 - 2026-05-29
 
 - Add expandable package summaries for high-volume run lists.

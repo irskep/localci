@@ -194,7 +194,7 @@ func TestDaemonManagerRecoverInterruptedWorkRequeuesRunningTask(t *testing.T) {
 	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 	run.TaskResults = []TaskRecord{task}
 	run.RefreshSummary()
-	if err := writeRunRecord(paths, req, run); err != nil {
+	if err := writeRunRecord(paths, run); err != nil {
 		t.Fatalf("writeRunRecord returned error: %v", err)
 	}
 
@@ -279,7 +279,7 @@ func TestDaemonManagerRecoverInterruptedWorkSkipsFinishedTask(t *testing.T) {
 	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 	run.TaskResults = []TaskRecord{task}
 	run.RefreshSummary()
-	if err := writeRunRecord(paths, req, run); err != nil {
+	if err := writeRunRecord(paths, run); err != nil {
 		t.Fatalf("writeRunRecord returned error: %v", err)
 	}
 

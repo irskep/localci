@@ -334,7 +334,7 @@ func upsertTaskRecord(paths Paths, req InvokeRequest, record TaskRecord, now tim
 
 	run.FinishedAt = now
 	run.RefreshSummary()
-	if err := writeRunRecord(paths, req, run); err != nil {
+	if err := writeRunRecord(paths, run); err != nil {
 		return RunRecord{}, err
 	}
 	return run, nil
@@ -350,7 +350,7 @@ func ensureRunRecordWithTasks(paths Paths, req InvokeRequest, tasks []Task, now 
 	}
 	run.DiscoveredTasks = append([]Task{}, tasks...)
 	run.RefreshSummary()
-	if err := writeRunRecord(paths, req, run); err != nil {
+	if err := writeRunRecord(paths, run); err != nil {
 		return RunRecord{}, err
 	}
 	return run, nil

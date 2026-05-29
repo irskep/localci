@@ -58,7 +58,7 @@ func TestStatusReaderReadCommit(t *testing.T) {
 		}
 	}
 
-	if err := writeRunRecord(paths, req, run); err != nil {
+	if err := writeRunRecord(paths, run); err != nil {
 		t.Fatalf("writeRunRecord returned error: %v", err)
 	}
 	if err := writeTaskRecord(taskB); err != nil {
@@ -127,14 +127,11 @@ func TestStatusReaderUsesPersistedRunTasksWhenOutputFilesAreDeleted(t *testing.T
 	run.DiscoveredTasks = []Task{{Name: task.Name}}
 	run.TaskResults = []TaskRecord{task}
 	run.RefreshSummary()
-	if err := os.MkdirAll(paths.CommitRoot(req.RepoDir, req.Commit), 0o755); err != nil {
-		t.Fatalf("MkdirAll returned error: %v", err)
-	}
-	if err := writeRunRecord(paths, req, run); err != nil {
+	if err := writeRunRecord(paths, run); err != nil {
 		t.Fatalf("writeRunRecord returned error: %v", err)
 	}
-	if err := os.Remove(paths.RunRecordPath(req.RepoDir, req.Commit)); err != nil {
-		t.Fatalf("Remove run record returned error: %v", err)
+	if err := os.RemoveAll(paths.CommitRoot(req.RepoDir, req.Commit)); err != nil {
+		t.Fatalf("RemoveAll commit output returned error: %v", err)
 	}
 
 	status, err := (StatusReader{Paths: paths}).ReadCommit(req.RepoDir, req.Commit)
@@ -175,7 +172,7 @@ func TestBuildCommitStatusViewIncludesQueuedAttempt(t *testing.T) {
 	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 	run.TaskResults = []TaskRecord{record}
 	run.RefreshSummary()
-	if err := writeRunRecord(paths, req, run); err != nil {
+	if err := writeRunRecord(paths, run); err != nil {
 		t.Fatalf("writeRunRecord returned error: %v", err)
 	}
 

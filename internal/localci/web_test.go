@@ -44,7 +44,7 @@ func TestWebServerCommitAndArtifactPages(t *testing.T) {
 	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 	run.TaskResults = []TaskRecord{record}
 	run.RefreshSummary()
-	if err := writeRunRecord(paths, req, run); err != nil {
+	if err := writeRunRecord(paths, run); err != nil {
 		t.Fatalf("writeRunRecord returned error: %v", err)
 	}
 
@@ -255,7 +255,7 @@ func TestWebServerAPI(t *testing.T) {
 	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 	run.TaskResults = []TaskRecord{record}
 	run.RefreshSummary()
-	if err := writeRunRecord(paths, req, run); err != nil {
+	if err := writeRunRecord(paths, run); err != nil {
 		t.Fatalf("writeRunRecord returned error: %v", err)
 	}
 
@@ -475,7 +475,7 @@ func TestWebServerHomeAndRepoPages(t *testing.T) {
 		run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 		run.TaskResults = []TaskRecord{record}
 		run.RefreshSummary()
-		if err := writeRunRecord(paths, req, run); err != nil {
+		if err := writeRunRecord(paths, run); err != nil {
 			t.Fatalf("writeRunRecord returned error: %v", err)
 		}
 	}
