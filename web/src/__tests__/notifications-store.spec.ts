@@ -84,6 +84,7 @@ describe('notification store', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -134,6 +135,45 @@ describe('notification store', () => {
 
     expect(FakeNotification.instances).toHaveLength(1)
     expect(FakeNotification.instances[0]?.title).toBe('LocalCI: passed')
+  })
+
+  it('sends a test notification every 10 seconds after startup', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    )
+    const store = useNotificationStore()
+
+    store.startRunMonitor()
+    vi.advanceTimersByTime(10_000)
+    vi.advanceTimersByTime(10_000)
+
+    expect(FakeNotification.instances).toEqual([
+      {
+        title: 'LocalCI: test',
+        options: { body: 'notification test' },
+      },
+      {
+        title: 'LocalCI: test',
+        options: { body: 'notification test' },
+      },
+    ])
+  })
+
+  it('does not send test notifications before permission is granted', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    )
+    FakeNotification.permission = 'default'
+    const store = useNotificationStore()
+
+    store.startRunMonitor()
+    vi.advanceTimersByTime(10_000)
+
+    expect(FakeNotification.instances).toEqual([])
   })
 
   it('does not notify when permission is not granted', () => {

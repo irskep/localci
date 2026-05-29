@@ -8,6 +8,7 @@ import { notificationForRun, runHasLiveTasks, runIsComplete } from '@/lib/run-no
 type PermissionState = NotificationPermission | 'unsupported'
 
 const enabledStorageKey = 'localci.notifications.enabled'
+const testNotificationIntervalMs = 10_000
 
 export const useNotificationStore = defineStore('notifications', () => {
   const permission = ref<PermissionState>(notificationPermission())
@@ -18,6 +19,7 @@ export const useNotificationStore = defineStore('notifications', () => {
   const notifiedRuns = new Set<string>()
   let socket: WebSocket | null = null
   let reconnectTimer: number | null = null
+  let testNotificationTimer: number | null = null
   let reconnectAttempts = 0
   let seeded = false
 
@@ -68,6 +70,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     if (monitorStarted.value) return
     monitorStarted.value = true
     refreshPermission()
+    startTestNotifications()
     connect()
     void getJSON('/api', parseHomeResponse)
       .then((data) => {
@@ -145,6 +148,13 @@ export const useNotificationStore = defineStore('notifications', () => {
       reconnectTimer = null
       connect()
     }, delay)
+  }
+
+  function startTestNotifications(): void {
+    if (testNotificationTimer !== null) return
+    testNotificationTimer = window.setInterval(() => {
+      sendNotification('LocalCI: test', 'notification test')
+    }, testNotificationIntervalMs)
   }
 
   function sendNotification(title: string, body: string): void {
