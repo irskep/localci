@@ -114,4 +114,30 @@ describe('localci store', () => {
     expect(store.repoLoaded).toBe(true)
     expect(store.currentRepo?.repo.repo_path).toBe('cli/localci')
   })
+
+  it('clears transient page load errors after the websocket recovers', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('Load failed')
+      }),
+    )
+    const store = useLocalciStore()
+    const snapshot = {
+      type: 'snapshot',
+      resource: '/api/repo/cli/localci',
+      data: {
+        repo: { repo_dir: '/repo', repo_path: 'cli/localci' },
+        commits: [],
+      },
+    }
+
+    store.subscribeRepo('/api/repo/cli/localci')
+    await vi.waitFor(() => expect(store.error).toBe('Load failed'))
+    FakeWebSocket.instances[0]?.message(snapshot)
+
+    expect(store.repoLoaded).toBe(true)
+    expect(store.currentRepo?.repo.repo_path).toBe('cli/localci')
+    expect(store.error).toBe('')
+  })
 })

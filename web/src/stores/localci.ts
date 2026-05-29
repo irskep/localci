@@ -194,13 +194,19 @@ export const useLocalciStore = defineStore('localci', () => {
     unsubscribePage()
     loading.value = true
     error.value = ''
+    let applied = false
+    const applyData = (data: T): void => {
+      apply(data)
+      applied = true
+      error.value = ''
+      loading.value = false
+    }
     const stream = openReconnectingEventStream(apiPath, {
       onMessage(message) {
         try {
           const event = parseAPIEvent(JSON.parse(message.data as string) as unknown, validateData)
           if (event.type === 'snapshot' || event.type === 'replace') {
-            apply(event.data)
-            loading.value = false
+            applyData(event.data)
           }
           if (event.type === 'error') {
             error.value = event.message
@@ -222,11 +228,10 @@ export const useLocalciStore = defineStore('localci', () => {
     void getJSON(apiPath, validateData)
       .then((data) => {
         if (pageStream !== stream) return
-        apply(data)
-        loading.value = false
+        applyData(data)
       })
       .catch((err) => {
-        if (pageStream !== stream) return
+        if (pageStream !== stream || applied) return
         error.value = err instanceof Error ? err.message : String(err)
         loading.value = false
       })
