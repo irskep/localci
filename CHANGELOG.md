@@ -4,15 +4,12 @@
 
 ## 0.1.5 - Unreleased
 
-- Use platform-standard config and cache directories for LocalCI state and artifacts.
-- Use shallow local fetches for per-commit clones.
-- Serve task artifacts through the web UI with browser-compatible raw URLs and downloads.
-- Use Cobra for CLI parsing, help, and shell completions.
-- Generate the CLI reference from Cobra command metadata.
-- Add `localci docs` with bundled narrative documentation.
-- Add first-run setup guidance to the web home page.
-- Add a Defining Tasks docs guide for TOML and file-based Mise tasks.
-- Remove legacy `run.json` history import and fallback code now that run history is SQLite-backed.
+- Store durable history and temporary artifacts in platform-standard directories.
+- Make per-commit runs faster and smaller with shallow local clones.
+- Let the web UI open browser-compatible artifacts directly and download binary artifacts.
+- Improve command help, shell completions, and CLI reference accuracy.
+- Add `localci docs` for quick terminal access to the core documentation.
+- Improve first-run setup guidance and task-definition documentation.
 - Visual improvements.
 
 ## 0.1.4 - 2026-05-29
