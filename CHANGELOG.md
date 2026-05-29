@@ -2,6 +2,13 @@
 
 <!-- loosely based on https://keepachangelog.com/en/1.0.0/ -->
 
+## 0.1.4 - 2026-05-29
+
+- Add expandable package summaries for high-volume run lists.
+- Add a reusable web top bar with the LocalCI logo and documentation link.
+- Fix SPA navigation and daemon restart recovery issues that could leave repo pages loading or show stale load errors.
+- Fix web route tests for the SPA shell.
+
 ## 0.1.3 - 2026-05-27
 
 - Improve high-volume run lists with compact summaries, linked task names, and clearer package grouping.
