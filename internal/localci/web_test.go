@@ -83,11 +83,8 @@ func TestWebServerCommitAndArtifactPages(t *testing.T) {
 	}
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if !strings.Contains(string(body), ">test<") {
-		t.Fatalf("commit page missing task link: %s", string(body))
-	}
-	if !strings.Contains(string(body), `/assets/app.js`) {
-		t.Fatalf("commit page missing app.js: %s", string(body))
+	if !isSPAShell(string(body)) {
+		t.Fatalf("commit page missing SPA shell: %s", string(body))
 	}
 
 	resp, err = http.Get(baseURL + "/repo/repo/commit/" + commit)
@@ -96,8 +93,8 @@ func TestWebServerCommitAndArtifactPages(t *testing.T) {
 	}
 	body, _ = io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if !strings.Contains(string(body), ">test<") {
-		t.Fatalf("commit route page missing task link: %s", string(body))
+	if !isSPAShell(string(body)) {
+		t.Fatalf("commit route page missing SPA shell: %s", string(body))
 	}
 
 	resp, err = http.Get(baseURL + "/task?repo=" + url.QueryEscape(repoDir) + "&commit=" + url.QueryEscape(commit) + "&task=" + url.QueryEscape("localci:test"))
@@ -106,21 +103,21 @@ func TestWebServerCommitAndArtifactPages(t *testing.T) {
 	}
 	body, _ = io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if !strings.Contains(string(body), "Retry task") {
-		t.Fatalf("task page missing retry form: %s", string(body))
-	}
-	if !strings.Contains(string(body), "Attempt: 1") {
-		t.Fatalf("task page missing attempt info: %s", string(body))
+	if !isSPAShell(string(body)) {
+		t.Fatalf("task page missing SPA shell: %s", string(body))
 	}
 
-	resp, err = http.Get(baseURL + "/artifact?repo=" + url.QueryEscape(repoDir) + "&commit=" + url.QueryEscape(commit) + "&task=" + url.QueryEscape("localci:test") + "&path=" + url.QueryEscape(artifactPath))
+	resp, err = http.Get(baseURL + "/api/repo/repo/commit/" + commit + "/task/" + url.PathEscape("localci:test") + "/attempt/1/artifact/test.log")
 	if err != nil {
-		t.Fatalf("GET artifact returned error: %v", err)
+		t.Fatalf("GET artifact API returned error: %v", err)
 	}
-	body, _ = io.ReadAll(resp.Body)
+	var artifact apiArtifactResponse
+	if err := json.NewDecoder(resp.Body).Decode(&artifact); err != nil {
+		t.Fatalf("Decode artifact returned error: %v", err)
+	}
 	_ = resp.Body.Close()
-	if got := string(body); got != "hello" {
-		t.Fatalf("artifact body = %q, want %q", got, "hello")
+	if artifact.Content != "hello" || artifact.Artifact.Path != artifactPath {
+		t.Fatalf("unexpected artifact response: %#v", artifact)
 	}
 }
 
@@ -221,6 +218,10 @@ func TestWebServerServesEmbeddedAssetsAndOverride(t *testing.T) {
 			t.Fatalf("override app route missing index content: %s", got)
 		}
 	})
+}
+
+func isSPAShell(body string) bool {
+	return strings.Contains(body, `id="app"`) && strings.Contains(body, `/assets/index-`)
 }
 
 func TestWebServerAPI(t *testing.T) {
