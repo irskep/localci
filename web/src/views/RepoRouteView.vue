@@ -2,7 +2,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import TopBar from '@/components/TopBar.vue'
 import RunList from '@/components/RunList.vue'
 import { parseRepoRoute } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
@@ -58,7 +58,7 @@ async function loadCurrentPage(): Promise<void> {
 
 <template>
   <main class="page">
-    <AppBreadcrumbs
+    <TopBar
       :items="[
         { label: 'Home', to: '/' },
         { label: store.currentRepo?.repo.repo_path ?? parsed.repoPath },

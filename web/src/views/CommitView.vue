@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import TopBar from '@/components/TopBar.vue'
 import {
   displayStatusSeverity,
   displayTaskFailure,
@@ -41,7 +41,7 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
 
 <template>
   <main class="page">
-    <AppBreadcrumbs
+    <TopBar
       :items="[
         { label: 'Home', to: '/' },
         {

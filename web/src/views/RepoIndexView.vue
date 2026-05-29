@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
-import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import TopBar from '@/components/TopBar.vue'
 import RepoLink from '@/components/RepoLink.vue'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
@@ -21,7 +21,7 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
 
 <template>
   <main class="page">
-    <AppBreadcrumbs :items="[{ label: 'Home', to: '/' }, { label: 'Repo' }]" />
+    <TopBar :items="[{ label: 'Home', to: '/' }, { label: 'Repo' }]" />
 
     <PMessage v-if="store.error" severity="error" :closable="false">{{ store.error }}</PMessage>
     <div v-if="store.loading && !store.home" class="loading-state">

@@ -40,7 +40,6 @@ const model = computed<MenuItem[]>(() =>
 
 <style scoped>
 .breadcrumbs {
-  margin-bottom: var(--app-space-4);
   padding: 0;
   background: transparent;
 }

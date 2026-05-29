@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import TopBar from '@/components/TopBar.vue'
 import ArtifactActions from '@/components/ArtifactActions.vue'
 import { attemptURL, commitURL, parseRepoRoute, repoPathURL, taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
@@ -32,7 +32,7 @@ onUnmounted(() => store.unsubscribeArtifact())
 
 <template>
   <main class="page artifact-page">
-    <AppBreadcrumbs
+    <TopBar
       :items="[
         { label: 'Home', to: '/' },
         {
