@@ -104,6 +104,7 @@ run = "mise install"
 LocalCI runs `localci:setup` first when it exists. It is setup for the run, not an ordinary validation check.
 
 Only the root setup task is used. LocalCI ignores setup tasks from nested config roots, such as `//web:localci:setup`. If you need package-specific setup, use [task dependencies](https://mise.en.dev/tasks/architecture.html#task-dependency-system).
+
 ## Task execution environment
 
 Tasks run either in shallow clones of a specific commit, or on your working directory when you pass `--no-clone`. Runs with `--no-clone` are marked with an asterisk `*` in the UI because their state won’t match what’s in git.

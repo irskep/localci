@@ -8,6 +8,8 @@
 - Use shallow local fetches for per-commit clones.
 - Serve task artifacts through the web UI with browser-compatible raw URLs and downloads.
 - Use Cobra for CLI parsing, help, and shell completions.
+- Generate the CLI reference from Cobra command metadata.
+- Add `localci docs` with bundled narrative documentation.
 - Add first-run setup guidance to the web home page.
 - Add a Defining Tasks docs guide for TOML and file-based Mise tasks.
 - Remove legacy `run.json` history import and fallback code now that run history is SQLite-backed.

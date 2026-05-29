@@ -9,7 +9,7 @@ nav = [
   "index.md",
   "getting-started.md",
   "tasks.md",
-  "cli.md",
+  "cli/localci.md",
 ]
 
 [project.theme.icon]

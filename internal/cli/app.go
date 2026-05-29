@@ -18,6 +18,8 @@ type App struct {
 	Stderr            io.Writer
 	Cwd               string
 	OpenURL           func(string) error
+	RenderManPage     func(string) error
+	StdoutIsTerminal  func() bool
 	CheckRequirements func() error
 	ConfigPath        string
 	LocalCIRoot       string

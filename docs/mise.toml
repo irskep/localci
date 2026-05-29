@@ -1,8 +1,10 @@
 [tools]
 "pipx:zensical" = "0.0.43"
+pandoc = "3.9.0.2"
 
 [tasks.build]
 description = "Build the Zensical documentation"
+depends = ["//docs:generated-docs"]
 run = [
   "printf 'cwd: %s\\n' \"$(pwd)\"",
   "zensical build",
@@ -17,7 +19,15 @@ run = [
 
 [tasks."localci:build"]
 description = "Build the Zensical documentation"
+depends = ["//docs:generated-docs"]
 run = [
   "printf 'cwd: %s\\n' \"$(pwd)\"",
   "zensical build --strict",
+]
+
+[tasks.generated-docs]
+description = "Generate CLI reference pages and bundled terminal docs"
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "go run ../cmd/localci-docs --cli-out src/cli --bundle-out ../internal/docs/generated --source src --filter pandoc/zensical-admonitions.lua",
 ]

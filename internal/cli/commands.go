@@ -51,6 +51,7 @@ func (a App) newRootCommand() *cobra.Command {
 		a.newStatusCommand(),
 		a.newHistoryCommand(),
 		a.newArtifactsCommand(),
+		a.newDocsCommand(),
 		a.newWebCommand(),
 		a.newDashCommand(),
 		a.newInstallHooksCommand(),
@@ -260,6 +261,26 @@ func (a App) newArtifactsCommand() *cobra.Command {
 		},
 		a.runArtifacts,
 	)
+}
+
+func (a App) newDocsCommand() *cobra.Command {
+	var plain bool
+	var roff bool
+	cmd := &cobra.Command{
+		Use:   "docs",
+		Short: "Run this to quickly learn everything localci can do",
+		Long:  "Read LocalCI's bundled narrative documentation. For command options, use localci --help or localci <command> --help.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if plain && roff {
+				return fmt.Errorf("--plain and --roff are mutually exclusive")
+			}
+			return a.runDocs(docsFlags{Plain: plain, Roff: roff})
+		},
+	}
+	cmd.Flags().BoolVar(&plain, "plain", false, "print plain text instead of opening a man-style viewer")
+	cmd.Flags().BoolVar(&roff, "roff", false, "print roff manpage source")
+	return cmd
 }
 
 func (a App) newWebCommand() *cobra.Command {

@@ -23,6 +23,14 @@ mise install
 localci start
 ```
 
+### Read docs in the terminal
+
+```sh
+localci docs
+```
+
+Use `localci docs --plain` when you want plain text for scripts, pagers, or agents.
+
 ### Install the hook
 
 From the repository root:

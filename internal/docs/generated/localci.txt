@@ -1,0 +1,415 @@
+LOCALCI(1) LocalCI Manual
+LocalCI
+May 2026
+
+NAME
+
+localci - local post-commit validation runner
+
+COMMAND HELP
+
+For command options, run localci --help or localci <command> --help.
+
+Overview
+
+LocalCI is an asynchronous post-commit validation runner for local development. It fills the gap
+between Git hooks and remote CI: checks run locally, but they run after the commit so the person or
+coding agent making the change does not have to block on the full suite before moving on.
+
+LocalCI is deliberately small. It discovers mise tasks, queues them in a daemon, runs them against
+an isolated clone, and makes the results available from the CLI and a local web UI.
+
+What LocalCI is for
+
+- ✓ Run all checks even if you forget
+
+  You or your agent might forget to keep one of your test suites green. LocalCI makes sure
+  everything runs all the time.
+
+- ✓ Browse results like GitHub Actions (but better)
+
+  Results, logs, and history are all available via one-shot commands, a web UI, and a terminal UI.
+
+What LocalCI is not for
+
+- ✕ GitHub Actions compatibility
+
+  LocalCI remains simple by sticking to running Mise tasks.
+
+- ✕ Projects without Mise
+
+  If a project cannot express its checks as Mise tasks, it is not a good fit.
+
+How it works
+
+1.  The daemon is running. (localci start)
+2.  A Git post-commit hook calls localci postcommit --repo <repo> --commit <commit>.
+3.  The LocalCI daemon clones your project to a unique place and checks out the commit.
+4.  The daemon discovers every mise task whose task name starts with localci:, including monorepo
+    tasks addressed with mise’s //path:task syntax, and puts them in a queue.
+5.  One by one, the daemon runs each task.
+6.  Results can be inspected with localci wait, localci status, localci web, or localci dash.
+
+By default, LocalCI runs everything in isolated clones. Use localci run --no-clone --wait when you
+intentionally want a daemon-managed run against your working tree.
+
+Getting Started
+
+This guide gets a repository to the point where LocalCI runs checks after each commit.
+
+Set up a repository
+
+Install LocalCI
+
+LocalCI requires Mise. Install Mise first, then add LocalCI as a pinned GitHub release tool:
+
+File: mise.toml
+
+    [tools]
+    "github:irskep/localci" = "0.1.5"
+
+    mise install
+
+Start the daemon
+
+    localci start
+
+Read docs in the terminal
+
+    localci docs
+
+Use localci docs --plain when you want plain text for scripts, pagers, or agents.
+
+Install the hook
+
+From the repository root:
+
+    localci install-hooks
+
+After each commit, the hook enqueues checks and prints commands for status and waiting.
+
+Define tasks
+
+LocalCI executes all tasks with localci: in their name, and always executes localci:setup first.
+
+File: mise.toml
+
+    [tasks."localci:setup"]
+    description = "Install dependencies for LocalCI runs"
+    run = [
+      # 'mise trust' is run automatically, so you can usually just install dependencies immediately
+      "mise install",
+    ]
+
+    [tasks."localci:test"]
+    description = "go test"
+    run = "go test ./..."
+
+Commit the setup
+
+Commit the LocalCI task definitions so the post-commit hook can enqueue checks for the new revision:
+
+    git add mise.toml
+    git commit -m "Configure LocalCI"
+
+Run checks
+
+Follow the latest run
+
+The normal workflow is post-commit: the hook queues work after each commit, and you inspect the
+daemon’s latest run.
+
+Wait in the terminal:
+
+    localci wait
+
+Show a bounded status summary without waiting:
+
+    localci status
+
+Open the same run in a browser or terminal UI:
+
+    localci web
+    localci dash
+
+After localci postcommit enqueues tasks, use the wait command it prints:
+
+    localci wait --repo <repo> --commit <commit>
+
+To inspect an existing no-clone run:
+
+    localci wait --commit 'HEAD*'
+
+Run an ad hoc daemon check
+
+Use run when you explicitly want to queue a manual daemon-managed run outside the post-commit path.
+
+    localci run --task test --wait
+
+To test uncommitted changes through the daemon queue, use --no-clone:
+
+    localci run --no-clone --task test --wait
+
+No-clone runs are labeled with a trailing *. They intentionally see unstaged files and local edits.
+
+Use invoke only when you want to run checks directly in the current terminal instead of through the
+daemon.
+
+Inspect results
+
+Check status
+
+Show the latest run for the current repository:
+
+    localci status
+
+Show one task:
+
+    localci status --task noisy-fail
+
+Show a specific run:
+
+    localci status --commit 6bd8d389f3f550da3fccb11bac380d59268fe320
+
+Non-interactive commands print bounded summaries. They do not dump full logs.
+
+Find artifact paths
+
+Print artifact paths for the latest run:
+
+    localci artifacts
+
+Print the primary artifact for failed tasks:
+
+    localci artifacts --failed --primary
+
+For shell scripts and agents, print only paths:
+
+    localci artifacts --task noisy-fail --primary --paths-only
+
+Then read the file directly:
+
+    cat "$(localci artifacts --task noisy-fail --primary --paths-only)"
+
+Browse history
+
+Show recent runs:
+
+    localci history
+
+Show recent results for a task across commits:
+
+    localci history --task noisy-fail
+
+Show recent failed runs:
+
+    localci history --failed
+
+Open UIs
+
+Open the web UI
+
+Open the latest run for the current repository:
+
+    localci web
+
+Open a specific task:
+
+    localci web --task noisy-fail
+
+Task artifact pages show full artifact paths and include copy/open actions.
+
+Use the terminal UI
+
+Open the all-repos dashboard:
+
+    localci dash
+
+Open a specific task:
+
+    localci dash --task noisy-fail
+
+The terminal UI supports the same run, task, retry, cancel, and artifact views as the web UI. On
+artifact views, use e to edit the selected artifact with $VISUAL or $EDITOR, o to open it with the
+platform opener, and f on macOS to reveal it in Finder through the daemon.
+
+Manage queued work
+
+Cancel work
+
+Cancel the active task:
+
+    localci cancel
+
+Cancel a specific task:
+
+    localci cancel --commit HEAD --task test
+
+Tasks
+
+LocalCI runs checks that are defined as Mise tasks. A task is eligible when its task name starts
+with localci:.
+
+LocalCI discovers tasks with:
+
+    mise tasks --json --all
+
+It then runs each matching task with:
+
+    mise run <task-name>
+
+Defining tasks
+
+TOML tasks
+
+Use TOML tasks when a check is short and belongs near the rest of your Mise configuration.
+
+File: mise.toml
+
+    [tasks."localci:test"]
+    description = "Run tests"
+    run = "go test ./..."
+
+File: mise.toml
+
+    [tasks."localci:fmt"]
+    description = "Format Go files"
+    run = "gofmt -w ./cmd ./internal"
+
+Mise documents this format in TOML tasks.
+
+Nested mise.toml files
+
+TOML tasks also work from nested Mise config roots. Tell Mise which child directories are config
+roots from the repo-level mise.toml:
+
+File: mise.toml
+
+    experimental_monorepo_root = true
+
+    [monorepo]
+    config_roots = ["web", "docs"]
+
+Then define LocalCI tasks inside those child configs:
+
+File: web/mise.toml
+
+    [tasks."localci:test"]
+    description = "Run Vue unit tests"
+    run = "pnpm exec vitest --run"
+
+File: docs/mise.toml
+
+    [tasks."localci:build"]
+    description = "Build documentation"
+    run = "zensical build --strict"
+
+LocalCI uses Mise’s task list, so nested tasks keep their path prefix. In the UI, LocalCI removes
+the localci: namespace from task labels: a root task like localci:test shows as test, and a nested
+task like //web:localci:test shows as //web:test.
+
+Mise documents the path syntax in monorepo tasks.
+
+File tasks
+
+Use file tasks when a check is easier to maintain as a script.
+
+    mkdir -p mise-tasks/localci
+
+File: mise-tasks/localci/test
+
+    go test ./...
+
+    chmod +x mise-tasks/localci/test
+
+Mise documents this format in file tasks.
+
+File tasks in monorepos
+
+File tasks work the same way inside nested config roots. For example, this file:
+
+File: web/mise-tasks/localci/test
+
+    pnpm exec vitest --run
+
+is exposed by Mise as //web:localci:test, and LocalCI shows it in the UI as //web:test.
+
+Setup tasks
+
+Use a root localci:setup task for dependency installation shared by all checks.
+
+File: mise.toml
+
+    [tasks."localci:setup"]
+    description = "Install dependencies for LocalCI runs"
+    run = "mise install"
+
+LocalCI runs localci:setup first when it exists. It is setup for the run, not an ordinary validation
+check.
+
+Only the root setup task is used. LocalCI ignores setup tasks from nested config roots, such as
+//web:localci:setup. If you need package-specific setup, use task dependencies.
+
+Task execution environment
+
+Tasks run either in shallow clones of a specific commit, or on your working directory when you pass
+--no-clone. Runs with --no-clone are marked with an asterisk * in the UI because their state won’t
+match what’s in git.
+
+Environment variables
+
+Every task receives these environment variables:
+
+  Variable                  Meaning
+  ------------------------- -------------------------------------------------
+  LOCALCI_TASK_OUTPUT_DIR   Directory for artifacts from this task attempt.
+  LOCALCI_TASK_CACHE_DIR    Cache directory for this task.
+  LOCALCI_CACHE_DIR         Cache directory shared by LocalCI tasks.
+
+Write reports and inspectable artifacts under LOCALCI_TASK_OUTPUT_DIR. LocalCI exposes those files
+in the web and terminal UIs.
+
+Task output
+
+LocalCI captures each task’s stdout and stderr into combined.log. For ordinary checks, let the task
+print normally:
+
+File: mise-tasks/localci/test
+
+    go test ./...
+
+For tasks with multiple outputs, write them under LOCALCI_TASK_OUTPUT_DIR:
+
+File: mise-tasks/localci/test-with-coverage
+
+    mkdir -p "$LOCALCI_TASK_OUTPUT_DIR/coverage"
+    pytest --cov --cov-report=html:"$LOCALCI_TASK_OUTPUT_DIR/coverage"
+
+Here‘s how you might configure a browser testing tool like Playwright to put its filesystem output
+in the right place:
+
+File: playwright.config.ts
+
+    import { defineConfig } from '@playwright/test'
+
+    export default defineConfig({
+      outputDir: process.env.LOCALCI_TASK_OUTPUT_DIR
+        ? `${process.env.LOCALCI_TASK_OUTPUT_DIR}/playwright-artifacts`
+        : 'test-results',
+      reporter: [
+        ['list'],
+        [
+          'html',
+          {
+            outputFolder: process.env.LOCALCI_TASK_OUTPUT_DIR
+              ? `${process.env.LOCALCI_TASK_OUTPUT_DIR}/playwright-report`
+              : 'playwright-report',
+            open: 'never',
+          },
+        ],
+      ],
+    })
+
+File: mise-tasks/localci/playwright
+
+    pnpm exec playwright test
