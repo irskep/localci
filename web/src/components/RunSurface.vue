@@ -315,7 +315,6 @@ function taskGroupIcon(group: PackageTaskGroup): string {
 
 function packageSummary(group: PackageGroup): string {
   const status = packageStatus(group)
-  if (status === 'succeeded') return 'passed'
   if (status === 'timed-out') return 'failed'
   if (status === 'not-run') return 'not run'
   return status
@@ -451,11 +450,11 @@ function taskSummaryStatusLabel(status: string): string {
             <summary class="run-package-summary run-package-summary-expandable">
               <i class="pi pi-chevron-right run-package-toggle" aria-hidden="true"></i>
               <span class="run-package-title">
+                <span>{{ packageGroup.name }}</span>
                 <PTag
                   :severity="packageSeverity(packageGroup)"
                   :value="packageSummary(packageGroup)"
                 />
-                <span>{{ packageGroup.name }}</span>
               </span>
               <span class="run-package-detail">
                 {{ packageProgressSummary(packageGroup) }}
@@ -492,12 +491,11 @@ function taskSummaryStatusLabel(status: string): string {
           </details>
           <div v-else class="run-package run-package-summary run-package-summary-static">
             <span class="run-package-title">
+              <span>{{ packageGroup.name }}</span>
               <PTag
-                v-if="packageStatus(packageGroup) !== 'succeeded'"
                 :severity="packageSeverity(packageGroup)"
                 :value="packageSummary(packageGroup)"
               />
-              <span>{{ packageGroup.name }}</span>
             </span>
             <span class="run-package-task-summary">
               <template v-for="(item, taskIndex) in packageGroup.tasks" :key="item.task.name">
@@ -528,11 +526,11 @@ function taskSummaryStatusLabel(status: string): string {
           <summary class="run-package-summary run-package-summary-expandable">
             <i class="pi pi-chevron-right run-package-toggle" aria-hidden="true"></i>
             <span class="run-package-title">
+              <span>{{ packageGroup.name }}</span>
               <PTag
                 :severity="packageSeverity(packageGroup)"
                 :value="packageSummary(packageGroup)"
               />
-              <span>{{ packageGroup.name }}</span>
             </span>
             <span class="run-package-detail">
               {{ packageProgressSummary(packageGroup) }}
@@ -569,12 +567,8 @@ function taskSummaryStatusLabel(status: string): string {
         </details>
         <div v-else class="run-package run-package-summary run-package-summary-static">
           <span class="run-package-title">
-            <PTag
-              v-if="packageStatus(packageGroup) !== 'succeeded'"
-              :severity="packageSeverity(packageGroup)"
-              :value="packageSummary(packageGroup)"
-            />
             <span>{{ packageGroup.name }}</span>
+            <PTag :severity="packageSeverity(packageGroup)" :value="packageSummary(packageGroup)" />
           </span>
           <span class="run-package-task-summary">
             <template v-for="(item, taskIndex) in packageGroup.tasks" :key="item.task.name">
