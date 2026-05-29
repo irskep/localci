@@ -66,7 +66,7 @@ LocalCI requires Mise. Install Mise first, then add LocalCI as a pinned GitHub r
 File: mise.toml
 
     [tools]
-    "github:irskep/localci" = "0.1.5"
+    "github:irskep/localci" = "0.2.0"
 
     mise install
 
