@@ -191,7 +191,6 @@ export const useLocalciStore = defineStore('localci', () => {
     validateData: (value: unknown) => T,
     apply: (data: T) => void,
   ): void {
-    if (pageStream && pageStream.key === apiPath) return
     unsubscribePage()
     loading.value = true
     error.value = ''
