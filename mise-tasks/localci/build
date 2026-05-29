@@ -10,6 +10,8 @@ printf 'cwd: %s\n' "$(pwd)"
 mkdir -p "$LOCALCI_TASK_OUTPUT_DIR" "$LOCALCI_TASK_CACHE_DIR" "$LOCALCI_CACHE_DIR"
 bin_dir="$LOCALCI_TASK_OUTPUT_DIR/bin"
 
+mise run //:web-embed
+
 printf 'go build -o %s ./cmd/localci\n' "$bin_dir/localci"
 
 mkdir -p "$bin_dir"

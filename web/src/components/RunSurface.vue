@@ -26,6 +26,20 @@ type PackageTaskGroup = {
   tasks: PackageTask[]
 }
 
+type TemporalInstant = {
+  epochMilliseconds: number
+  toLocaleString: (locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions) => string
+}
+
+type TemporalGlobal = {
+  Instant: {
+    from: (value: string) => TemporalInstant
+  }
+  Now: {
+    instant: () => TemporalInstant
+  }
+}
+
 const TASK_STATUS_GROUPS = [
   'failed',
   'canceled',
@@ -48,9 +62,71 @@ withDefaults(
   },
 )
 
-function activityTime(entry: CommitSummary): string {
-  if (!entry.activity_at) return ''
-  return new Date(entry.activity_at).toLocaleString()
+const RELATIVE_TIME = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+
+function temporal(): TemporalGlobal | undefined {
+  return (globalThis as typeof globalThis & { Temporal?: TemporalGlobal }).Temporal
+}
+
+function activityInstant(entry: CommitSummary): TemporalInstant | undefined {
+  if (!entry.activity_at) return undefined
+  const temporalAPI = temporal()
+  if (temporalAPI) {
+    try {
+      return temporalAPI.Instant.from(entry.activity_at)
+    } catch {
+      return undefined
+    }
+  }
+  const date = new Date(entry.activity_at)
+  if (Number.isNaN(date.getTime())) return undefined
+  return {
+    epochMilliseconds: date.getTime(),
+    toLocaleString: (locales, options) => date.toLocaleString(locales, options),
+  }
+}
+
+function activityRelativeTime(entry: CommitSummary): string {
+  const instant = activityInstant(entry)
+  if (!instant) return ''
+
+  const now = temporal()?.Now.instant().epochMilliseconds ?? Date.now()
+  const deltaMilliseconds = instant.epochMilliseconds - now
+  const absoluteDelta = Math.abs(deltaMilliseconds)
+  const minute = 60_000
+  const hour = 60 * minute
+  const day = 24 * hour
+  const month = 30 * day
+  const year = 365 * day
+
+  if (absoluteDelta < 45_000) return 'just now'
+  if (absoluteDelta < 45 * minute) {
+    return RELATIVE_TIME.format(Math.round(deltaMilliseconds / minute), 'minute')
+  }
+  if (absoluteDelta < 22 * hour) {
+    return RELATIVE_TIME.format(Math.round(deltaMilliseconds / hour), 'hour')
+  }
+  if (absoluteDelta < 26 * day) {
+    return RELATIVE_TIME.format(Math.round(deltaMilliseconds / day), 'day')
+  }
+  if (absoluteDelta < 11 * month) {
+    return RELATIVE_TIME.format(Math.round(deltaMilliseconds / month), 'month')
+  }
+  return RELATIVE_TIME.format(Math.round(deltaMilliseconds / year), 'year')
+}
+
+function activityExactTime(entry: CommitSummary): string {
+  return (
+    activityInstant(entry)?.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZoneName: 'short',
+    }) ?? ''
+  )
 }
 
 function runGroups(entry: CommitSummary): Array<TaskStatusGroup<TaskSummary>> {
@@ -302,18 +378,30 @@ function taskSummaryStatusLabel(status: string): string {
 <template>
   <article class="run-surface">
     <div class="run-meta">
-      <RepoLink v-if="showRepo" :repo-path="repoPath" />
-      <span v-else>{{ repoPath }}</span>
-      <RunLink :repo-path="repoPath" :commit="run.commit" />
-      <span class="attribute-list">
-        <PTag
-          v-for="attribute in annotationEntries(run.annotations)"
-          :key="attribute.key"
-          severity="secondary"
-          :value="`${attribute.key}: ${attribute.value}`"
-        />
-      </span>
-      <span class="muted">{{ activityTime(run) }}</span>
+      <div class="run-meta-primary">
+        <RunLink :repo-path="repoPath" :commit="run.commit" />
+        <time
+          v-if="run.activity_at"
+          class="muted run-meta-time"
+          :datetime="run.activity_at"
+          :title="activityExactTime(run)"
+          :aria-label="activityExactTime(run)"
+        >
+          {{ activityRelativeTime(run) }}
+        </time>
+      </div>
+      <div class="run-meta-secondary">
+        <RepoLink v-if="showRepo" :repo-path="repoPath" />
+        <span v-else>{{ repoPath }}</span>
+        <span class="attribute-list">
+          <PTag
+            v-for="attribute in annotationEntries(run.annotations)"
+            :key="attribute.key"
+            severity="secondary"
+            :value="`${attribute.key}: ${attribute.value}`"
+          />
+        </span>
+      </div>
     </div>
     <div v-if="summaryMode && !runHasLiveTasks(run) && usePackageGroups(run)" class="run-summary">
       <template v-if="completedRunIssueGroups(run).length === 0">
@@ -406,7 +494,11 @@ function taskSummaryStatusLabel(status: string): string {
         </details>
         <div v-else class="run-package run-package-summary run-package-summary-static">
           <span class="run-package-title">
-            <PTag :severity="packageSeverity(packageGroup)" :value="packageSummary(packageGroup)" />
+            <PTag
+              v-if="packageStatus(packageGroup) !== 'succeeded'"
+              :severity="packageSeverity(packageGroup)"
+              :value="packageSummary(packageGroup)"
+            />
             <span>{{ packageGroup.name }}</span>
           </span>
           <span class="run-package-task-summary">
@@ -425,7 +517,11 @@ function taskSummaryStatusLabel(status: string): string {
       class="run-status-list"
     >
       <div v-for="group in runGroups(run)" :key="group.label" class="run-status-row">
-        <PTag :severity="groupSeverity(group)" :value="group.label" />
+        <PTag
+          v-if="group.label !== 'passed'"
+          :severity="groupSeverity(group)"
+          :value="group.label"
+        />
         <span class="run-task-list">
           <RouterLink
             v-for="task in group.tasks"
@@ -452,7 +548,6 @@ function taskSummaryStatusLabel(status: string): string {
   background: var(--p-content-background);
 }
 
-.run-meta,
 .run-status-row,
 .run-task-list {
   display: flex;
@@ -463,7 +558,35 @@ function taskSummaryStatusLabel(status: string): string {
 }
 
 .run-meta {
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--app-space-4);
+  min-width: 0;
+}
+
+.run-meta-primary,
+.run-meta-secondary {
+  display: grid;
+  gap: var(--app-space-1);
+  min-width: 0;
+}
+
+.run-meta-secondary {
+  justify-items: end;
+  text-align: right;
+}
+
+.run-meta-time {
+  font-size: var(--p-form-field-sm-font-size);
+}
+
+.attribute-list {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--app-space-2);
+  min-width: 0;
 }
 
 .run-status-list {
@@ -565,6 +688,19 @@ function taskSummaryStatusLabel(status: string): string {
 }
 
 @media (max-width: 720px) {
+  .run-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .run-meta-secondary {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .attribute-list {
+    justify-content: flex-start;
+  }
+
   .run-package-summary {
     grid-template-columns: auto minmax(0, 1fr);
   }

@@ -14,6 +14,7 @@ pnpm = "11.2.2"
 
 [tasks.build]
 description = "Build the localci binary"
+depends = ["//:web-embed"]
 run = [
   "printf 'cwd: %s\\n' \"$(pwd)\"",
   "go build -o ./bin/localci ./cmd/localci",
@@ -24,6 +25,15 @@ description = "Build the Vue UI"
 run = [
   "printf 'cwd: %s\\n' \"$(pwd)\"",
   "pnpm --dir web run build-only",
+]
+
+[tasks.web-embed]
+description = "Build the Vue UI into the Go embedded asset directory"
+depends = ["//:web-build"]
+run = [
+  "printf 'cwd: %s\\n' \"$(pwd)\"",
+  "find webassets/assets -mindepth 1 ! -name app.js -exec rm -rf {} +",
+  "cp -R web/dist/. webassets/assets/",
 ]
 
 [tasks."localci:setup"]

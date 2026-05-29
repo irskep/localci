@@ -69,7 +69,7 @@ func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.HandleFunc("/api", s.handleAPI)
 	mux.HandleFunc("/api/", s.handleAPI)
-	if s.servesFrontendApp() {
+	if servesFrontendApp(assetFS) {
 		mux.HandleFunc("/", serveFrontendApp(assetFS))
 	} else {
 		mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServerFS(assetFS)))
@@ -107,8 +107,9 @@ func (s WebServer) assetFS() (fs.FS, error) {
 	return webassets.EmbeddedFS()
 }
 
-func (s WebServer) servesFrontendApp() bool {
-	return strings.TrimSpace(s.AssetDir) != ""
+func servesFrontendApp(assetFS fs.FS) bool {
+	_, err := fs.Stat(assetFS, "index.html")
+	return err == nil
 }
 
 func (s WebServer) handleHome(w http.ResponseWriter, _ *http.Request) {

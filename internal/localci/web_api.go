@@ -9,9 +9,18 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
+
+const defaultRunListLimit = 20
+
+type runListPageParams struct {
+	Limit  int
+	Before time.Time
+}
 
 func (s WebServer) handleAPI(w http.ResponseWriter, r *http.Request) {
 	escapedPath := requestEscapedPath(r)
@@ -74,7 +83,12 @@ func (s WebServer) handleAPIDaemon(w http.ResponseWriter, r *http.Request, segme
 	go s.Shutdown()
 }
 
-func (s WebServer) handleAPIHome(w http.ResponseWriter, _ *http.Request) {
+func (s WebServer) handleAPIHome(w http.ResponseWriter, r *http.Request) {
+	page, err := parseRunListPageParams(r)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err)
+		return
+	}
 	repos, err := HistoryReader{Paths: s.Paths}.ListRepos()
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
@@ -86,6 +100,7 @@ func (s WebServer) handleAPIHome(w http.ResponseWriter, _ *http.Request) {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
+	views, cursors := pageCommitSummaries(views, page)
 
 	queueResponse, err := s.apiQueueResponse()
 	if err != nil {
@@ -97,6 +112,8 @@ func (s WebServer) handleAPIHome(w http.ResponseWriter, _ *http.Request) {
 		Repos:         make([]apiRepoSummary, 0, len(repos)),
 		RecentCommits: make([]apiCommitSummary, 0, len(views)),
 		Queue:         queueResponse,
+		NextBefore:    cursors.NextBefore,
+		NewerBefore:   cursors.NewerBefore,
 	}
 	for _, repo := range repos {
 		resp.Repos = append(resp.Repos, s.apiRepoSummary(repo.RepoDir))
@@ -146,7 +163,7 @@ func (s WebServer) handleAPIRepoRoutes(w http.ResponseWriter, r *http.Request, s
 			methodNotAllowed(w, http.MethodGet)
 			return
 		}
-		s.handleAPIRepo(w, repoDir)
+		s.handleAPIRepo(w, r, repoDir)
 		return
 	}
 
@@ -234,7 +251,12 @@ func (s WebServer) handleAPIRepoIndex(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func (s WebServer) handleAPIRepo(w http.ResponseWriter, repoDir string) {
+func (s WebServer) handleAPIRepo(w http.ResponseWriter, r *http.Request, repoDir string) {
+	page, err := parseRunListPageParams(r)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err)
+		return
+	}
 	commits, err := HistoryReader{Paths: s.Paths}.ListRepoCommits(repoDir)
 	if err != nil {
 		if errorsIsRecordNotFound(err) {
@@ -249,9 +271,12 @@ func (s WebServer) handleAPIRepo(w http.ResponseWriter, repoDir string) {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
+	views, cursors := pageCommitSummaries(views, page)
 	writeJSON(w, http.StatusOK, apiRepoResponse{
-		Repo:    s.apiRepoSummary(repoDir),
-		Commits: views,
+		Repo:        s.apiRepoSummary(repoDir),
+		Commits:     views,
+		NextBefore:  cursors.NextBefore,
+		NewerBefore: cursors.NewerBefore,
 	})
 }
 
@@ -271,6 +296,78 @@ func (s WebServer) handleAPIRepoCommitIndex(w http.ResponseWriter, repoDir strin
 		return
 	}
 	writeJSON(w, http.StatusOK, views)
+}
+
+func parseRunListPageParams(r *http.Request) (runListPageParams, error) {
+	page := runListPageParams{Limit: defaultRunListLimit}
+	query := r.URL.Query()
+
+	if rawBefore := strings.TrimSpace(query.Get("before")); rawBefore != "" {
+		before, err := time.Parse(time.RFC3339Nano, rawBefore)
+		if err != nil {
+			return runListPageParams{}, fmt.Errorf("before must be an RFC3339 timestamp")
+		}
+		page.Before = before
+	}
+
+	return page, nil
+}
+
+type runListCursors struct {
+	NextBefore  string
+	NewerBefore string
+}
+
+func pageCommitSummaries(commits []apiCommitSummary, page runListPageParams) ([]apiCommitSummary, runListCursors) {
+	sortAPICommitSummaries(commits)
+
+	start := 0
+	if !page.Before.IsZero() {
+		start = len(commits)
+		for index, commit := range commits {
+			if commit.ActivityAt.Before(page.Before) {
+				start = index
+				break
+			}
+		}
+	}
+
+	end := start + page.Limit
+	if end > len(commits) {
+		end = len(commits)
+	}
+	if start > len(commits) {
+		start = len(commits)
+	}
+	pageItems := commits[start:end]
+
+	cursors := runListCursors{}
+	if end < len(commits) && len(pageItems) > 0 {
+		cursors.NextBefore = pageItems[len(pageItems)-1].ActivityAt.Format(time.RFC3339Nano)
+	}
+	if start > 0 {
+		previousStart := start - page.Limit
+		if previousStart <= 0 {
+			cursors.NewerBefore = ""
+		} else {
+			cursors.NewerBefore = commits[previousStart-1].ActivityAt.Format(time.RFC3339Nano)
+		}
+	}
+	return pageItems, cursors
+}
+
+func sortAPICommitSummaries(commits []apiCommitSummary) {
+	sort.Slice(commits, func(i int, j int) bool {
+		left := commits[i]
+		right := commits[j]
+		if left.ActivityAt.Equal(right.ActivityAt) {
+			if left.Repo.RepoPath == right.Repo.RepoPath {
+				return left.Commit > right.Commit
+			}
+			return left.Repo.RepoPath < right.Repo.RepoPath
+		}
+		return left.ActivityAt.After(right.ActivityAt)
+	})
 }
 
 func (s WebServer) handleAPICommit(w http.ResponseWriter, repoDir string, commit string) {

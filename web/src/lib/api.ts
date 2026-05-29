@@ -19,6 +19,8 @@ export type HomeResponse = {
   repos: RepoSummary[]
   recent_commits: CommitSummary[]
   queue: QueueResponse
+  next_before?: string
+  newer_before?: string
 }
 
 export type CommitSummary = {
@@ -42,6 +44,8 @@ export type TaskSummary = {
 export type RepoResponse = {
   repo: RepoSummary
   commits: CommitSummary[]
+  next_before?: string
+  newer_before?: string
 }
 
 export type CommitResponse = {
@@ -189,6 +193,8 @@ export function parseHomeResponse(value: unknown): HomeResponse {
     repos: asArray(data.repos, 'home.repos').map(parseRepoSummary),
     recent_commits: asArray(data.recent_commits, 'home.recent_commits').map(parseCommitSummary),
     queue: parseQueueResponse(data.queue),
+    next_before: optionalString(data.next_before, 'home.next_before'),
+    newer_before: optionalString(data.newer_before, 'home.newer_before'),
   }
 }
 
@@ -205,6 +211,8 @@ export function parseRepoResponse(value: unknown): RepoResponse {
   return {
     repo: parseRepoSummary(data.repo),
     commits: asArray(data.commits, 'repo.commits').map(parseCommitSummary),
+    next_before: optionalString(data.next_before, 'repo.next_before'),
+    newer_before: optionalString(data.newer_before, 'repo.newer_before'),
   }
 }
 
@@ -397,6 +405,11 @@ function asArray(value: unknown, name: string): unknown[] {
 function asString(value: unknown, name: string): string {
   if (typeof value !== 'string') throw new Error(`${name} must be a string`)
   return value
+}
+
+function optionalString(value: unknown, name: string): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  return asString(value, name)
 }
 
 function asNumber(value: unknown, name: string): number {

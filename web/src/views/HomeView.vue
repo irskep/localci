@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import RepoLink from '@/components/RepoLink.vue'
 import RunLink from '@/components/RunLink.vue'
@@ -10,18 +11,48 @@ import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
 
 const store = useLocalciStore()
+const route = useRoute()
 
 const recentRows = computed(() => store.home?.recent_commits ?? [])
 const repoRows = computed(() => store.home?.repos ?? [])
 const queueRows = computed(() => store.home?.queue.pending ?? [])
 const active = computed(() => store.home?.queue.active)
+const currentBefore = computed(() => queryString(route.query.before))
+const newerPage = computed(() => {
+  if (!currentBefore.value) return undefined
+  const before = store.home?.newer_before
+  return { path: route.path, query: before ? { before } : {} }
+})
+const olderPage = computed(() => {
+  const before = store.home?.next_before
+  return before ? { path: route.path, query: { before } } : undefined
+})
+const loadingPage = ref(false)
 
 useDocumentTitle('Overview')
 
-onMounted(() => {
-  store.subscribeHome()
-})
+watch(() => route.query.before, loadCurrentPage, { immediate: true })
 onUnmounted(() => store.unsubscribePage())
+
+function queryString(value: unknown): string | undefined {
+  if (typeof value === 'string' && value !== '') return value
+  if (Array.isArray(value) && typeof value[0] === 'string' && value[0] !== '') return value[0]
+  return undefined
+}
+
+async function loadCurrentPage(): Promise<void> {
+  loadingPage.value = true
+  try {
+    if (currentBefore.value) {
+      store.unsubscribePage()
+      await store.loadHomePage(currentBefore.value)
+    } else {
+      store.subscribeHome()
+    }
+  } finally {
+    loadingPage.value = false
+  }
+}
 </script>
 
 <template>
@@ -35,7 +66,12 @@ onUnmounted(() => store.unsubscribePage())
     <template v-if="store.home">
       <section class="section-grid">
         <div class="stack">
-          <RunList :runs="recentRows" />
+          <RunList
+            :runs="recentRows"
+            :newer-to="newerPage"
+            :older-to="olderPage"
+            :loading-page="loadingPage"
+          />
         </div>
 
         <aside class="stack">

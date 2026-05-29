@@ -17,6 +17,7 @@ import Tooltip from 'primevue/tooltip'
 import App from './App.vue'
 import router from './router'
 import 'primeicons/primeicons.css'
+import './styles/fonts.css'
 import './styles/app.css'
 
 const app = createApp(App)

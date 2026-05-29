@@ -106,6 +106,17 @@ export const useLocalciStore = defineStore('localci', () => {
     homeLoaded.value = true
   }
 
+  async function loadHomePage(before?: string): Promise<void> {
+    homeLoaded.value = false
+    const query = before ? `?before=${encodeURIComponent(before)}` : ''
+    const result = await load(() => getJSON(`/api${query}`, parseHomeResponse))
+    if (result) {
+      home.value = result
+      queue.value = result.queue
+    }
+    homeLoaded.value = true
+  }
+
   function subscribeHome(): void {
     homeLoaded.value = false
     subscribePage('/api', parseHomeResponse, (data) => {
@@ -136,6 +147,15 @@ export const useLocalciStore = defineStore('localci', () => {
     repoLoaded.value = false
     currentRepo.value = null
     const result = await load(() => getJSON(apiPath, parseRepoResponse))
+    if (result) currentRepo.value = result
+    repoLoaded.value = true
+  }
+
+  async function loadRepoPage(apiPath: string, before?: string): Promise<void> {
+    repoLoaded.value = false
+    const separator = apiPath.includes('?') ? '&' : '?'
+    const query = before ? `${separator}before=${encodeURIComponent(before)}` : ''
+    const result = await load(() => getJSON(`${apiPath}${query}`, parseRepoResponse))
     if (result) currentRepo.value = result
     repoLoaded.value = true
   }
@@ -424,8 +444,10 @@ export const useLocalciStore = defineStore('localci', () => {
     loadArtifactList,
     loadCommit,
     loadHome,
+    loadHomePage,
     loadQueue,
     loadRepo,
+    loadRepoPage,
     loadTask,
     loading,
     queue,

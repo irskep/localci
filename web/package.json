@@ -16,6 +16,8 @@
     "format": "oxfmt src/"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
     "@primeuix/themes": "2.0.3",
     "pinia": "3.0.4",
     "primeicons": "7.0.0",

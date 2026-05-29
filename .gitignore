@@ -5,3 +5,5 @@ bin/
 .rodney/
 docs/.cache/
 docs/site/
+webassets/assets/*
+!webassets/assets/app.js

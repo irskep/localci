@@ -41,11 +41,15 @@ type apiHomeResponse struct {
 	Repos         []apiRepoSummary   `json:"repos"`
 	RecentCommits []apiCommitSummary `json:"recent_commits"`
 	Queue         apiQueueResponse   `json:"queue"`
+	NextBefore    string             `json:"next_before,omitempty"`
+	NewerBefore   string             `json:"newer_before,omitempty"`
 }
 
 type apiRepoResponse struct {
-	Repo    apiRepoSummary     `json:"repo"`
-	Commits []apiCommitSummary `json:"commits"`
+	Repo        apiRepoSummary     `json:"repo"`
+	Commits     []apiCommitSummary `json:"commits"`
+	NextBefore  string             `json:"next_before,omitempty"`
+	NewerBefore string             `json:"newer_before,omitempty"`
 }
 
 type apiCommitResponse struct {

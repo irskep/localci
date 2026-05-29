@@ -1,6 +1,6 @@
 :root {
-  --app-font-family: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --app-font-family-mono: 'SFMono-Regular', 'Cascadia Code', 'Liberation Mono', monospace;
+  --app-font-family: 'IBM Plex Sans', sans-serif;
+  --app-font-family-mono: 'IBM Plex Mono', monospace;
   --app-space-1: var(--p-anchor-gutter);
   --app-space-2: var(--p-list-gap);
   --app-space-3: var(--p-navigation-item-gap);

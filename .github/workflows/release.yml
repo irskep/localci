@@ -62,6 +62,7 @@ jobs:
       - name: Build release artifacts
         run: |
           set -eu
+          mise run //:web-embed
           mkdir -p dist
           for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
             os=${target%/*}
