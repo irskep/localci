@@ -24,8 +24,13 @@ func (s WebServer) handleAPIArtifactIndex(w http.ResponseWriter, repoDir string,
 		return
 	}
 	task = s.enrichTaskArtifacts(repoDir, commit, task)
+	repo, err := s.apiRepoSummary(repoDir)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, apiArtifactListResponse{
-		Repo:      s.apiRepoSummary(repoDir),
+		Repo:      repo,
 		Commit:    commit,
 		Task:      task.Name,
 		Attempt:   task.Attempt,
@@ -73,8 +78,13 @@ func (s WebServer) handleAPIArtifact(w http.ResponseWriter, repoDir string, comm
 			return
 		}
 	}
+	repo, err := s.apiRepoSummary(repoDir)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, apiArtifactResponse{
-		Repo:     s.apiRepoSummary(repoDir),
+		Repo:     repo,
 		Commit:   commit,
 		Task:     task.Name,
 		Attempt:  task.Attempt,
@@ -198,7 +208,7 @@ func (s WebServer) enrichTaskArtifacts(repoDir string, commit string, task TaskS
 func (s WebServer) enrichArtifact(repoDir string, commit string, task TaskStatusView, artifact ArtifactView) ArtifactView {
 	_, textErr := readTextTaskArtifact(task, artifact.DisplayName)
 	artifact.IsText = textErr == nil
-	if rawURL, err := RawArtifactRoutePath(s.configuredRepoRoot(), repoDir, commit, task.Name, task.Attempt, artifact.DisplayName); err == nil {
+	if rawURL, err := RawArtifactRoutePath(repoDir, commit, task.Name, task.Attempt, artifact.DisplayName); err == nil {
 		artifact.RawURL = rawURL
 		artifact.DownloadURL = rawURL + "?download=1"
 	}

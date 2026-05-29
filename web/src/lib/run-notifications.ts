@@ -40,7 +40,7 @@ export function notificationForRun(run: CommitSummary): RunNotification {
   return {
     key: `${run.repo.repo_path}:${run.commit}`,
     title: `LocalCI: ${status}`,
-    body: `${run.repo.repo_path} ${shortCommit(run.commit)}`,
+    body: `${run.repo.repo_label} ${shortCommit(run.commit)}`,
     status,
   }
 }

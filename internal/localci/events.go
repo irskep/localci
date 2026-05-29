@@ -95,8 +95,7 @@ func (h *EventHub) publish(event APIEvent) {
 }
 
 type EventNotifier struct {
-	Root string
-	Hub  *EventHub
+	Hub *EventHub
 }
 
 func (n EventNotifier) QueueChanged() {
@@ -140,20 +139,20 @@ func (n EventNotifier) ArtifactAppended(entry QueueEntry, artifact string, offse
 }
 
 func (n EventNotifier) entryResources(entry QueueEntry) (string, string, string, string) {
-	repoPath, err := RouteRepoPath(n.Root, entry.RepoDir)
+	repoPath, err := RouteRepoPath(entry.RepoDir)
 	if err != nil {
 		return "", "", "", ""
 	}
 	repo := path.Join("/api/repo", repoPath)
-	commitPath, err := CommitRoutePath(n.Root, entry.RepoDir, entry.Commit)
+	commitPath, err := CommitRoutePath(entry.RepoDir, entry.Commit)
 	if err != nil {
 		return repo, "", "", ""
 	}
-	taskPath, err := TaskRoutePath(n.Root, entry.RepoDir, entry.Commit, entry.TaskName)
+	taskPath, err := TaskRoutePath(entry.RepoDir, entry.Commit, entry.TaskName)
 	if err != nil {
 		return repo, "/api" + commitPath, "", ""
 	}
-	attemptPath, err := AttemptRoutePath(n.Root, entry.RepoDir, entry.Commit, entry.TaskName, entry.Attempt)
+	attemptPath, err := AttemptRoutePath(entry.RepoDir, entry.Commit, entry.TaskName, entry.Attempt)
 	if err != nil {
 		return repo, "/api" + commitPath, "/api" + taskPath, ""
 	}

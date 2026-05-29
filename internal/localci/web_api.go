@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -120,7 +119,12 @@ func (s WebServer) handleAPIHome(w http.ResponseWriter, r *http.Request) {
 		NewerBefore:   runPage.NewerBefore,
 	}
 	for _, repo := range repos {
-		resp.Repos = append(resp.Repos, s.apiRepoSummary(repo.RepoDir))
+		summary, err := s.apiRepoSummary(repo.RepoDir)
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err)
+			return
+		}
+		resp.Repos = append(resp.Repos, summary)
 	}
 	resp.RecentCommits = append(resp.RecentCommits, views...)
 
@@ -250,7 +254,12 @@ func (s WebServer) handleAPIRepoIndex(w http.ResponseWriter, _ *http.Request) {
 	}
 	resp := make([]apiRepoSummary, 0, len(repos))
 	for _, repo := range repos {
-		resp = append(resp, s.apiRepoSummary(repo.RepoDir))
+		summary, err := s.apiRepoSummary(repo.RepoDir)
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err)
+			return
+		}
+		resp = append(resp, summary)
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -275,8 +284,13 @@ func (s WebServer) handleAPIRepo(w http.ResponseWriter, r *http.Request, repoDir
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
+	repo, err := s.apiRepoSummary(repoDir)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, apiRepoResponse{
-		Repo:        s.apiRepoSummary(repoDir),
+		Repo:        repo,
 		Commits:     views,
 		NextBefore:  runPage.NextBefore,
 		NewerBefore: runPage.NewerBefore,
@@ -322,8 +336,13 @@ func (s WebServer) handleAPICommit(w http.ResponseWriter, repoDir string, commit
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
+	repo, err := s.apiRepoSummary(repoDir)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, apiCommitResponse{
-		Repo:   s.apiRepoSummary(repoDir),
+		Repo:   repo,
 		Commit: view,
 	})
 }
@@ -349,8 +368,13 @@ func (s WebServer) handleAPITask(w http.ResponseWriter, repoDir string, commit s
 	}
 	task = s.enrichTaskArtifacts(repoDir, commit, task)
 	primaryArtifact, primaryLog := LoadPrimaryLog(task)
+	repo, err := s.apiRepoSummary(repoDir)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, apiTaskResponse{
-		Repo:            s.apiRepoSummary(repoDir),
+		Repo:            repo,
 		Commit:          commit,
 		Task:            task,
 		SelectedAttempt: task.Attempt,
@@ -461,13 +485,18 @@ func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit 
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	route, err := AttemptRoutePath(s.configuredRepoRoot(), repoDir, commit, taskName, attempt)
+	route, err := AttemptRoutePath(repoDir, commit, taskName, attempt)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	repo, err := s.apiRepoSummary(repoDir)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, apiRetryResponse{
-		Repo:     s.apiRepoSummary(repoDir),
+		Repo:     repo,
 		Commit:   commit,
 		Task:     taskName,
 		Attempt:  attempt,
@@ -507,8 +536,13 @@ func (s WebServer) handleAPICancel(w http.ResponseWriter, repoDir string, commit
 		}
 	}
 
+	repo, err := s.apiRepoSummary(repoDir)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, apiCancelResponse{
-		Repo:     s.apiRepoSummary(repoDir),
+		Repo:     repo,
 		Commit:   commit,
 		Task:     taskName,
 		Active:   result.Active,
@@ -532,30 +566,49 @@ func (s WebServer) apiQueueResponse() (apiQueueResponse, error) {
 		Pending: make([]apiQueueEntry, 0, len(queueEntries)),
 	}
 	if err == nil {
-		activeEntry := s.apiQueueEntry(active.QueueEntry)
+		activeEntry, err := s.apiQueueEntry(active.QueueEntry)
+		if err != nil {
+			return apiQueueResponse{}, err
+		}
 		resp.Active = &activeEntry
 	}
 	for _, entry := range queueEntries {
-		resp.Pending = append(resp.Pending, s.apiQueueEntry(entry))
+		queueEntry, err := s.apiQueueEntry(entry)
+		if err != nil {
+			return apiQueueResponse{}, err
+		}
+		resp.Pending = append(resp.Pending, queueEntry)
 	}
 	return resp, nil
 }
 
-func (s WebServer) apiQueueEntry(entry QueueEntry) apiQueueEntry {
+func (s WebServer) apiQueueEntry(entry QueueEntry) (apiQueueEntry, error) {
+	repo, err := s.apiRepoSummary(entry.RepoDir)
+	if err != nil {
+		return apiQueueEntry{}, err
+	}
 	return apiQueueEntry{
-		Repo:    s.apiRepoSummary(entry.RepoDir),
+		Repo:    repo,
 		Commit:  entry.Commit,
 		Task:    entry.TaskName,
 		Attempt: entry.Attempt,
-	}
+	}, nil
 }
 
-func (s WebServer) apiRepoSummary(repoDir string) apiRepoSummary {
-	repoPath := s.canonicalRepoPath(repoDir)
-	return apiRepoSummary{
-		RepoDir:  repoDir,
-		RepoPath: repoPath,
+func (s WebServer) apiRepoSummary(repoDir string) (apiRepoSummary, error) {
+	repoPath, err := RouteRepoPath(repoDir)
+	if err != nil {
+		return apiRepoSummary{}, err
 	}
+	repoLabel, err := s.repoLabel(repoDir)
+	if err != nil {
+		return apiRepoSummary{}, err
+	}
+	return apiRepoSummary{
+		RepoDir:   repoDir,
+		RepoPath:  repoPath,
+		RepoLabel: repoLabel,
+	}, nil
 }
 
 func (s WebServer) buildRepoCommitSummaries(repoDir string, commits []RunRecord) ([]apiCommitSummary, error) {
@@ -584,12 +637,16 @@ func (s WebServer) buildRunCommitSummaries(runs []RunRecord) ([]apiCommitSummary
 
 	views := make([]apiCommitSummary, 0, len(runs))
 	for _, run := range runs {
-		views = append(views, s.buildCommitSummary(run.RepoDir, run, run.DiscoveredTasks, queue, activePtr))
+		view, err := s.buildCommitSummary(run.RepoDir, run, run.DiscoveredTasks, queue, activePtr)
+		if err != nil {
+			return nil, err
+		}
+		views = append(views, view)
 	}
 	return views, nil
 }
 
-func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered []Task, queued []QueueEntry, active *ActiveTask) apiCommitSummary {
+func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered []Task, queued []QueueEntry, active *ActiveTask) (apiCommitSummary, error) {
 	records := map[string]TaskRecord{}
 	for _, record := range run.TaskResults {
 		records[record.Name] = record
@@ -639,13 +696,17 @@ func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered 
 		tasks = append(tasks, summary)
 	}
 
+	repo, err := s.apiRepoSummary(repoDir)
+	if err != nil {
+		return apiCommitSummary{}, err
+	}
 	return apiCommitSummary{
-		Repo:        s.apiRepoSummary(repoDir),
+		Repo:        repo,
 		Commit:      run.Commit,
 		Annotations: cloneAnnotations(run.Annotations),
 		Tasks:       tasks,
 		ActivityAt:  RunActivityAt(run),
-	}
+	}, nil
 }
 
 func (s WebServer) discoverTasks(repoDir string) ([]Task, error) {
@@ -671,42 +732,20 @@ func (s WebServer) selectedTaskStatus(repoDir string, commit string, taskName st
 	return task, nil
 }
 
-func (s WebServer) routeRepoPath(repoDir string) string {
-	repoPath, err := RouteRepoPath(s.configuredRepoRoot(), repoDir)
-	if err != nil {
-		return ""
-	}
-	return repoPath
-}
-
-func (s WebServer) canonicalRepoPath(repoDir string) string {
-	repoPath, err := CanonicalRepoPath(s.configuredRepoRoot(), repoDir)
-	if err != nil {
-		return ""
-	}
-	return repoPath
-}
-
 func (s WebServer) repoDirFromRoute(repoSegments []string) (string, error) {
-	root := s.configuredRepoRoot()
-	if len(repoSegments) == 0 {
-		return "", fmt.Errorf("repo path is required")
-	}
-	decoded := make([]string, 0, len(repoSegments))
-	for _, segment := range repoSegments {
-		if segment == "" {
-			continue
-		}
-		decoded = append(decoded, segment)
-	}
-	return ResolveRepoDir(root, filepath.Join(decoded...))
+	return RepoDirFromRoute(repoSegments)
 }
 
-func (s WebServer) configuredRepoRoot() string {
-	if strings.TrimSpace(s.RepoRoot) == "" {
-		return string(filepath.Separator)
+func (s WebServer) repoLabel(repoDir string) (string, error) {
+	repos, err := (RunRepository{Paths: s.Paths}).ListRepoSummaries()
+	if err != nil {
+		return "", err
 	}
-	return filepath.Clean(s.RepoRoot)
+	repoDirs := make([]string, 0, len(repos)+1)
+	for _, repo := range repos {
+		repoDirs = append(repoDirs, repo.RepoDir)
+	}
+	return RepoDisplayLabel(repoDir, repoDirs), nil
 }
 
 func splitEscapedPath(escapedPath string) ([]string, error) {

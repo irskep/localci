@@ -3,8 +3,9 @@ package localci
 import "time"
 
 type apiRepoSummary struct {
-	RepoDir  string `json:"repo_dir"`
-	RepoPath string `json:"repo_path"`
+	RepoDir   string `json:"repo_dir"`
+	RepoPath  string `json:"repo_path"`
+	RepoLabel string `json:"repo_label"`
 }
 
 type apiCommitSummary struct {

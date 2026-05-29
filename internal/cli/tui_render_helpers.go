@@ -19,7 +19,7 @@ func runListLine(run tuiCommitSummary, width int) string {
 	} else if hasTaskStatus(run.Tasks, localci.ExecutionStatusSucceeded) {
 		mark = "✓"
 	}
-	line := fmt.Sprintf("%s %s  %s  %s  %s", mark, run.Repo.RepoPath, shortCommit(run.Commit), taskCountsShort(run.Tasks), timeAgo(run.ActivityAt))
+	line := fmt.Sprintf("%s %s  %s  %s  %s", mark, run.Repo.DisplayLabel(), shortCommit(run.Commit), taskCountsShort(run.Tasks), timeAgo(run.ActivityAt))
 	if branch := run.Annotations["branch"]; branch != "" && width >= 72 {
 		line += "  " + branch
 	}
@@ -78,9 +78,9 @@ func taskNamesByStatus(tasks []tuiTaskSummary, status localci.ExecutionStatus) [
 func renderQueueLine(entry tuiQueueEntry, compact bool) string {
 	task := trimTaskLabel(entry.Task)
 	if compact {
-		return fmt.Sprintf("%s %s", entry.Repo.RepoPath, task)
+		return fmt.Sprintf("%s %s", entry.Repo.DisplayLabel(), task)
 	}
-	return fmt.Sprintf("%s  %s  %s  attempt %d", entry.Repo.RepoPath, shortCommit(entry.Commit), task, entry.Attempt)
+	return fmt.Sprintf("%s  %s  %s  attempt %d", entry.Repo.DisplayLabel(), shortCommit(entry.Commit), task, entry.Attempt)
 }
 
 func taskSummaryLine(name string, shortName string, status localci.ExecutionStatus, attempt int, attemptCount int, duration int64, failure string) string {

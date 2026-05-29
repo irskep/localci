@@ -109,9 +109,6 @@ func TestOpenWebOpensURLAndPrintsIt(t *testing.T) {
 			opened = target
 			return nil
 		},
-		LoadConfig: func(string) (localci.Config, error) {
-			return localci.Config{Root: "/"}, nil
-		},
 	}
 
 	err := app.openWeb(commitTarget{

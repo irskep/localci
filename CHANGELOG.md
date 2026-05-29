@@ -4,6 +4,8 @@
 
 ## 0.2.1 - Unreleased
 
+- Remove vestigial repo root setting.
+
 ## 0.2.0 - 2026-05-29
 
 - Store durable history and temporary artifacts in platform-standard directories.

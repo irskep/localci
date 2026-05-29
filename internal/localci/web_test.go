@@ -261,9 +261,8 @@ func TestWebServerAPI(t *testing.T) {
 
 	var revealedPath string
 	server := WebServer{
-		Paths:    paths,
-		Queue:    queue,
-		RepoRoot: repoRoot,
+		Paths: paths,
+		Queue: queue,
 		DiscoverTasks: func(context.Context, string) ([]Task, error) {
 			return []Task{{Name: "localci:test"}}, nil
 		},
@@ -304,17 +303,21 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("Decode home returned error: %v", err)
 	}
 	_ = resp.Body.Close()
-	if len(home.Repos) != 1 || home.Repos[0].RepoPath != "team/repo" {
+	repoRoutePath, err := RouteRepoPath(repoDir)
+	if err != nil {
+		t.Fatalf("RouteRepoPath returned error: %v", err)
+	}
+	if len(home.Repos) != 1 || home.Repos[0].RepoPath != repoRoutePath || home.Repos[0].RepoLabel != "repo" {
 		t.Fatalf("unexpected home repos: %#v", home.Repos)
 	}
 	if len(home.RecentCommits) != 1 || home.RecentCommits[0].Commit != commit {
 		t.Fatalf("unexpected recent commits: %#v", home.RecentCommits)
 	}
-	if home.RecentCommits[0].Repo.RepoPath != "team/repo" {
+	if home.RecentCommits[0].Repo.RepoPath != repoRoutePath {
 		t.Fatalf("unexpected recent commit repo: %#v", home.RecentCommits[0].Repo)
 	}
 
-	resp, err = http.Get(baseURL + "/api/repo/team/repo/commit/" + commit)
+	resp, err = http.Get(baseURL + "/api/repo/" + repoRoutePath + "/commit/" + commit)
 	if err != nil {
 		t.Fatalf("GET commit api returned error: %v", err)
 	}
@@ -484,9 +487,8 @@ func TestWebServerServesRawArtifacts(t *testing.T) {
 	}
 
 	server := WebServer{
-		Paths:    paths,
-		Queue:    QueueStore{Paths: paths},
-		RepoRoot: repoRoot,
+		Paths: paths,
+		Queue: QueueStore{Paths: paths},
 		DiscoverTasks: func(context.Context, string) ([]Task, error) {
 			return []Task{{Name: record.Name}}, nil
 		},
@@ -511,7 +513,7 @@ func TestWebServerServesRawArtifacts(t *testing.T) {
 		<-errs
 	}()
 
-	rawPath, err := RawArtifactRoutePath(repoRoot, repoDir, commit, record.Name, record.Attempt, "static-site/index.html")
+	rawPath, err := RawArtifactRoutePath(repoDir, commit, record.Name, record.Attempt, "static-site/index.html")
 	if err != nil {
 		t.Fatalf("RawArtifactRoutePath returned error: %v", err)
 	}

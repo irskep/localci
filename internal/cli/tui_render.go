@@ -51,29 +51,22 @@ func (m tuiModel) breadcrumbs() []string {
 	case tuiViewQueue:
 		return []string{"Home", "Queue"}
 	case tuiViewRepo:
-		return []string{"Home", fallbackLabel(m.route.repoPath, "Repo")}
+		return []string{"Home", m.route.repoPath}
 	case tuiViewCommit:
-		return []string{"Home", fallbackLabel(m.route.repoPath, "Repo"), fallbackLabel(shortCommit(m.route.commit), "Commit")}
+		return []string{"Home", m.route.repoPath, shortCommit(m.route.commit)}
 	case tuiViewTask:
-		crumbs := []string{"Home", fallbackLabel(m.route.repoPath, "Repo"), fallbackLabel(shortCommit(m.route.commit), "Commit"), fallbackLabel(trimTaskLabel(m.route.task), "Task")}
+		crumbs := []string{"Home", m.route.repoPath, shortCommit(m.route.commit), trimTaskLabel(m.route.task)}
 		if m.route.attempt > 0 {
 			crumbs = append(crumbs, fmt.Sprintf("attempt %d", m.route.attempt))
 		}
 		return crumbs
 	case tuiViewArtifacts:
-		return []string{"Home", fallbackLabel(m.route.repoPath, "Repo"), fallbackLabel(shortCommit(m.route.commit), "Commit"), fallbackLabel(trimTaskLabel(m.route.task), "Task"), fmt.Sprintf("attempt %d", m.route.attempt)}
+		return []string{"Home", m.route.repoPath, shortCommit(m.route.commit), trimTaskLabel(m.route.task), fmt.Sprintf("attempt %d", m.route.attempt)}
 	case tuiViewArtifact:
-		return []string{"Home", fallbackLabel(m.route.repoPath, "Repo"), fallbackLabel(shortCommit(m.route.commit), "Commit"), fallbackLabel(trimTaskLabel(m.route.task), "Task"), fmt.Sprintf("attempt %d", m.route.attempt), fallbackLabel(m.route.artifact, "Artifact")}
+		return []string{"Home", m.route.repoPath, shortCommit(m.route.commit), trimTaskLabel(m.route.task), fmt.Sprintf("attempt %d", m.route.attempt), m.route.artifact}
 	default:
 		return []string{"Home"}
 	}
-}
-
-func fallbackLabel(value string, fallback string) string {
-	if strings.TrimSpace(value) == "" {
-		return fallback
-	}
-	return value
 }
 
 func (m tuiModel) bodyHandlesError() bool {
@@ -213,7 +206,7 @@ func (m tuiModel) renderSelectedRunDetail(theme tuiTheme, height int, width int)
 	}
 	run := m.home.RecentCommits[m.cursor]
 	lines = append(lines,
-		truncate(run.Repo.RepoPath+"  "+shortCommit(run.Commit), width-4),
+		truncate(run.Repo.DisplayLabel()+"  "+shortCommit(run.Commit), width-4),
 		truncate(taskCounts(run.Tasks), width-4),
 	)
 	if !runComplete(run.Tasks) {
@@ -266,7 +259,7 @@ func (m tuiModel) renderRepos(theme tuiTheme, height int) string {
 		if i < m.scroll || i >= m.scroll+height-2 {
 			continue
 		}
-		rows = append(rows, selectableLine(theme, i == m.cursor, truncate(repo.RepoPath, m.width-4)))
+		rows = append(rows, selectableLine(theme, i == m.cursor, truncate(repo.DisplayLabel(), m.width-4)))
 	}
 	if len(m.repos) == 0 {
 		rows = append(rows, theme.muted().Render("No repos yet."))
@@ -278,7 +271,7 @@ func (m tuiModel) renderRepo(theme tuiTheme, height int) string {
 	if m.repo == nil {
 		return loadingText(m.loading)
 	}
-	rows := []string{theme.title().Render(m.repo.Repo.RepoPath)}
+	rows := []string{theme.title().Render(m.repo.Repo.DisplayLabel())}
 	for i, run := range visibleRuns(m.repo.Commits, m.scroll, height-2) {
 		rows = append(rows, selectableLine(theme, m.scroll+i == m.cursor, runListLine(run, m.width-8)))
 	}
@@ -431,7 +424,7 @@ func (m tuiModel) renderArtifact(theme tuiTheme, height int) string {
 
 func (m tuiModel) renderRunSummary(theme tuiTheme, run tuiCommitSummary, selected bool) string {
 	counts := taskCounts(run.Tasks)
-	line := fmt.Sprintf("%s  %s  %s  %s", run.Repo.RepoPath, shortCommit(run.Commit), counts, timeAgo(run.ActivityAt))
+	line := fmt.Sprintf("%s  %s  %s  %s", run.Repo.DisplayLabel(), shortCommit(run.Commit), counts, timeAgo(run.ActivityAt))
 	if branch := run.Annotations["branch"]; branch != "" {
 		line += "  branch:" + branch
 	}

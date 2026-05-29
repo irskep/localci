@@ -11,7 +11,7 @@ import (
 func TestTUIRouteForTargetBuildsAPIPaths(t *testing.T) {
 	t.Parallel()
 
-	route, err := tuiRouteForTarget("/Users/steve/dev", commitTarget{
+	route, err := tuiRouteForTarget(commitTarget{
 		RepoDir: "/Users/steve/dev/cli/localci",
 		Commit:  "abc123",
 		Task:    "//web:localci:test",
@@ -22,7 +22,7 @@ func TestTUIRouteForTargetBuildsAPIPaths(t *testing.T) {
 	if route.view != tuiViewTask {
 		t.Fatalf("view = %v, want task", route.view)
 	}
-	want := "/api/repo/cli/localci/commit/abc123/task/%2F%2Fweb:localci:test"
+	want := "/api/repo/Users/steve/dev/cli/localci/commit/abc123/task/%2F%2Fweb:localci:test"
 	if route.apiPath != want {
 		t.Fatalf("apiPath = %q, want %q", route.apiPath, want)
 	}
@@ -49,15 +49,15 @@ func TestTUIRenderHomeIncludesQueueAndRuns(t *testing.T) {
 	model.width = 100
 	model.height = 30
 	model.home = &tuiHomeResponse{
-		Repos: []tuiRepoSummary{{RepoDir: "/repo", RepoPath: "team/repo"}},
+		Repos: []tuiRepoSummary{{RepoDir: "/repo", RepoPath: "repo", RepoLabel: "team/repo"}},
 		Queue: tuiQueueResponse{Active: &tuiQueueEntry{
-			Repo:    tuiRepoSummary{RepoDir: "/repo", RepoPath: "team/repo"},
+			Repo:    tuiRepoSummary{RepoDir: "/repo", RepoPath: "repo", RepoLabel: "team/repo"},
 			Commit:  "abc123",
 			Task:    "localci:test",
 			Attempt: 2,
 		}},
 		RecentCommits: []tuiCommitSummary{{
-			Repo:       tuiRepoSummary{RepoDir: "/repo", RepoPath: "team/repo"},
+			Repo:       tuiRepoSummary{RepoDir: "/repo", RepoPath: "repo", RepoLabel: "team/repo"},
 			Commit:     "abc123456789",
 			ActivityAt: time.Now(),
 			Tasks: []tuiTaskSummary{{

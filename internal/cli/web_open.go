@@ -83,20 +83,15 @@ func (a App) buildWebURL(baseURL string, spec commitTarget) (string, error) {
 		return root.String(), nil
 	}
 
-	cfg, err := a.loadConfig()
-	if err != nil {
-		return "", err
-	}
-
 	switch {
 	case spec.Commit == "":
-		repoPath, err := localci.RouteRepoPath(cfg.Root, spec.RepoDir)
+		repoPath, err := localci.RouteRepoPath(spec.RepoDir)
 		if err != nil {
 			return "", err
 		}
 		root.Path = path.Join("/repo", repoPath)
 	case spec.Task == "":
-		commitPath, err := localci.CommitRoutePath(cfg.Root, spec.RepoDir, spec.Commit)
+		commitPath, err := localci.CommitRoutePath(spec.RepoDir, spec.Commit)
 		if err != nil {
 			return "", err
 		}
@@ -104,7 +99,7 @@ func (a App) buildWebURL(baseURL string, spec commitTarget) (string, error) {
 			return "", err
 		}
 	case spec.Artifact == "":
-		taskPath, err := localci.TaskRoutePath(cfg.Root, spec.RepoDir, spec.Commit, spec.Task)
+		taskPath, err := localci.TaskRoutePath(spec.RepoDir, spec.Commit, spec.Task)
 		if err != nil {
 			return "", err
 		}
@@ -116,7 +111,7 @@ func (a App) buildWebURL(baseURL string, spec commitTarget) (string, error) {
 		if attempt <= 0 {
 			attempt = 1
 		}
-		artifactPath, err := localci.ArtifactRoutePath(cfg.Root, spec.RepoDir, spec.Commit, spec.Task, attempt, spec.Artifact)
+		artifactPath, err := localci.ArtifactRoutePath(spec.RepoDir, spec.Commit, spec.Task, attempt, spec.Artifact)
 		if err != nil {
 			return "", err
 		}

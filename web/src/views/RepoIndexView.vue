@@ -32,10 +32,10 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
       <PDataTable :value="repos" size="small" class="table-surface">
         <PColumn header="Name">
           <template #body="{ data }">
-            <RepoLink :repo-path="data.repo_path" />
+            <RepoLink :repo-path="data.repo_path" :repo-label="data.repo_label" />
           </template>
         </PColumn>
-        <PColumn field="repo_path" header="Path" />
+        <PColumn field="repo_label" header="Path" />
       </PDataTable>
     </PPanel>
     <div v-else-if="store.homeLoaded && !store.error" class="empty-state">

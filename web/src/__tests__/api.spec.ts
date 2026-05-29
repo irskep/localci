@@ -45,7 +45,7 @@ describe('api validation', () => {
 
   it('accepts task responses without trusting artifact paths', () => {
     const response = parseTaskResponse({
-      repo: { repo_dir: '/repo', repo_path: 'repo' },
+      repo: { repo_dir: '/repo', repo_path: 'repo', repo_label: 'repo' },
       commit: 'abc123',
       task: {
         name: 'localci:test',

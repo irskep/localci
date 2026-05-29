@@ -209,7 +209,7 @@ func (m DaemonManager) Run(ctx context.Context) error {
 	}()
 
 	eventHub := NewEventHub()
-	eventNotifier := &EventNotifier{Root: m.repoRoot(), Hub: eventHub}
+	eventNotifier := &EventNotifier{Hub: eventHub}
 	scheduler := m.Scheduler
 	scheduler.Events = eventNotifier
 	scheduler.Runner.Events = eventNotifier
@@ -233,7 +233,6 @@ func (m DaemonManager) Run(ctx context.Context) error {
 		Queue:         scheduler.Queue,
 		DiscoverTasks: scheduler.Runner.DiscoverTasks,
 		AssetDir:      os.Getenv("LOCALCI_WEB_DIR"),
-		RepoRoot:      m.repoRoot(),
 		Events:        eventNotifier,
 		EventHub:      eventHub,
 		Shutdown:      cancel,
@@ -461,18 +460,6 @@ func (m DaemonManager) httpAddress() string {
 	}
 
 	return "127.0.0.1:61924"
-}
-
-func (m DaemonManager) repoRoot() string {
-	configPath, err := DefaultConfigPath()
-	if err != nil {
-		return string(filepath.Separator)
-	}
-	cfg, err := LoadConfigOrDefault(configPath)
-	if err != nil {
-		return string(filepath.Separator)
-	}
-	return cfg.Root
 }
 
 func (m DaemonManager) recoverInterruptedWork() error {

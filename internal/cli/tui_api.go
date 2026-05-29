@@ -19,8 +19,13 @@ import (
 )
 
 type tuiRepoSummary struct {
-	RepoDir  string `json:"repo_dir"`
-	RepoPath string `json:"repo_path"`
+	RepoDir   string `json:"repo_dir"`
+	RepoPath  string `json:"repo_path"`
+	RepoLabel string `json:"repo_label"`
+}
+
+func (r tuiRepoSummary) DisplayLabel() string {
+	return r.RepoLabel
 }
 
 type tuiQueueEntry struct {

@@ -53,6 +53,7 @@ withDefaults(
   defineProps<{
     run: CommitSummary
     repoPath: string
+    repoLabel?: string
     showRepo?: boolean
     summaryMode?: boolean
   }>(),
@@ -390,8 +391,8 @@ function taskSummaryStatusLabel(status: string): string {
         </time>
       </div>
       <div class="run-meta-secondary">
-        <RepoLink v-if="showRepo" :repo-path="repoPath" />
-        <span v-else>{{ repoPath }}</span>
+        <RepoLink v-if="showRepo" :repo-path="repoPath" :repo-label="repoLabel" />
+        <span v-else>{{ repoLabel ?? repoPath }}</span>
         <span class="attribute-list">
           <PTag
             v-for="attribute in annotationEntries(run.annotations)"

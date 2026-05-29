@@ -12,7 +12,7 @@ const route = useRoute()
 const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
 const commits = computed(() => store.currentRepo?.commits ?? [])
-const title = computed(() => store.currentRepo?.repo.repo_path ?? parsed.value.repoPath)
+const title = computed(() => store.currentRepo?.repo.repo_label ?? parsed.value.repoPath)
 const currentBefore = computed(() => queryString(route.query.before))
 const newerPage = computed(() => {
   if (!currentBefore.value || parsed.value.kind !== 'repo') return undefined
@@ -61,7 +61,7 @@ async function loadCurrentPage(): Promise<void> {
     <TopBar
       :items="[
         { label: 'Home', to: '/' },
-        { label: store.currentRepo?.repo.repo_path ?? parsed.repoPath },
+        { label: store.currentRepo?.repo.repo_label ?? parsed.repoPath },
       ]"
     />
 
@@ -75,6 +75,7 @@ async function loadCurrentPage(): Promise<void> {
       v-if="commits.length > 0"
       :runs="commits"
       :repo-path="parsed.repoPath"
+      :repo-label="store.currentRepo?.repo.repo_label"
       :show-repo="false"
       :newer-to="newerPage"
       :older-to="olderPage"

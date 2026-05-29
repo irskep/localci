@@ -50,7 +50,6 @@ func TestAPIEventWebSocketSendsSnapshot(t *testing.T) {
 		DiscoverTasks: func(context.Context, string) ([]Task, error) {
 			return []Task{{Name: "localci:test"}}, nil
 		},
-		RepoRoot: root,
 		EventHub: NewEventHub(),
 	}
 
@@ -152,7 +151,6 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 		DiscoverTasks: func(context.Context, string) ([]Task, error) {
 			return []Task{{Name: taskName}}, nil
 		},
-		RepoRoot: root,
 		EventHub: NewEventHub(),
 	}
 
@@ -178,14 +176,18 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 		<-errs
 	}()
 
-	resource := "/api/repo/repo/commit/abc123/task/%2F%2F%3Alocalci%3Aslow-stream/attempt/1/artifact/combined.log"
+	repoPath, err := RouteRepoPath(repoDir)
+	if err != nil {
+		t.Fatalf("RouteRepoPath returned error: %v", err)
+	}
+	resource := "/api/repo/" + repoPath + "/commit/abc123/task/%2F%2F%3Alocalci%3Aslow-stream/attempt/1/artifact/combined.log"
 	conn, _, err := websocket.Dial(context.Background(), "ws://"+listener.Addr().String()+resource+"/events", nil)
 	if err != nil {
 		t.Fatalf("Dial returned error: %v", err)
 	}
 	defer conn.CloseNow()
 
-	taskResource := "/api/repo/repo/commit/abc123/task/%2F%2F%3Alocalci%3Aslow-stream"
+	taskResource := "/api/repo/" + repoPath + "/commit/abc123/task/%2F%2F%3Alocalci%3Aslow-stream"
 	taskConn, _, err := websocket.Dial(context.Background(), "ws://"+listener.Addr().String()+taskResource+"/events", nil)
 	if err != nil {
 		t.Fatalf("Dial task returned error: %v", err)
@@ -209,7 +211,7 @@ func TestAPIEventWebSocketSendsArtifactAppend(t *testing.T) {
 		t.Fatalf("task event type = %q, want snapshot", event.Type)
 	}
 
-	EventNotifier{Root: root, Hub: server.EventHub}.ArtifactAppended(QueueEntry{
+	EventNotifier{Hub: server.EventHub}.ArtifactAppended(QueueEntry{
 		Kind:     QueueEntryKindTask,
 		RepoDir:  repoDir,
 		Commit:   commit,

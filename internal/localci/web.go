@@ -21,7 +21,6 @@ type WebServer struct {
 	Queue                  QueueStore
 	DiscoverTasks          func(context.Context, string) ([]Task, error)
 	AssetDir               string
-	RepoRoot               string
 	Events                 *EventNotifier
 	EventHub               *EventHub
 	Shutdown               func()

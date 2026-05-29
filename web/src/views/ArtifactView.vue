@@ -37,7 +37,7 @@ onUnmounted(() => store.unsubscribeArtifact())
       :items="[
         { label: 'Home', to: '/' },
         {
-          label: store.currentArtifact?.repo.repo_path ?? parsed.repoPath,
+          label: store.currentArtifact?.repo.repo_label ?? parsed.repoPath,
           to: repoPathURL(parsed.repoPath),
         },
         {

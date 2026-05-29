@@ -5,10 +5,11 @@ import { repoPathURL } from '@/lib/routes'
 
 const props = defineProps<{
   repoPath: string
+  repoLabel?: string
   label?: string
 }>()
 
-const label = computed(() => props.label ?? props.repoPath)
+const label = computed(() => props.label ?? props.repoLabel ?? props.repoPath)
 </script>
 
 <template>

@@ -8,28 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"localci/internal/localci"
 )
-
-func TestLoadConfigDefaultsRootToSlashWhenConfigIsMissing(t *testing.T) {
-	t.Parallel()
-
-	app := App{
-		Stdout:     io.Discard,
-		Stderr:     io.Discard,
-		Cwd:        "/repo",
-		ConfigPath: filepath.Join(t.TempDir(), "missing-config.toml"),
-	}
-
-	cfg, err := app.loadConfig()
-	if err != nil {
-		t.Fatalf("loadConfig returned error: %v", err)
-	}
-	if cfg.Root != string(filepath.Separator) {
-		t.Fatalf("Root = %q, want %q", cfg.Root, string(filepath.Separator))
-	}
-}
 
 func TestDiscoverRepoFromNestedCWD(t *testing.T) {
 	t.Parallel()
@@ -577,14 +556,11 @@ func TestPostcommitWaitInstruction(t *testing.T) {
 	}
 }
 
-func testApp(root string, cwd string) App {
+func testApp(_ string, cwd string) App {
 	return App{
 		Stdout: io.Discard,
 		Stderr: io.Discard,
 		Cwd:    cwd,
-		LoadConfig: func(string) (localci.Config, error) {
-			return localci.Config{Root: root}, nil
-		},
 	}
 }
 

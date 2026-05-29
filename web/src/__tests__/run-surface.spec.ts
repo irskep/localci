@@ -18,7 +18,7 @@ function task(status: string, name = status, failure = ''): TaskSummary {
 
 function run(tasks: TaskSummary[]): CommitSummary {
   return {
-    repo: { repo_dir: '/repo', repo_path: 'cli/localci' },
+    repo: { repo_dir: '/repo', repo_path: 'cli/localci', repo_label: 'cli/localci' },
     commit: 'abc123def456',
     annotations: {},
     tasks,

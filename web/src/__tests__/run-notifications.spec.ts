@@ -22,7 +22,7 @@ function task(status: string, failure = ''): TaskSummary {
 
 function run(tasks: TaskSummary[]): CommitSummary {
   return {
-    repo: { repo_dir: '/repo', repo_path: 'cli/localci' },
+    repo: { repo_dir: '/repo', repo_path: 'cli/localci', repo_label: 'cli/localci' },
     commit: '3a974feb300e734293a95d7bea0809c11293f2c9',
     tasks,
     activity_at: '2026-05-29T12:00:00Z',

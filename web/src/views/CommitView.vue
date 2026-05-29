@@ -22,7 +22,7 @@ const tasks = computed(() => commit.value?.tasks ?? [])
 const subscribedPage = ref('')
 const title = computed(() => {
   const commitLabel = parsed.value.commit ? shortCommit(parsed.value.commit) : 'Commit'
-  const repoLabel = store.currentCommit?.repo.repo_path ?? parsed.value.repoPath
+  const repoLabel = store.currentCommit?.repo.repo_label ?? parsed.value.repoPath
   return repoLabel ? `${repoLabel} ${commitLabel}` : commitLabel
 })
 
@@ -45,7 +45,7 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
       :items="[
         { label: 'Home', to: '/' },
         {
-          label: store.currentCommit?.repo.repo_path ?? parsed.repoPath,
+          label: store.currentCommit?.repo.repo_label ?? parsed.repoPath,
           to: repoPathURL(parsed.repoPath),
         },
         { label: parsed.commit ? shortCommit(parsed.commit) : 'Commit' },

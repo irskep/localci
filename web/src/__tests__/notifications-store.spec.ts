@@ -59,10 +59,10 @@ function task(status: string, failure = ''): TaskSummary {
 
 function home(tasks: TaskSummary[]): HomeResponse {
   return {
-    repos: [{ repo_dir: '/repo', repo_path: 'cli/localci' }],
+    repos: [{ repo_dir: '/repo', repo_path: 'cli/localci', repo_label: 'cli/localci' }],
     recent_commits: [
       {
-        repo: { repo_dir: '/repo', repo_path: 'cli/localci' },
+        repo: { repo_dir: '/repo', repo_path: 'cli/localci', repo_label: 'cli/localci' },
         commit: 'abc123',
         tasks,
         activity_at: '2026-05-29T12:00:00Z',

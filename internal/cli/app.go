@@ -21,9 +21,7 @@ type App struct {
 	RenderManPage     func(string) error
 	StdoutIsTerminal  func() bool
 	CheckRequirements func() error
-	ConfigPath        string
 	LocalCIRoot       string
-	LoadConfig        func(string) (localci.Config, error)
 	LatestCommit      func(string) (string, error)
 	HeadCommit        func(string) (string, error)
 }
@@ -594,16 +592,11 @@ func (a App) runInstallHooks(flags cliFlags) error {
 }
 
 func (a App) resolveRepoArg(path string) (string, error) {
-	cfg, err := a.loadConfig()
-	if err != nil {
-		return "", err
-	}
-
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(a.Cwd, path)
 	}
 
-	return localci.ResolveRepoDir(cfg.Root, path)
+	return filepath.Clean(path), nil
 }
 
 func (a App) repoFromFlagOrCwd(repoArg string) (string, error) {
@@ -651,22 +644,6 @@ func (a App) discoverRepoFromCwd() (string, error) {
 	}
 
 	return "", fmt.Errorf("could not find a git repository from %s; pass --repo <path>", start)
-}
-
-func (a App) loadConfig() (localci.Config, error) {
-	path := a.ConfigPath
-	if path == "" {
-		var err error
-		path, err = localci.DefaultConfigPath()
-		if err != nil {
-			return localci.Config{}, err
-		}
-	}
-
-	if a.LoadConfig != nil {
-		return a.LoadConfig(path)
-	}
-	return localci.LoadConfigOrDefault(path)
 }
 
 func (a App) latestCommitForRepo(repoDir string) (string, error) {

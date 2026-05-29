@@ -162,7 +162,11 @@ func (s WebServer) apiHomeSnapshot() (apiHomeResponse, error) {
 		NewerBefore:   runPage.NewerBefore,
 	}
 	for _, repo := range repos {
-		resp.Repos = append(resp.Repos, s.apiRepoSummary(repo.RepoDir))
+		summary, err := s.apiRepoSummary(repo.RepoDir)
+		if err != nil {
+			return apiHomeResponse{}, err
+		}
+		resp.Repos = append(resp.Repos, summary)
 	}
 	resp.RecentCommits = append(resp.RecentCommits, views...)
 	return resp, nil
@@ -176,7 +180,11 @@ func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 		}
 		resp := make([]apiRepoSummary, 0, len(repos))
 		for _, repo := range repos {
-			resp = append(resp, s.apiRepoSummary(repo.RepoDir))
+			summary, err := s.apiRepoSummary(repo.RepoDir)
+			if err != nil {
+				return nil, err
+			}
+			resp = append(resp, summary)
 		}
 		return resp, nil
 	}
@@ -204,8 +212,12 @@ func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
+		repo, err := s.apiRepoSummary(repoDir)
+		if err != nil {
+			return nil, err
+		}
 		return apiRepoResponse{
-			Repo:        s.apiRepoSummary(repoDir),
+			Repo:        repo,
 			Commits:     views,
 			NextBefore:  runPage.NextBefore,
 			NewerBefore: runPage.NewerBefore,
@@ -221,7 +233,11 @@ func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return apiCommitResponse{Repo: s.apiRepoSummary(repoDir), Commit: view}, nil
+		repo, err := s.apiRepoSummary(repoDir)
+		if err != nil {
+			return nil, err
+		}
+		return apiCommitResponse{Repo: repo, Commit: view}, nil
 	}
 	if tail[2] != "task" {
 		return nil, fmt.Errorf("unsupported commit resource: %s", strings.Join(tail, "/"))
@@ -257,8 +273,12 @@ func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 			return nil, err
 		}
 		task = s.enrichTaskArtifacts(repoDir, commit, task)
+		repo, err := s.apiRepoSummary(repoDir)
+		if err != nil {
+			return nil, err
+		}
 		return apiArtifactListResponse{
-			Repo:      s.apiRepoSummary(repoDir),
+			Repo:      repo,
 			Commit:    commit,
 			Task:      task.Name,
 			Attempt:   task.Attempt,
@@ -275,8 +295,12 @@ func (s WebServer) apiTaskSnapshot(repoDir string, commit string, taskName strin
 	}
 	task = s.enrichTaskArtifacts(repoDir, commit, task)
 	primaryArtifact, primaryLog := LoadPrimaryLog(task)
+	repo, err := s.apiRepoSummary(repoDir)
+	if err != nil {
+		return apiTaskResponse{}, err
+	}
 	return apiTaskResponse{
-		Repo:            s.apiRepoSummary(repoDir),
+		Repo:            repo,
 		Commit:          commit,
 		Task:            task,
 		SelectedAttempt: task.Attempt,
@@ -304,8 +328,12 @@ func (s WebServer) apiArtifactSnapshot(repoDir string, commit string, taskName s
 			return apiArtifactResponse{}, err
 		}
 	}
+	repo, err := s.apiRepoSummary(repoDir)
+	if err != nil {
+		return apiArtifactResponse{}, err
+	}
 	return apiArtifactResponse{
-		Repo:     s.apiRepoSummary(repoDir),
+		Repo:     repo,
 		Commit:   commit,
 		Task:     task.Name,
 		Attempt:  task.Attempt,

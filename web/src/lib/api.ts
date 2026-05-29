@@ -1,6 +1,7 @@
 export type RepoSummary = {
   repo_dir: string
   repo_path: string
+  repo_label: string
 }
 
 export type QueueEntry = {
@@ -300,6 +301,7 @@ function parseRepoSummary(value: unknown): RepoSummary {
   return {
     repo_dir: asString(data.repo_dir, 'repo.repo_dir'),
     repo_path: asString(data.repo_path, 'repo.repo_path'),
+    repo_label: asString(data.repo_label, 'repo.repo_label'),
   }
 }
 

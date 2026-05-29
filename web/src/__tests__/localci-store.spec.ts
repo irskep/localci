@@ -48,7 +48,7 @@ describe('localci store', () => {
       type: 'snapshot',
       resource: '/api/repo/cli/localci',
       data: {
-        repo: { repo_dir: '/repo', repo_path: 'cli/localci' },
+        repo: { repo_dir: '/repo', repo_path: 'cli/localci', repo_label: 'cli/localci' },
         commits: [],
       },
     }
@@ -74,7 +74,7 @@ describe('localci store', () => {
       vi.fn(async () => ({
         ok: true,
         json: async () => ({
-          repo: { repo_dir: '/repo', repo_path: 'cli/localci' },
+          repo: { repo_dir: '/repo', repo_path: 'cli/localci', repo_label: 'cli/localci' },
           commits: [],
         }),
       })),
@@ -100,7 +100,7 @@ describe('localci store', () => {
       type: 'snapshot',
       resource: '/api/repo/cli/localci',
       data: {
-        repo: { repo_dir: '/repo', repo_path: 'cli/localci' },
+        repo: { repo_dir: '/repo', repo_path: 'cli/localci', repo_label: 'cli/localci' },
         commits: [],
       },
     }
@@ -127,7 +127,7 @@ describe('localci store', () => {
       type: 'snapshot',
       resource: '/api/repo/cli/localci',
       data: {
-        repo: { repo_dir: '/repo', repo_path: 'cli/localci' },
+        repo: { repo_dir: '/repo', repo_path: 'cli/localci', repo_label: 'cli/localci' },
         commits: [],
       },
     }

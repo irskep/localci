@@ -120,7 +120,7 @@ onUnmounted(() => store.unsubscribeTask())
       :items="[
         { label: 'Home', to: '/' },
         {
-          label: taskResponse?.repo.repo_path ?? parsed.repoPath,
+          label: taskResponse?.repo.repo_label ?? parsed.repoPath,
           to: repoPathURL(parsed.repoPath),
         },
         {

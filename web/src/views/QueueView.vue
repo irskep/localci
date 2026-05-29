@@ -38,7 +38,7 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
             class="pi pi-spin pi-spinner run-task-icon run-task-icon-running"
             aria-hidden="true"
           ></i>
-          <RepoLink :repo-path="active.repo.repo_path" />
+          <RepoLink :repo-path="active.repo.repo_path" :repo-label="active.repo.repo_label" />
           <RouterLink :to="taskURL(active.repo.repo_path, active.commit, active.task)">
             {{ active.task }}
           </RouterLink>
@@ -55,7 +55,7 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
         </PColumn>
         <PColumn header="Repo">
           <template #body="{ data }">
-            <RepoLink :repo-path="data.repo.repo_path" />
+            <RepoLink :repo-path="data.repo.repo_path" :repo-label="data.repo.repo_label" />
           </template>
         </PColumn>
         <PColumn header="Task">

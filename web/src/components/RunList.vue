@@ -8,6 +8,7 @@ withDefaults(
   defineProps<{
     runs: CommitSummary[]
     repoPath?: string
+    repoLabel?: string
     showRepo?: boolean
     newerTo?: RouteLocationRaw
     olderTo?: RouteLocationRaw
@@ -15,6 +16,7 @@ withDefaults(
   }>(),
   {
     repoPath: undefined,
+    repoLabel: undefined,
     showRepo: true,
     newerTo: undefined,
     olderTo: undefined,
@@ -31,6 +33,7 @@ withDefaults(
         :key="`${repoPath ?? run.repo.repo_path}:${run.commit}`"
         :run="run"
         :repo-path="repoPath ?? run.repo.repo_path"
+        :repo-label="repoLabel ?? run.repo.repo_label"
         :show-repo="showRepo"
         summary-mode
       />

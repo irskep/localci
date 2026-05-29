@@ -98,7 +98,7 @@ async function loadCurrentPage(): Promise<void> {
             <div class="active-panel-content">
               <WebsocketStatus />
               <div v-if="active" class="inline-link-list">
-                <RepoLink :repo-path="active.repo.repo_path" />
+                <RepoLink :repo-path="active.repo.repo_path" :repo-label="active.repo.repo_label" />
                 <RunLink :repo-path="active.repo.repo_path" :commit="active.commit" />
                 <RouterLink :to="taskURL(active.repo.repo_path, active.commit, active.task)">
                   {{ active.task }}
@@ -119,7 +119,7 @@ async function loadCurrentPage(): Promise<void> {
               >
                 <i class="pi pi-clock run-task-icon run-task-icon-queued" aria-hidden="true"></i>
                 <span class="inline-link-list">
-                  <RepoLink :repo-path="entry.repo.repo_path" />
+                  <RepoLink :repo-path="entry.repo.repo_path" :repo-label="entry.repo.repo_label" />
                   <RouterLink :to="taskURL(entry.repo.repo_path, entry.commit, entry.task)">
                     {{ entry.task }}
                   </RouterLink>
@@ -132,7 +132,7 @@ async function loadCurrentPage(): Promise<void> {
           <PPanel header="Repo">
             <ul class="artifact-list">
               <li v-for="repo in repoRows" :key="repo.repo_path">
-                <RepoLink :repo-path="repo.repo_path" />
+                <RepoLink :repo-path="repo.repo_path" :repo-label="repo.repo_label" />
               </li>
             </ul>
           </PPanel>

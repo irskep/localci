@@ -75,31 +75,32 @@ func (a App) runDash(flags cliFlags) error {
 }
 
 func (a App) tuiRouteForTarget(spec commitTarget) (tuiRoute, error) {
-	cfg, err := a.loadConfig()
-	if err != nil {
-		return tuiRoute{}, err
-	}
-	return tuiRouteForTarget(cfg.Root, spec)
+	return tuiRouteForTarget(spec)
 }
 
-func tuiRouteForTarget(root string, spec commitTarget) (tuiRoute, error) {
+func tuiRouteForTarget(spec commitTarget) (tuiRoute, error) {
 	switch {
 	case spec.RepoDir == "":
 		return tuiRoute{view: tuiViewHome, apiPath: "/api", title: "Home"}, nil
 	case spec.Commit == "":
-		repoPath, err := localci.RouteRepoPath(root, spec.RepoDir)
+		repoPath, err := localci.RouteRepoPath(spec.RepoDir)
 		if err != nil {
 			return tuiRoute{}, err
 		}
+		label := localci.RepoDisplayLabel(spec.RepoDir, nil)
 		return tuiRoute{
 			view:     tuiViewRepo,
 			apiPath:  "/api/repo/" + strings.TrimPrefix(repoPath, "/"),
-			repoPath: canonicalPathLabel(root, spec.RepoDir),
+			repoPath: repoPath,
 			repoDir:  spec.RepoDir,
-			title:    canonicalPathLabel(root, spec.RepoDir),
+			title:    label,
 		}, nil
 	case spec.Task == "":
-		commitPath, err := localci.CommitRoutePath(root, spec.RepoDir, spec.Commit)
+		commitPath, err := localci.CommitRoutePath(spec.RepoDir, spec.Commit)
+		if err != nil {
+			return tuiRoute{}, err
+		}
+		repoPath, err := localci.RouteRepoPath(spec.RepoDir)
 		if err != nil {
 			return tuiRoute{}, err
 		}
@@ -107,13 +108,17 @@ func tuiRouteForTarget(root string, spec commitTarget) (tuiRoute, error) {
 		return tuiRoute{
 			view:     tuiViewCommit,
 			apiPath:  apiPath,
-			repoPath: canonicalPathLabel(root, spec.RepoDir),
+			repoPath: repoPath,
 			repoDir:  spec.RepoDir,
 			commit:   spec.Commit,
 			title:    shortCommit(spec.Commit),
 		}, nil
 	case spec.Artifact == "":
-		taskPath, err := localci.TaskRoutePath(root, spec.RepoDir, spec.Commit, spec.Task)
+		taskPath, err := localci.TaskRoutePath(spec.RepoDir, spec.Commit, spec.Task)
+		if err != nil {
+			return tuiRoute{}, err
+		}
+		repoPath, err := localci.RouteRepoPath(spec.RepoDir)
 		if err != nil {
 			return tuiRoute{}, err
 		}
@@ -121,7 +126,7 @@ func tuiRouteForTarget(root string, spec commitTarget) (tuiRoute, error) {
 		return tuiRoute{
 			view:     tuiViewTask,
 			apiPath:  apiPath,
-			repoPath: canonicalPathLabel(root, spec.RepoDir),
+			repoPath: repoPath,
 			repoDir:  spec.RepoDir,
 			commit:   spec.Commit,
 			task:     spec.Task,
@@ -132,9 +137,13 @@ func tuiRouteForTarget(root string, spec commitTarget) (tuiRoute, error) {
 		if attempt <= 0 {
 			attempt = 1
 		}
+		repoPath, err := localci.RouteRepoPath(spec.RepoDir)
+		if err != nil {
+			return tuiRoute{}, err
+		}
 		base := tuiRoute{
 			view:     tuiViewArtifacts,
-			repoPath: canonicalPathLabel(root, spec.RepoDir),
+			repoPath: repoPath,
 			repoDir:  spec.RepoDir,
 			commit:   spec.Commit,
 			task:     spec.Task,
@@ -163,7 +172,7 @@ func tuiRepoRoute(repo tuiRepoSummary) tuiRoute {
 		apiPath:  path.Join("/api/repo", repo.RepoPath),
 		repoPath: repo.RepoPath,
 		repoDir:  repo.RepoDir,
-		title:    repo.RepoPath,
+		title:    repo.DisplayLabel(),
 	}
 }
 
@@ -201,12 +210,4 @@ func tuiArtifactRoute(route tuiRoute, artifact string) tuiRoute {
 	route.apiPath = path.Join("/api/repo", route.repoPath, "commit", route.commit, "task", url.PathEscape(route.task), "attempt", strconv.Itoa(route.attempt), "artifact", artifact)
 	route.title = artifact
 	return route
-}
-
-func canonicalPathLabel(root string, repoDir string) string {
-	label, err := localci.CanonicalRepoPath(root, repoDir)
-	if err != nil || label == "" {
-		return repoDir
-	}
-	return label
 }
