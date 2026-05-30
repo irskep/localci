@@ -2,158 +2,48 @@
   <img src="logo.svg" alt="LocalCI logo" width="96">
 </p>
 
-# LocalCI
+# LocalCI: Continuous Integration On Your Own Computer
 
 [![CI](https://github.com/irskep/localci/actions/workflows/ci.yml/badge.svg)](https://github.com/irskep/localci/actions/workflows/ci.yml)
 
-LocalCI is an asynchronous post-commit validation runner for local development.
-It runs the checks you already define as [Mise](https://mise.jdx.dev/)
-tasks, stores logs and artifacts on disk, and makes results available through
-one-shot CLI commands, a terminal UI, and a local web UI.
+Full documentation: <https://steveasleep.com/localci/>
 
-It is meant to sit between Git hooks and remote CI: local like a hook, but async like CI.
+CI systems run lots of checks on every commit, so you can catch as many errors as possible before your code is published. LocalCI lets you use that strategy on your laptop, no server needed. A postcommit hook asks a daemon to run all your tests serially in isolated shallow git clones, and then you can monitor status and view history through various means (CLI, web interface, interactive terminal UI), just like you would with GitHub Actions.
+
+You can also have it run all tests on your working directory without cloning, as a quick way to check everything immediately.
 
 ![LocalCI terminal dashboard](screenshots/screenshot-terminal.png)
 
 ![LocalCI web UI](screenshots/screenshot-web.png)
 
-## What It Does
+## Why would you want to do this?
 
-- Runs after each commit, so you or your coding agent can keep moving while the
-  full suite runs in the background.
-- Executes checks in isolated clones by default, so results are tied to a
-  committed tree instead of whichever files happen to be checked out.
-- Discovers every Mise task whose name starts with `localci:`, including
-  monorepo tasks such as `//web:localci:test`.
-- Runs a root `localci:setup` task first when one exists.
-- Keeps logs and artifacts as files, with commands for finding the exact paths
-  when a human or agent needs to inspect them.
+### Catch problems earlier by not relying on memory and discipline
 
-LocalCI is not a GitHub Actions clone. There is no workflow DSL; mise is the contract.
+During normal development, you (or, realistically, a coding agent) run contextual checks all the time. You run your typechecker, or the test that covers the work you’re doing. You run the linter to see if you introduced any issues. These local checks give you direct, immediate feedback on your work.
 
-## When To Use It
+Then you open a PR, which runs CI, and—surprise!—a check failed that you didn't anticipate. You broke it three commits back but never noticed because you didn’t think to run that check.
 
-Use LocalCI when a repository can express its checks as Mise tasks and you want
-continuous local feedback after commits. It is especially useful for agents and
-larger repos where running every check before every commit would interrupt the
-development loop.
+If you had been using LocalCI, you could have done a quick history check before opening the PR, or even have a git hook show it to you when you push.
 
-LocalCI is not a replacement for remote CI, and it is not a fit for projects
-that cannot define their validation commands as Mise tasks.
+Having all results available immediately means you don’t have to consciously run a check and wait for the results. The results are just there.
 
-## Quick Start
+### Reduce the role of GitHub Actions, or other CI web services, in your workflow
 
-Install LocalCI with mise, then start the daemon and install the post-commit hook:
+The internet is often fast, but there are major downsides to relying on a remote CI server for your core development iteration loop.
 
-```toml
-[tools]
-"github:irskep/localci" = "0.2.2"
-```
+First, sending all your code to the cloud, starting a fleet of virtual machines, and downloading dependencies from a cache is a lot more work than just…running the test suite locally.
 
-```sh
-mise install
+Second, the UI for browsing CI results on some services is just straight ass. 100 MB of JavaScript just to read your plaintext log file. Hierarchies that make no sense. Limits on how output can be browsed. Isn’t it fun to download a 100 MB tarball to look at Playwright’s HTML output?
 
-localci start
-localci install-hooks
-```
+With LocalCI, it’s all already on your own computer. You can use it on an airplane. The UI is less than 1 MB of JavaScript, which isn’t nothing, but at least there are no ad trackers. If you have a gripe, I’ll consider your suggestion because I am just a guy with a git repository, rather than letting your community forum topic languish for years.
 
-Define checks as Mise tasks in the `localci:` namespace. A typical root
-configuration uses `localci:setup` for dependencies and `localci:test` for the
-actual validation:
+## Limitations
 
-```toml
-[tasks."localci:setup"]
-description = "Install dependencies for LocalCI runs"
-run = "mise install"
+1. You must define all checks as [Mise](https://mise.en.dev) tasks. Enlightened folks consider this a feature, not a bug.
+2. There is no configuration. All tasks run in serial. This may change based on feedback.
+3. As of May 2026, there is one user: me. But I do use it.
 
-[tasks."localci:test"]
-description = "Run tests"
-run = "go test ./..."
-```
+## Getting Started
 
-File tasks work too. For example, `mise-tasks/localci/test`:
-
-```sh
-#!/bin/sh
-set -eu
-
-go test ./...
-```
-
-Commit the task definitions so the post-commit hook can enqueue checks for that
-revision:
-
-```sh
-git add mise.toml
-git commit -m "Configure LocalCI"
-```
-
-## Daily Workflow
-
-After each commit, LocalCI queues the eligible tasks. Inspect the latest run
-from the terminal:
-
-```sh
-localci wait
-localci status
-```
-
-Or open the same information in a UI:
-
-```sh
-localci web
-localci dash
-```
-
-For an ad hoc daemon-managed run, use `localci run`:
-
-```sh
-localci run --task test --wait
-```
-
-When you intentionally want to test uncommitted changes through the daemon
-queue, use `--no-clone`:
-
-```sh
-localci run --no-clone --task test --wait
-```
-
-No-clone runs are marked with a trailing `*` because they reflect the live
-working tree instead of a committed revision.
-
-## Artifacts
-
-LocalCI never needs to dump a huge log into your terminal. Ask for paths instead:
-
-```sh
-localci artifacts --failed --primary
-localci artifacts --task noisy-fail --primary --paths-only
-```
-
-Then open, edit, copy, or attach those files using your normal tools.
-
-Tasks can write additional reports under `LOCALCI_TASK_OUTPUT_DIR`. LocalCI also
-captures stdout and stderr into `combined.log` for every task attempt.
-
-## Common Commands
-
-```sh
-localci start          # start the daemon
-localci stop           # stop the daemon
-localci restart        # restart the daemon
-localci install-hooks  # install the Git post-commit hook
-localci wait           # wait for the selected run or task
-localci status         # print a bounded status summary
-localci history        # list recent runs
-localci artifacts      # print artifact paths
-localci web            # open the web UI
-localci dash           # open the terminal UI
-localci cancel         # cancel queued or active work
-```
-
-## Documentation
-
-The full docs cover setup, task discovery, monorepo tasks, artifact handling,
-CLI usage, and the web/TUI inspection flow:
-
-<https://steveasleep.com/localci/>
+Covered here in the docs: <https://steveasleep.com/localci/getting-started/>

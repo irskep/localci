@@ -4,6 +4,8 @@ LocalCI is an asynchronous post-commit validation runner for local development. 
 
 LocalCI is deliberately small. It discovers mise tasks, queues them in a daemon, runs them against an isolated clone, and makes the results available from the CLI and a local web UI.
 
+The “why” of this project is covered in [the GitHub README](https://github.com/irskep/localci/blob/main/README.md).
+
 ## What LocalCI is for
 
 <div class="grid cards" markdown>
