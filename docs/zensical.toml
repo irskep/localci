@@ -9,6 +9,7 @@ nav = [
   "index.md",
   "getting-started.md",
   "tasks.md",
+  "changelog.md",
   "cli/localci.md",
 ]
 

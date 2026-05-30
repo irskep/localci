@@ -1,0 +1,48 @@
+name: Docs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  MISE_EXPERIMENTAL: "true"
+
+jobs:
+  deploy:
+    name: deploy docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install mise
+        run: |
+          set -eu
+          curl https://mise.run | sh
+          echo "$HOME/.local/bin" >>"$GITHUB_PATH"
+          "$HOME/.local/bin/mise" install --yes
+
+      - name: Set up LocalCI task dependencies
+        run: mise run localci:setup
+
+      - name: Build docs
+        env:
+          LOCALCI_CACHE_DIR: ${{ runner.temp }}/localci/cache
+          LOCALCI_TASK_CACHE_DIR: ${{ runner.temp }}/localci/task-cache/docs
+          LOCALCI_TASK_OUTPUT_DIR: ${{ runner.temp }}/localci/out/docs
+        run: mise run //docs:localci:build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

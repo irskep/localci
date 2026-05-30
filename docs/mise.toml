@@ -29,5 +29,5 @@ run = [
 description = "Generate CLI reference pages and bundled terminal docs"
 run = [
   "printf 'cwd: %s\\n' \"$(pwd)\"",
-  "go run ../cmd/localci-docs --cli-out src/cli --bundle-out ../internal/docs/generated --source src --filter pandoc/zensical-admonitions.lua",
+  "go run ../cmd/localci-docs --cli-out src/cli --bundle-out ../internal/docs/generated --source src --filter pandoc/zensical-admonitions.lua --changelog-in ../CHANGELOG.md --changelog-out src/changelog.md",
 ]
