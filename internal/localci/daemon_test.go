@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -146,29 +148,24 @@ func TestEnsureHTTPAddressAvailableShutsDownUntrackedDaemon(t *testing.T) {
 		t.Fatalf("Listen returned error: %v", err)
 	}
 
-	server := &http.Server{}
-	server.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var server *httptest.Server
+	server = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/daemon/shutdown" {
 			http.NotFound(w, r)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
 		go func() {
-			_ = server.Close()
+			server.Close()
 		}()
-	})
+	}))
+	server.Listener = listener
+	server.Start()
+	defer server.Close()
 
-	errs := make(chan error, 1)
-	go func() {
-		errs <- server.Serve(listener)
-	}()
-
-	manager := DaemonManager{HTTPAddress: listener.Addr().String()}
+	manager := DaemonManager{HTTPAddress: strings.TrimPrefix(server.URL, "http://")}
 	if err := manager.ensureHTTPAddressAvailable(context.Background()); err != nil {
 		t.Fatalf("ensureHTTPAddressAvailable returned error: %v", err)
-	}
-	if err := <-errs; err != nil && !errors.Is(err, http.ErrServerClosed) {
-		t.Fatalf("Serve returned error: %v", err)
 	}
 }
 

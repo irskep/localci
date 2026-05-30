@@ -334,7 +334,7 @@ func (m DaemonManager) ensureHTTPAddressAvailable(ctx context.Context) error {
 	}
 
 	if shutdownErr := shutdownHTTPDaemon(ctx, "http://"+address); shutdownErr != nil {
-		return fmt.Errorf("daemon HTTP address %s is already in use and did not accept shutdown: %w", address, err)
+		return fmt.Errorf("daemon HTTP address %s is already in use and did not accept shutdown: %w", address, shutdownErr)
 	}
 
 	deadline := time.Now().Add(5 * time.Second)
