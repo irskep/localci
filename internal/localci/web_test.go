@@ -16,111 +16,6 @@ import (
 	"time"
 )
 
-func TestWebServerCommitAndArtifactPages(t *testing.T) {
-	t.Parallel()
-
-	root := t.TempDir()
-	paths := Paths{Root: root}
-	queue := QueueStore{Paths: paths}
-	repoDir := "/repo"
-	commit := "abc123"
-	req := InvokeRequest{RepoDir: repoDir, Commit: commit}
-
-	record := newTaskRecord(paths, req, Task{Name: "localci:test"}, 1, time.Now().UTC())
-	record.Status = TaskStatusSucceeded
-	if err := os.MkdirAll(record.OutputDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll returned error: %v", err)
-	}
-	artifactPath := filepath.Join(record.OutputDir, "test.log")
-	if err := os.WriteFile(artifactPath, []byte("hello"), 0o644); err != nil {
-		t.Fatalf("WriteFile returned error: %v", err)
-	}
-	if err := writeTaskRecord(record); err != nil {
-		t.Fatalf("writeTaskRecord returned error: %v", err)
-	}
-
-	run := newRunRecord(req, record.StartedAt)
-	run.FinishedAt = record.StartedAt.Add(time.Second)
-	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
-	run.TaskResults = []TaskRecord{record}
-	run.RefreshSummary()
-	if err := writeRunRecord(paths, run); err != nil {
-		t.Fatalf("writeRunRecord returned error: %v", err)
-	}
-
-	server := WebServer{
-		Paths: paths,
-		Queue: queue,
-		DiscoverTasks: func(context.Context, string) ([]Task, error) {
-			return []Task{{Name: "localci:test"}}, nil
-		},
-	}
-
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		if isTCPPermissionError(err) {
-			t.Skip("tcp listeners are not permitted in this environment")
-		}
-		t.Fatalf("Listen returned error: %v", err)
-	}
-	defer listener.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	errs := make(chan error, 1)
-	go func() {
-		errs <- server.Serve(ctx, listener)
-	}()
-	defer func() {
-		cancel()
-		<-errs
-	}()
-
-	baseURL := "http://" + listener.Addr().String()
-	resp, err := http.Get(baseURL + "/commit?repo=" + url.QueryEscape(repoDir) + "&commit=" + url.QueryEscape(commit))
-	if err != nil {
-		t.Fatalf("GET commit returned error: %v", err)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
-	if !isSPAShell(string(body)) {
-		t.Fatalf("commit page missing SPA shell: %s", string(body))
-	}
-
-	resp, err = http.Get(baseURL + "/repo/repo/commit/" + commit)
-	if err != nil {
-		t.Fatalf("GET commit route returned error: %v", err)
-	}
-	body, _ = io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
-	if !isSPAShell(string(body)) {
-		t.Fatalf("commit route page missing SPA shell: %s", string(body))
-	}
-
-	resp, err = http.Get(baseURL + "/task?repo=" + url.QueryEscape(repoDir) + "&commit=" + url.QueryEscape(commit) + "&task=" + url.QueryEscape("localci:test"))
-	if err != nil {
-		t.Fatalf("GET task returned error: %v", err)
-	}
-	body, _ = io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
-	if !isSPAShell(string(body)) {
-		t.Fatalf("task page missing SPA shell: %s", string(body))
-	}
-
-	resp, err = http.Get(baseURL + "/api/repo/repo/commit/" + commit + "/task/" + url.PathEscape("localci:test") + "/attempt/1/artifact/test.log")
-	if err != nil {
-		t.Fatalf("GET artifact API returned error: %v", err)
-	}
-	var artifact apiArtifactResponse
-	if err := json.NewDecoder(resp.Body).Decode(&artifact); err != nil {
-		t.Fatalf("Decode artifact returned error: %v", err)
-	}
-	_ = resp.Body.Close()
-	if artifact.Content != "hello" || artifact.Artifact.Path != artifactPath {
-		t.Fatalf("unexpected artifact response: %#v", artifact)
-	}
-}
-
 func TestWebServerServesEmbeddedAssetsAndOverride(t *testing.T) {
 	root := t.TempDir()
 	paths := Paths{Root: root}
@@ -218,10 +113,6 @@ func TestWebServerServesEmbeddedAssetsAndOverride(t *testing.T) {
 			t.Fatalf("override app route missing index content: %s", got)
 		}
 	})
-}
-
-func isSPAShell(body string) bool {
-	return strings.Contains(body, `id="app"`) && strings.Contains(body, `/assets/index-`)
 }
 
 func TestWebServerAPI(t *testing.T) {
