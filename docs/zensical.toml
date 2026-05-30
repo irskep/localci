@@ -13,6 +13,9 @@ nav = [
   "cli/localci.md",
 ]
 
+[project.theme]
+logo = "assets/logo.svg"
+
 [project.theme.icon]
 logo = "lucide/git-commit-horizontal"
 

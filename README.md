@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.svg" alt="LocalCI logo" width="96">
+</p>
+
 # LocalCI
 
 [![CI](https://github.com/irskep/localci/actions/workflows/ci.yml/badge.svg)](https://github.com/irskep/localci/actions/workflows/ci.yml)

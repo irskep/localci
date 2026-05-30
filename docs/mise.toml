@@ -3,11 +3,11 @@
 pandoc = "3.9.0.2"
 
 [tasks.build]
-description = "Build the Zensical documentation"
+description = "Build and validate the Zensical documentation"
 depends = ["//docs:generated-docs"]
 run = [
   "printf 'cwd: %s\\n' \"$(pwd)\"",
-  "zensical build",
+  "zensical build --strict",
 ]
 
 [tasks.serve]
@@ -18,12 +18,8 @@ run = [
 ]
 
 [tasks."localci:build"]
-description = "Build the Zensical documentation"
-depends = ["//docs:generated-docs"]
-run = [
-  "printf 'cwd: %s\\n' \"$(pwd)\"",
-  "zensical build --strict",
-]
+description = "Build and validate the Zensical documentation"
+run = "mise run //docs:build"
 
 [tasks.generated-docs]
 description = "Generate CLI reference pages and bundled terminal docs"
