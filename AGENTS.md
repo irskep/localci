@@ -16,4 +16,4 @@
 - Use `mise run web` to rebuild the web UI, restart the daemon, and open the current repo page.
 - Use `mise run check` for the basic local build/test check.
 
-This project has no users. Migrations are irrelevant. Make sweeping changes with no guilt.
+Although this project has real users, lossy migrations and hard-failing API mismatches are permitted during development. Present migration concerns after making the full change rather than baking in overly defensive programming or old path reads.
