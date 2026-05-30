@@ -13,6 +13,10 @@ one-shot CLI commands, a terminal UI, and a local web UI.
 
 It is meant to sit between Git hooks and remote CI: local like a hook, but async like CI.
 
+![LocalCI terminal dashboard](screenshots/screenshot-terminal.png)
+
+![LocalCI web UI](screenshots/screenshot-web.png)
+
 ## What It Does
 
 - Runs after each commit, so you or your coding agent can keep moving while the
