@@ -331,7 +331,8 @@ func TestWebServerAPI(t *testing.T) {
 	}
 
 	taskPath := url.PathEscape("localci:test")
-	resp, err = http.Get(baseURL + "/api/repo/team/repo/commit/" + commit + "/task/" + taskPath)
+	taskAPIBase := baseURL + "/api/repo/" + repoRoutePath + "/commit/" + commit + "/task/" + taskPath
+	resp, err = http.Get(taskAPIBase)
 	if err != nil {
 		t.Fatalf("GET task api returned error: %v", err)
 	}
@@ -344,7 +345,7 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("unexpected primary log response: %#v", taskResp)
 	}
 
-	resp, err = http.Get(baseURL + "/api/repo/team/repo/commit/" + commit + "/task/" + taskPath + "/attempt/2/artifact")
+	resp, err = http.Get(taskAPIBase + "/attempt/2/artifact")
 	if err != nil {
 		t.Fatalf("GET artifact index returned error: %v", err)
 	}
@@ -357,7 +358,7 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("unexpected artifacts: %#v", artifactList.Artifacts)
 	}
 
-	resp, err = http.Get(baseURL + "/api/repo/team/repo/commit/" + commit + "/task/" + taskPath + "/attempt/2/artifact")
+	resp, err = http.Get(taskAPIBase + "/attempt/2/artifact")
 	if err != nil {
 		t.Fatalf("GET artifact index for raw JSON returned error: %v", err)
 	}
@@ -372,7 +373,7 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("artifact API omitted path: %#v", rawArtifactList.Artifacts[0])
 	}
 
-	resp, err = http.Get(baseURL + "/api/repo/team/repo/commit/" + commit + "/task/" + taskPath + "/attempt/2/artifact/combined.log")
+	resp, err = http.Get(taskAPIBase + "/attempt/2/artifact/combined.log")
 	if err != nil {
 		t.Fatalf("GET artifact returned error: %v", err)
 	}
@@ -385,7 +386,7 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("artifact content = %q, want %q", artifactResp.Content, "hello")
 	}
 
-	reqReveal, err := http.NewRequest(http.MethodPost, baseURL+"/api/repo/team/repo/commit/"+commit+"/task/"+taskPath+"/attempt/2/artifact/combined.log/reveal", nil)
+	reqReveal, err := http.NewRequest(http.MethodPost, taskAPIBase+"/attempt/2/artifact/combined.log/reveal", nil)
 	if err != nil {
 		t.Fatalf("NewRequest reveal returned error: %v", err)
 	}
@@ -402,7 +403,7 @@ func TestWebServerAPI(t *testing.T) {
 		t.Fatalf("reveal response = %#v, revealed %q, want %q", revealResp, revealedPath, artifactPath)
 	}
 
-	reqRetry, err := http.NewRequest(http.MethodPost, baseURL+"/api/repo/team/repo/commit/"+commit+"/task/"+taskPath+"/retry", nil)
+	reqRetry, err := http.NewRequest(http.MethodPost, taskAPIBase+"/retry", nil)
 	if err != nil {
 		t.Fatalf("NewRequest returned error: %v", err)
 	}
@@ -418,11 +419,12 @@ func TestWebServerAPI(t *testing.T) {
 	if !retryResp.Enqueued || retryResp.Attempt != 3 {
 		t.Fatalf("retry response = %#v, want enqueued=true", retryResp)
 	}
-	if retryResp.URL != "/repo/team/repo/commit/abc123/task/localci:test/attempt/3" {
+	expectedRetryURL := "/repo/" + repoRoutePath + "/commit/abc123/task/localci:test/attempt/3"
+	if retryResp.URL != expectedRetryURL {
 		t.Fatalf("retry URL = %q, want attempt route", retryResp.URL)
 	}
 
-	reqCancel, err := http.NewRequest(http.MethodPost, baseURL+"/api/repo/team/repo/commit/"+commit+"/task/"+taskPath+"/cancel", nil)
+	reqCancel, err := http.NewRequest(http.MethodPost, taskAPIBase+"/cancel", nil)
 	if err != nil {
 		t.Fatalf("NewRequest cancel returned error: %v", err)
 	}
