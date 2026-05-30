@@ -1,6 +1,10 @@
 # Changelog
 
 
+## 0.2.3 - 2026-05-30
+
+- Fix the terminal dashboard failing to load when API responses include pagination fields.
+
 ## 0.2.2 - 2026-05-29
 
 - Add changelog to the documentation and make docs deployment manually runnable.

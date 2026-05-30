@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -74,6 +76,32 @@ func TestTUIRenderHomeIncludesQueueAndRuns(t *testing.T) {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered home missing %q:\n%s", want, rendered)
 		}
+	}
+}
+
+func TestTUIResponsesAcceptPaginationFields(t *testing.T) {
+	t.Parallel()
+
+	decodeStrict := func(data string, out any) error {
+		dec := json.NewDecoder(bytes.NewReader([]byte(data)))
+		dec.DisallowUnknownFields()
+		return dec.Decode(out)
+	}
+
+	var home tuiHomeResponse
+	if err := decodeStrict(`{"repos":[],"recent_commits":[],"queue":{"pending":[]},"next_before":"older","newer_before":"newer"}`, &home); err != nil {
+		t.Fatalf("decode home response: %v", err)
+	}
+	if home.NextBefore != "older" || home.NewerBefore != "newer" {
+		t.Fatalf("home pagination fields = %q, %q; want older, newer", home.NextBefore, home.NewerBefore)
+	}
+
+	var repo tuiRepoResponse
+	if err := decodeStrict(`{"repo":{"repo_dir":"/repo","repo_path":"repo","repo_label":"repo"},"commits":[],"next_before":"older","newer_before":"newer"}`, &repo); err != nil {
+		t.Fatalf("decode repo response: %v", err)
+	}
+	if repo.NextBefore != "older" || repo.NewerBefore != "newer" {
+		t.Fatalf("repo pagination fields = %q, %q; want older, newer", repo.NextBefore, repo.NewerBefore)
 	}
 }
 

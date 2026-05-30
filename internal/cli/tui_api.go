@@ -44,11 +44,15 @@ type tuiHomeResponse struct {
 	Repos         []tuiRepoSummary   `json:"repos"`
 	RecentCommits []tuiCommitSummary `json:"recent_commits"`
 	Queue         tuiQueueResponse   `json:"queue"`
+	NextBefore    string             `json:"next_before,omitempty"`
+	NewerBefore   string             `json:"newer_before,omitempty"`
 }
 
 type tuiRepoResponse struct {
-	Repo    tuiRepoSummary     `json:"repo"`
-	Commits []tuiCommitSummary `json:"commits"`
+	Repo        tuiRepoSummary     `json:"repo"`
+	Commits     []tuiCommitSummary `json:"commits"`
+	NextBefore  string             `json:"next_before,omitempty"`
+	NewerBefore string             `json:"newer_before,omitempty"`
 }
 
 type tuiCommitSummary struct {
