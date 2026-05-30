@@ -339,7 +339,7 @@ onUnmounted(() => store.unsubscribeTask())
   margin: 0;
   padding: var(--app-space-5);
   border-top: 1px solid var(--p-content-border-color);
-  background: var(--p-surface-0);
+  background: var(--p-content-background);
   color: var(--p-text-color);
   font-size: var(--app-log-font-size);
   line-height: var(--app-log-line-height);

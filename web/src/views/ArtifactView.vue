@@ -139,7 +139,7 @@ onUnmounted(() => store.unsubscribeArtifact())
   border: 1px solid var(--p-content-border-color);
   border-bottom: 0;
   border-radius: var(--p-content-border-radius) var(--p-content-border-radius) 0 0;
-  background: var(--p-surface-0);
+  background: var(--p-content-background);
   color: var(--p-text-color);
   font-size: var(--app-log-font-size);
   line-height: var(--app-log-line-height);
@@ -154,7 +154,7 @@ onUnmounted(() => store.unsubscribeArtifact())
   padding: var(--app-space-5);
   border: 1px solid var(--p-content-border-color);
   border-radius: var(--p-content-border-radius);
-  background: var(--p-surface-0);
+  background: var(--p-content-background);
 }
 
 .artifact-fallback p {

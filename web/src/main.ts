@@ -44,7 +44,7 @@ app.use(PrimeVue, {
   theme: {
     preset: LocalciTheme,
     options: {
-      darkModeSelector: false,
+      darkModeSelector: 'system',
     },
   },
 })

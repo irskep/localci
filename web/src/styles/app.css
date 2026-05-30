@@ -13,12 +13,20 @@
   --app-item-padding: var(--p-list-option-padding);
   --app-log-font-size: var(--p-form-field-sm-font-size);
   --app-log-line-height: 1.45;
+  --app-page-background: var(--p-surface-50);
 
+  color-scheme: light dark;
   color: var(--p-text-color);
-  background: var(--p-surface-50);
+  background: var(--app-page-background);
   font-family: var(--app-font-family);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-page-background: var(--p-form-field-background);
+  }
 }
 
 * {
@@ -30,7 +38,7 @@ body {
   height: 100vh;
   margin: 0;
   overflow: hidden;
-  background: var(--p-surface-50);
+  background: var(--app-page-background);
 }
 
 #app {

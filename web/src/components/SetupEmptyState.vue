@@ -81,7 +81,7 @@ pre {
   padding: var(--app-space-4);
   border: 1px solid var(--p-content-border-color);
   border-radius: var(--p-content-border-radius);
-  background: var(--p-surface-0);
+  background: var(--p-content-background);
   overflow: auto;
 }
 
@@ -103,7 +103,7 @@ pre {
   border: 1px solid var(--p-content-border-color);
   border-bottom: 0;
   border-radius: var(--p-content-border-radius) var(--p-content-border-radius) 0 0;
-  background: var(--p-surface-0);
+  background: var(--p-content-background);
   color: var(--p-text-muted-color);
   font-family: var(--app-font-family-mono);
   font-size: var(--app-log-font-size);
