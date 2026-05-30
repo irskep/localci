@@ -2,7 +2,7 @@
 
 <!-- loosely based on https://keepachangelog.com/en/1.0.0/ -->
 
-## 0.2.2 - Unreleased
+## 0.2.2 - 2026-05-29
 
 - Add changelog to the documentation and make docs deployment manually runnable.
 - Add system-aware dark mode to the web UI.
