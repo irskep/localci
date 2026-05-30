@@ -21,7 +21,6 @@ You can also have it run all tests on your working directory without cloning, as
 ```
 > git commit -am "README overhaul"
 [//:postcommit] $ ~/<redacted>/localci/mise-tasks/postcommit --repo /<redacted>/localci
-cwd: /<redacted>/localci
 Enqueued 1 task for /<redacted>/localci at 2b7535ffc423923a4c7cd2e27ee1e1d39ddb6575
 Status: localci status --repo /<redacted>/localci --commit 2b7535ffc423923a4c7cd2e27ee1e1d39ddb6575
 Results: http://127.0.0.1:61924/repo/<redacted>/localci/commit/2b7535ffc423923a4c7cd2e27ee1e1d39ddb6575
