@@ -8,6 +8,7 @@ import RunLink from '@/components/RunLink.vue'
 import RunList from '@/components/RunList.vue'
 import SetupEmptyState from '@/components/SetupEmptyState.vue'
 import WebsocketStatus from '@/components/WebsocketStatus.vue'
+import { shortCommit } from '@/lib/api'
 import { taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
@@ -109,21 +110,29 @@ async function loadCurrentPage(): Promise<void> {
           </PPanel>
 
           <PPanel header="Queue">
-            <template #icons>
-              <RouterLink to="/queue">See more</RouterLink>
-            </template>
-            <ul v-if="queueRows.length > 0" class="artifact-list">
+            <ul v-if="queueRows.length > 0" class="queue-list">
               <li
                 v-for="entry in queueRows.slice(0, 6)"
                 :key="`${entry.repo.repo_path}:${entry.commit}:${entry.task}`"
+                class="queue-entry"
               >
                 <i class="pi pi-clock run-task-icon run-task-icon-queued" aria-hidden="true"></i>
-                <span class="inline-link-list">
-                  <RepoLink :repo-path="entry.repo.repo_path" :repo-label="entry.repo.repo_label" />
-                  <RouterLink :to="taskURL(entry.repo.repo_path, entry.commit, entry.task)">
+                <div class="queue-entry-body">
+                  <RouterLink
+                    class="queue-task"
+                    :to="taskURL(entry.repo.repo_path, entry.commit, entry.task)"
+                  >
                     {{ entry.task }}
                   </RouterLink>
-                </span>
+                  <div class="queue-meta">
+                    <RepoLink
+                      :repo-path="entry.repo.repo_path"
+                      :repo-label="entry.repo.repo_label"
+                    />
+                    <span>{{ shortCommit(entry.commit) }}</span>
+                    <span v-if="entry.attempt > 0">attempt {{ entry.attempt }}</span>
+                  </div>
+                </div>
               </li>
             </ul>
             <div v-else class="empty-state">Queue is idle.</div>
@@ -176,6 +185,49 @@ async function loadCurrentPage(): Promise<void> {
   min-width: 0;
   padding: var(--app-space-3) 0;
   overflow-wrap: anywhere;
+}
+
+.queue-list {
+  display: grid;
+  gap: var(--app-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queue-entry {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--app-space-3);
+  min-width: 0;
+}
+
+.queue-entry > .run-task-icon {
+  margin-top: 0.2em;
+}
+
+.queue-entry-body {
+  display: grid;
+  gap: var(--app-space-1);
+  min-width: 0;
+}
+
+.queue-task {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--app-space-2);
+  min-width: 0;
+  color: var(--p-text-muted-color);
+  font-size: var(--p-form-field-sm-font-size);
 }
 
 .active-panel-content {

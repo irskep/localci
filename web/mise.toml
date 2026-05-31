@@ -7,9 +7,12 @@ run = [
 
 [tasks."localci:build"]
 description = "Build the Vue UI"
+usage = '''
+arg "<output-dir>" env="LOCALCI_TASK_OUTPUT_DIR" help="LocalCI task output directory"
+'''
 run = [
   "printf 'cwd: %s\\n' \"$(pwd)\"",
-  "pnpm exec vite build --outDir \"$LOCALCI_TASK_OUTPUT_DIR/dist\"",
+  "pnpm exec vite build --outDir \"${usage_output_dir:?}/dist\"",
 ]
 
 [tasks."localci:fmt"]
