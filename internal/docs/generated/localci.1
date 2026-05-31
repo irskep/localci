@@ -481,6 +481,11 @@ T}@T{
 Directory for artifacts from this task attempt.
 T}
 T{
+\f[CR]LOCALCI_TASK_ARTIFACTS_FILE\f[R]
+T}@T{
+JSON manifest path for named artifact actions from this task attempt.
+T}
+T{
 \f[CR]LOCALCI_TASK_CACHE_DIR\f[R]
 T}@T{
 Cache directory for this task.
@@ -515,6 +520,29 @@ File: \f[CR]mise\-tasks/localci/test\-with\-coverage\f[R]
 mkdir \-p \(dq$LOCALCI_TASK_OUTPUT_DIR/coverage\(dq
 pytest \-\-cov \-\-cov\-report=html:\(dq$LOCALCI_TASK_OUTPUT_DIR/coverage\(dq
 .EE
+.PP
+If a task has an output people should open from higher\-level views,
+write a manifest to \f[CR]LOCALCI_TASK_ARTIFACTS_FILE\f[R].
+Manifest paths are relative to \f[CR]LOCALCI_TASK_OUTPUT_DIR\f[R], and
+marked artifacts sort before ordinary artifacts:
+.PP
+File: \f[CR]mise\-tasks/localci/docs\f[R]
+.IP
+.EX
+mkdir \-p \(dq$LOCALCI_TASK_OUTPUT_DIR/site\(dq
+cp \-R site/. \(dq$LOCALCI_TASK_OUTPUT_DIR/site/\(dq
+cat >\(dq$LOCALCI_TASK_ARTIFACTS_FILE\(dq <<\(aqJSON\(aq
+{
+  \(dqversion\(dq: 1,
+  \(dqartifacts\(dq: [
+    {\(dqname\(dq: \(dqdocs html\(dq, \(dqpath\(dq: \(dqsite/index.html\(dq, \(dqaction\(dq: \(dqopen\(dq}
+  ]
+}
+JSON
+.EE
+.PP
+Valid actions are \f[CR]open\f[R], \f[CR]download\f[R],
+\f[CR]reveal\f[R], and \f[CR]view\f[R].
 .PP
 Here\(oqs how you might configure a browser testing tool like Playwright
 to put its filesystem output in the right place:

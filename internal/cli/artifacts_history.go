@@ -15,6 +15,8 @@ type cliArtifactRow struct {
 	Status    localci.ExecutionStatus `json:"status"`
 	Attempt   int                     `json:"attempt"`
 	Artifact  string                  `json:"artifact"`
+	Label     string                  `json:"label,omitempty"`
+	Action    localci.ArtifactAction  `json:"action,omitempty"`
 	Path      string                  `json:"path"`
 	Primary   bool                    `json:"primary"`
 }
@@ -86,6 +88,8 @@ func artifactRows(paths localci.Paths, repo string, commit string, tasks []local
 				Status:    task.Status,
 				Attempt:   task.Attempt,
 				Artifact:  artifact.DisplayName,
+				Label:     artifact.MarkedName,
+				Action:    artifact.Action,
 				Path:      artifact.Path,
 				Primary:   hasPrimary && artifact.DisplayName == primaryArtifact.DisplayName,
 			})
@@ -105,8 +109,8 @@ func printArtifactsOutput(w io.Writer, output cliArtifactsOutput) {
 		return
 	}
 	fmt.Fprintln(w)
-	headers := []string{"status", "task", "attempt", "artifact", "path"}
-	widths := []int{len(headers[0]), len(headers[1]), len(headers[2]), len(headers[3]), len(headers[4])}
+	headers := []string{"status", "task", "attempt", "artifact", "action", "path"}
+	widths := []int{len(headers[0]), len(headers[1]), len(headers[2]), len(headers[3]), len(headers[4]), len(headers[5])}
 	for _, row := range output.Artifacts {
 		values := artifactRowValues(row)
 		for i, value := range values {
@@ -138,9 +142,17 @@ func artifactRowValues(row cliArtifactRow) []string {
 		statusLabel(row.Status),
 		row.ShortTask,
 		fmt.Sprintf("%d", row.Attempt),
-		row.Artifact,
+		artifactLabel(row),
+		string(row.Action),
 		row.Path,
 	}
+}
+
+func artifactLabel(row cliArtifactRow) string {
+	if row.Label != "" {
+		return row.Label + " (" + row.Artifact + ")"
+	}
+	return row.Artifact
 }
 
 type cliHistoryRow struct {

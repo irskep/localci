@@ -29,10 +29,11 @@ func (r tuiRepoSummary) DisplayLabel() string {
 }
 
 type tuiQueueEntry struct {
-	Repo    tuiRepoSummary `json:"repo"`
-	Commit  string         `json:"commit"`
-	Task    string         `json:"task"`
-	Attempt int            `json:"attempt"`
+	Repo      tuiRepoSummary         `json:"repo"`
+	Commit    string                 `json:"commit"`
+	Task      string                 `json:"task"`
+	Attempt   int                    `json:"attempt"`
+	Artifacts []localci.ArtifactView `json:"artifacts,omitempty"`
 }
 
 type tuiQueueResponse struct {
@@ -85,6 +86,7 @@ type tuiTaskSummary struct {
 	Status               localci.ExecutionStatus `json:"status"`
 	DurationMilliseconds int64                   `json:"duration_ms"`
 	Failure              string                  `json:"failure"`
+	Artifacts            []localci.ArtifactView  `json:"artifacts,omitempty"`
 }
 
 type tuiCommitResponse struct {

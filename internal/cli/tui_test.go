@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -201,6 +202,47 @@ func TestTUIArtifactTabsUseBoundedWindow(t *testing.T) {
 	}
 	if start > 16 || end <= 16 {
 		t.Fatalf("range = [%d, %d), want cursor 16 visible", start, end)
+	}
+}
+
+func TestTUICommitTaskArtifactSummaryIsBounded(t *testing.T) {
+	t.Parallel()
+
+	artifacts := []localci.ArtifactView{{
+		DisplayName: "site/index.html",
+		MarkedName:  "docs html",
+		Action:      localci.ArtifactActionOpen,
+	}}
+	for i := range 20 {
+		artifacts = append(artifacts, localci.ArtifactView{
+			DisplayName: fmt.Sprintf("site/page-%02d/index.html", i),
+		})
+	}
+
+	rows := commitTaskArtifactSummary(artifacts, 6, 80)
+	rendered := strings.Join(rows, "\n")
+	for _, want := range []string{"artifacts: 21", "docs html -> site/index.html (open)", "more (press a)"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("artifact summary missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "site/page-19/index.html") {
+		t.Fatalf("artifact summary should not dump every artifact:\n%s", rendered)
+	}
+}
+
+func TestTUICommitTaskArtifactSummaryTruncatesWidePaths(t *testing.T) {
+	t.Parallel()
+
+	rows := commitTaskArtifactSummary([]localci.ArtifactView{{
+		DisplayName: "site/cli/localci_completion_powershell/index.html",
+	}}, 4, 24)
+
+	if len(rows) < 3 {
+		t.Fatalf("rows = %#v, want artifact row", rows)
+	}
+	if got := lipgloss.Width(rows[2]); got > 24 {
+		t.Fatalf("artifact row width = %d, want <= 24: %q", got, rows[2])
 	}
 }
 

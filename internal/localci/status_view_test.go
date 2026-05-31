@@ -153,3 +153,38 @@ func TestReadTextTaskArtifactAllowsLogs(t *testing.T) {
 		t.Fatalf("content = %q, want hello newline", data)
 	}
 }
+
+func TestBuildArtifactViewsSortsMarkedArtifactsFirst(t *testing.T) {
+	t.Parallel()
+
+	outputDir := t.TempDir()
+	for _, name := range []string{"combined.log", "site/index.html", "report.txt"} {
+		path := filepath.Join(outputDir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("MkdirAll returned error: %v", err)
+		}
+		if err := os.WriteFile(path, []byte("ok"), 0o644); err != nil {
+			t.Fatalf("WriteFile returned error: %v", err)
+		}
+	}
+	files, err := listOutputFiles(outputDir)
+	if err != nil {
+		t.Fatalf("listOutputFiles returned error: %v", err)
+	}
+
+	artifacts := buildArtifactViews(outputDir, files, []MarkedArtifact{{
+		Name:   "docs html",
+		Path:   "site/index.html",
+		Action: ArtifactActionOpen,
+	}})
+
+	if len(artifacts) < 2 {
+		t.Fatalf("artifacts = %#v, want multiple artifacts", artifacts)
+	}
+	if artifacts[0].DisplayName != "site/index.html" {
+		t.Fatalf("first artifact = %q, want marked artifact", artifacts[0].DisplayName)
+	}
+	if artifacts[0].MarkedName != "docs html" || artifacts[0].Action != ArtifactActionOpen {
+		t.Fatalf("first artifact metadata = %#v, want marked open docs html", artifacts[0])
+	}
+}

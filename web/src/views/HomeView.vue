@@ -3,6 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import TopBar from '@/components/TopBar.vue'
+import MarkedArtifactLinks from '@/components/MarkedArtifactLinks.vue'
 import RepoLink from '@/components/RepoLink.vue'
 import RunList from '@/components/RunList.vue'
 import SetupEmptyState from '@/components/SetupEmptyState.vue'
@@ -139,6 +140,15 @@ async function loadCurrentPage(): Promise<void> {
                       <span>{{ shortCommit(entry.commit) }}</span>
                       <span v-if="entry.attempt > 1">attempt {{ entry.attempt }}</span>
                     </div>
+                    <div v-if="entry.artifacts?.length" class="queue-artifacts">
+                      <MarkedArtifactLinks
+                        :artifacts="entry.artifacts"
+                        :repo-path="entry.repo.repo_path"
+                        :commit="entry.commit"
+                        :task-name="entry.task"
+                        :attempt="entry.attempt"
+                      />
+                    </div>
                   </div>
                 </li>
               </TransitionGroup>
@@ -208,6 +218,14 @@ async function loadCurrentPage(): Promise<void> {
   min-width: 0;
   color: var(--p-text-muted-color);
   font-size: var(--p-form-field-sm-font-size);
+}
+
+.queue-artifacts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--app-space-2);
+  min-width: 0;
 }
 
 .queue-panel-content {

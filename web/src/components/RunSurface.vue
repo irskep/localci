@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import CommitSubject from '@/components/CommitSubject.vue'
+import MarkedArtifactLinks from '@/components/MarkedArtifactLinks.vue'
 import RepoLink from '@/components/RepoLink.vue'
 import RunLink from '@/components/RunLink.vue'
 import {
@@ -447,6 +448,13 @@ function taskAttemptLabel(task: TaskSummary): string {
                     {{ taskAttemptLabel(item.task) }}</span
                   >
                 </RouterLink>
+                <MarkedArtifactLinks
+                  :artifacts="item.task.artifacts ?? []"
+                  :repo-path="repoPath"
+                  :commit="run.commit"
+                  :task-name="item.task.name"
+                  :attempt="item.task.attempt"
+                />
               </template>
               <span v-if="issueTaskMoreCount(packageGroup) > 0">
                 , +{{ issueTaskMoreCount(packageGroup) }} more</span
@@ -493,17 +501,22 @@ function taskAttemptLabel(task: TaskSummary): string {
               >
                 <PTag :severity="taskGroupSeverity(group)" :value="group.label" />
                 <span class="run-task-list">
-                  <RouterLink
-                    v-for="item in group.tasks"
-                    :key="item.task.name"
-                    :to="taskURL(repoPath, run.commit, item.task.name)"
-                  >
-                    <i :class="taskGroupIcon(group)" aria-hidden="true"></i>
-                    {{ item.label
-                    }}<span v-if="taskAttemptLabel(item.task)" class="run-task-attempt">
-                      {{ taskAttemptLabel(item.task) }}</span
-                    >
-                  </RouterLink>
+                  <template v-for="item in group.tasks" :key="item.task.name">
+                    <RouterLink :to="taskURL(repoPath, run.commit, item.task.name)">
+                      <i :class="taskGroupIcon(group)" aria-hidden="true"></i>
+                      {{ item.label
+                      }}<span v-if="taskAttemptLabel(item.task)" class="run-task-attempt">
+                        {{ taskAttemptLabel(item.task) }}</span
+                      >
+                    </RouterLink>
+                    <MarkedArtifactLinks
+                      :artifacts="item.task.artifacts ?? []"
+                      :repo-path="repoPath"
+                      :commit="run.commit"
+                      :task-name="item.task.name"
+                      :attempt="item.task.attempt"
+                    />
+                  </template>
                 </span>
               </div>
             </div>
@@ -525,6 +538,13 @@ function taskAttemptLabel(task: TaskSummary): string {
                     {{ taskAttemptLabel(item.task) }}</span
                   >
                 </RouterLink>
+                <MarkedArtifactLinks
+                  :artifacts="item.task.artifacts ?? []"
+                  :repo-path="repoPath"
+                  :commit="run.commit"
+                  :task-name="item.task.name"
+                  :attempt="item.task.attempt"
+                />
               </template>
             </span>
           </div>
@@ -575,17 +595,22 @@ function taskAttemptLabel(task: TaskSummary): string {
             >
               <PTag :severity="taskGroupSeverity(group)" :value="group.label" />
               <span class="run-task-list">
-                <RouterLink
-                  v-for="item in group.tasks"
-                  :key="item.task.name"
-                  :to="taskURL(repoPath, run.commit, item.task.name)"
-                >
-                  <i :class="taskGroupIcon(group)" aria-hidden="true"></i>
-                  {{ item.label
-                  }}<span v-if="taskAttemptLabel(item.task)" class="run-task-attempt">
-                    {{ taskAttemptLabel(item.task) }}</span
-                  >
-                </RouterLink>
+                <template v-for="item in group.tasks" :key="item.task.name">
+                  <RouterLink :to="taskURL(repoPath, run.commit, item.task.name)">
+                    <i :class="taskGroupIcon(group)" aria-hidden="true"></i>
+                    {{ item.label
+                    }}<span v-if="taskAttemptLabel(item.task)" class="run-task-attempt">
+                      {{ taskAttemptLabel(item.task) }}</span
+                    >
+                  </RouterLink>
+                  <MarkedArtifactLinks
+                    :artifacts="item.task.artifacts ?? []"
+                    :repo-path="repoPath"
+                    :commit="run.commit"
+                    :task-name="item.task.name"
+                    :attempt="item.task.attempt"
+                  />
+                </template>
               </span>
             </div>
           </div>
@@ -604,6 +629,13 @@ function taskAttemptLabel(task: TaskSummary): string {
                   {{ taskAttemptLabel(item.task) }}</span
                 >
               </RouterLink>
+              <MarkedArtifactLinks
+                :artifacts="item.task.artifacts ?? []"
+                :repo-path="repoPath"
+                :commit="run.commit"
+                :task-name="item.task.name"
+                :attempt="item.task.attempt"
+              />
             </template>
           </span>
         </div>
@@ -620,17 +652,22 @@ function taskAttemptLabel(task: TaskSummary): string {
           :value="group.label"
         />
         <span class="run-task-list">
-          <RouterLink
-            v-for="task in group.tasks"
-            :key="task.name"
-            :to="taskURL(repoPath, run.commit, task.name)"
-          >
-            <i :class="taskStatusIcon(task)" aria-hidden="true"></i>
-            {{ task.short_name
-            }}<span v-if="taskAttemptLabel(task)" class="run-task-attempt">
-              {{ taskAttemptLabel(task) }}</span
-            >
-          </RouterLink>
+          <template v-for="task in group.tasks" :key="task.name">
+            <RouterLink :to="taskURL(repoPath, run.commit, task.name)">
+              <i :class="taskStatusIcon(task)" aria-hidden="true"></i>
+              {{ task.short_name
+              }}<span v-if="taskAttemptLabel(task)" class="run-task-attempt">
+                {{ taskAttemptLabel(task) }}</span
+              >
+            </RouterLink>
+            <MarkedArtifactLinks
+              :artifacts="task.artifacts ?? []"
+              :repo-path="repoPath"
+              :commit="run.commit"
+              :task-name="task.name"
+              :attempt="task.attempt"
+            />
+          </template>
         </span>
       </div>
     </div>

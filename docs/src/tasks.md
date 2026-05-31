@@ -116,6 +116,7 @@ Every task receives these environment variables:
 | Variable | Meaning |
 | --- | --- |
 | `LOCALCI_TASK_OUTPUT_DIR` | Directory for artifacts from this task attempt. |
+| `LOCALCI_TASK_ARTIFACTS_FILE` | JSON manifest path for named artifact actions from this task attempt. |
 | `LOCALCI_TASK_CACHE_DIR` | Cache directory for this task. |
 | `LOCALCI_CACHE_DIR` | Cache directory shared by LocalCI tasks. |
 
@@ -135,6 +136,23 @@ For tasks with multiple outputs, write them under `LOCALCI_TASK_OUTPUT_DIR`:
 mkdir -p "$LOCALCI_TASK_OUTPUT_DIR/coverage"
 pytest --cov --cov-report=html:"$LOCALCI_TASK_OUTPUT_DIR/coverage"
 ```
+
+If a task has an output people should open from higher-level views, write a manifest to `LOCALCI_TASK_ARTIFACTS_FILE`. Manifest paths are relative to `LOCALCI_TASK_OUTPUT_DIR`, and marked artifacts sort before ordinary artifacts:
+
+```sh title="mise-tasks/localci/docs"
+mkdir -p "$LOCALCI_TASK_OUTPUT_DIR/site"
+cp -R site/. "$LOCALCI_TASK_OUTPUT_DIR/site/"
+cat >"$LOCALCI_TASK_ARTIFACTS_FILE" <<'JSON'
+{
+  "version": 1,
+  "artifacts": [
+    {"name": "docs html", "path": "site/index.html", "action": "open"}
+  ]
+}
+JSON
+```
+
+Valid actions are `open`, `download`, `reveal`, and `view`.
 
 Here‘s how you might configure a browser testing tool like Playwright to put its filesystem output in the right place:
 

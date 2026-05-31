@@ -6,6 +6,7 @@
 
 - Add a web task history page for reviewing one task across commits.
 - Add task history to `localci history --task` and the terminal dashboard.
+- Add task-declared artifact links so important outputs can surface directly in run lists, queue rows, task pages, CLI output, and the terminal dashboard.
 - Simplify the web home page by merging active work into the queue panel and moving repo navigation into the top bar.
 - Improve web navigation with visible breadcrumb links and consistent top bar link styling.
 - Fix web UI retries so newly queued attempts open immediately instead of briefly showing a daemon reconnecting state.

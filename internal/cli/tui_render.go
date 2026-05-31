@@ -326,10 +326,7 @@ func (m tuiModel) renderCommit(theme tuiTheme, height int) string {
 			right = append(right, "failure: "+selected.Failure)
 		}
 		if len(selected.Artifacts) > 0 {
-			right = append(right, "", "artifacts:")
-			for _, artifact := range selected.Artifacts {
-				right = append(right, "  "+artifact.DisplayName)
-			}
+			right = append(right, commitTaskArtifactSummary(selected.Artifacts, max(1, height-len(right)-3), rightWidth)...)
 		}
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top,
@@ -337,6 +334,33 @@ func (m tuiModel) renderCommit(theme tuiTheme, height int) string {
 		" ",
 		lipgloss.NewStyle().Width(rightWidth).Height(height).Render(strings.Join(right, "\n")),
 	)
+}
+
+func commitTaskArtifactSummary(artifacts []localci.ArtifactView, availableRows int, width int) []string {
+	if len(artifacts) == 0 || availableRows <= 0 {
+		return nil
+	}
+	rows := []string{"", fmt.Sprintf("artifacts: %d", len(artifacts))}
+	maxArtifactRows := max(1, availableRows-2)
+	visible := min(len(artifacts), maxArtifactRows)
+	for _, artifact := range artifacts[:visible] {
+		rows = append(rows, truncate("  "+artifactSummaryLabel(artifact), width))
+	}
+	if remaining := len(artifacts) - visible; remaining > 0 {
+		rows = append(rows, truncate(fmt.Sprintf("  … %d more (press a)", remaining), width))
+	}
+	return rows
+}
+
+func artifactSummaryLabel(artifact localci.ArtifactView) string {
+	if artifact.MarkedName == "" {
+		return artifact.DisplayName
+	}
+	label := artifact.MarkedName + " -> " + artifact.DisplayName
+	if artifact.Action != "" {
+		label += " (" + string(artifact.Action) + ")"
+	}
+	return label
 }
 
 func (m tuiModel) renderTask(theme tuiTheme, height int) string {

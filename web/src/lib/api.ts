@@ -9,6 +9,7 @@ export type QueueEntry = {
   commit: string
   task: string
   attempt: number
+  artifacts?: ArtifactView[]
 }
 
 export type QueueResponse = {
@@ -40,6 +41,7 @@ export type TaskSummary = {
   status: string
   duration_ms: number
   failure: string
+  artifacts?: ArtifactView[]
 }
 
 export type RepoResponse = {
@@ -141,7 +143,14 @@ export type TaskStatusView = {
   failure: string
   duration_ms: number
   artifacts: ArtifactView[]
+  marked_artifacts?: MarkedArtifact[]
   attempts: TaskAttemptView[]
+}
+
+export type MarkedArtifact = {
+  name: string
+  path: string
+  action: string
 }
 
 export type TaskAttemptView = {
@@ -154,6 +163,8 @@ export type TaskAttemptView = {
 export type ArtifactView = {
   display_name: string
   path: string
+  marked_name?: string
+  action?: string
   is_text?: boolean
   raw_url?: string
   download_url?: string
@@ -342,6 +353,10 @@ function parseQueueEntry(value: unknown): QueueEntry {
     commit: asString(data.commit, 'queue.commit'),
     task: asString(data.task, 'queue.task'),
     attempt: asNumber(data.attempt, 'queue.attempt'),
+    artifacts:
+      data.artifacts === undefined
+        ? undefined
+        : asArray(data.artifacts, 'queue.artifacts').map(parseArtifactView),
   }
 }
 
@@ -376,6 +391,10 @@ function parseTaskSummary(value: unknown): TaskSummary {
     status: asString(data.status, 'task.status'),
     duration_ms: asNumber(data.duration_ms, 'task.duration_ms'),
     failure: asString(data.failure, 'task.failure'),
+    artifacts:
+      data.artifacts === undefined
+        ? undefined
+        : asArray(data.artifacts, 'task.artifacts').map(parseArtifactView),
   }
 }
 
@@ -400,7 +419,20 @@ function parseTaskStatusView(value: unknown): TaskStatusView {
     failure: asString(data.failure, 'task_status.failure'),
     duration_ms: asNumber(data.duration_ms, 'task_status.duration_ms'),
     artifacts: asArray(data.artifacts, 'task_status.artifacts').map(parseArtifactView),
+    marked_artifacts:
+      data.marked_artifacts === undefined
+        ? undefined
+        : asArray(data.marked_artifacts, 'task_status.marked_artifacts').map(parseMarkedArtifact),
     attempts: asArray(data.attempts, 'task_status.attempts').map(parseTaskAttemptView),
+  }
+}
+
+function parseMarkedArtifact(value: unknown): MarkedArtifact {
+  const data = asObject(value, 'marked artifact')
+  return {
+    name: asString(data.name, 'marked_artifact.name'),
+    path: asString(data.path, 'marked_artifact.path'),
+    action: asString(data.action, 'marked_artifact.action'),
   }
 }
 
@@ -419,6 +451,8 @@ function parseArtifactView(value: unknown): ArtifactView {
   return {
     display_name: asString(data.display_name, 'artifact.display_name'),
     path: asString(data.path, 'artifact.path'),
+    marked_name: optionalString(data.marked_name, 'artifact.marked_name'),
+    action: optionalString(data.action, 'artifact.action'),
     is_text: optionalBoolean(data.is_text, 'artifact.is_text'),
     raw_url: optionalString(data.raw_url, 'artifact.raw_url'),
     download_url: optionalString(data.download_url, 'artifact.download_url'),

@@ -232,6 +232,21 @@ func (s WebServer) enrichTaskArtifacts(repoDir string, commit string, task TaskS
 	return task
 }
 
+func (s WebServer) enrichMarkedArtifacts(repoDir string, commit string, task TaskStatusView) []ArtifactView {
+	task = s.enrichTaskArtifacts(repoDir, commit, task)
+	return markedArtifactViews(task)
+}
+
+func markedArtifactViews(task TaskStatusView) []ArtifactView {
+	artifacts := []ArtifactView{}
+	for _, artifact := range task.Artifacts {
+		if artifact.MarkedName != "" {
+			artifacts = append(artifacts, artifact)
+		}
+	}
+	return artifacts
+}
+
 func (s WebServer) enrichArtifact(repoDir string, commit string, task TaskStatusView, artifact ArtifactView) ArtifactView {
 	_, textErr := readTextTaskArtifact(task, artifact.DisplayName)
 	artifact.IsText = textErr == nil

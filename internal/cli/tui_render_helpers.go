@@ -103,7 +103,11 @@ func renderQueueLine(entry tuiQueueEntry, compact bool) string {
 	if compact {
 		return fmt.Sprintf("%s %s", entry.Repo.DisplayLabel(), task)
 	}
-	return fmt.Sprintf("%s  %s  %s  attempt %d", entry.Repo.DisplayLabel(), shortCommit(entry.Commit), task, entry.Attempt)
+	line := fmt.Sprintf("%s  %s  %s  attempt %d", entry.Repo.DisplayLabel(), shortCommit(entry.Commit), task, entry.Attempt)
+	if marked := markedArtifactLabels(entry.Artifacts); marked != "" {
+		line += "  " + marked
+	}
+	return line
 }
 
 func taskSummaryLine(name string, shortName string, status localci.ExecutionStatus, attempt int, attemptCount int, duration int64, failure string) string {
@@ -122,6 +126,24 @@ func taskSummaryLine(name string, shortName string, status localci.ExecutionStat
 		parts = append(parts, failure)
 	}
 	return strings.Join(parts, "  ")
+}
+
+func markedArtifactLabels(artifacts []localci.ArtifactView) string {
+	labels := []string{}
+	for _, artifact := range artifacts {
+		if artifact.MarkedName == "" {
+			continue
+		}
+		label := artifact.MarkedName
+		if artifact.Action != "" {
+			label += ":" + string(artifact.Action)
+		}
+		labels = append(labels, label)
+	}
+	if len(labels) == 0 {
+		return ""
+	}
+	return "[" + strings.Join(labels, ", ") + "]"
 }
 
 func statusMark(status localci.ExecutionStatus) string {

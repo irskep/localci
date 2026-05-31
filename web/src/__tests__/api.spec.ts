@@ -57,14 +57,17 @@ describe('api validation', () => {
         duration_ms: 10,
         artifacts: [
           {
-            display_name: 'combined.log',
-            path: '/tmp/combined.log',
+            display_name: 'site/index.html',
+            path: '/tmp/site/index.html',
+            marked_name: 'docs html',
+            action: 'open',
             is_text: true,
-            raw_url: '/artifacts/repo/repo/commit/abc/task/localci:test/attempt/1/combined.log',
+            raw_url: '/artifacts/repo/repo/commit/abc/task/localci:test/attempt/1/site/index.html',
             download_url:
-              '/artifacts/repo/repo/commit/abc/task/localci:test/attempt/1/combined.log?download=1',
+              '/artifacts/repo/repo/commit/abc/task/localci:test/attempt/1/site/index.html?download=1',
           },
         ],
+        marked_artifacts: [{ name: 'docs html', path: 'site/index.html', action: 'open' }],
         attempts: [{ attempt: 1, status: 'succeeded', failure: '', duration_ms: 10 }],
       },
       selected_attempt: 1,
@@ -75,13 +78,18 @@ describe('api validation', () => {
 
     expect(response.task.artifacts).toEqual([
       {
-        display_name: 'combined.log',
-        path: '/tmp/combined.log',
+        display_name: 'site/index.html',
+        path: '/tmp/site/index.html',
+        marked_name: 'docs html',
+        action: 'open',
         is_text: true,
-        raw_url: '/artifacts/repo/repo/commit/abc/task/localci:test/attempt/1/combined.log',
+        raw_url: '/artifacts/repo/repo/commit/abc/task/localci:test/attempt/1/site/index.html',
         download_url:
-          '/artifacts/repo/repo/commit/abc/task/localci:test/attempt/1/combined.log?download=1',
+          '/artifacts/repo/repo/commit/abc/task/localci:test/attempt/1/site/index.html?download=1',
       },
+    ])
+    expect(response.task.marked_artifacts).toEqual([
+      { name: 'docs html', path: 'site/index.html', action: 'open' },
     ])
   })
 

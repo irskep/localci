@@ -600,11 +600,19 @@ func (s WebServer) apiQueueEntry(entry QueueEntry) (apiQueueEntry, error) {
 	if err != nil {
 		return apiQueueEntry{}, err
 	}
+	var artifacts []ArtifactView
+	if entry.TaskName != "" && entry.Attempt > 0 {
+		if task, err := s.selectedTaskStatus(entry.RepoDir, entry.Commit, entry.TaskName, entry.Attempt); err == nil {
+			task = s.enrichTaskArtifacts(entry.RepoDir, entry.Commit, task)
+			artifacts = markedArtifactViews(task)
+		}
+	}
 	return apiQueueEntry{
-		Repo:    repo,
-		Commit:  entry.Commit,
-		Task:    entry.TaskName,
-		Attempt: entry.Attempt,
+		Repo:      repo,
+		Commit:    entry.Commit,
+		Task:      entry.TaskName,
+		Attempt:   entry.Attempt,
+		Artifacts: artifacts,
 	}, nil
 }
 
@@ -733,6 +741,13 @@ func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered 
 			summary.Status = executionStatusFromTaskRecord(record)
 			summary.DurationMilliseconds = record.DurationMilliseconds
 			summary.Failure = record.Failure
+			summary.Artifacts = s.enrichMarkedArtifacts(repoDir, run.Commit, TaskStatusView{
+				Name:            task.Name,
+				Attempt:         record.Attempt,
+				OutputDir:       record.OutputDir,
+				MarkedArtifacts: record.MarkedArtifacts,
+				Artifacts:       buildArtifactViews(record.OutputDir, outputFilesOrNil(record.OutputDir), record.MarkedArtifacts),
+			})
 			if record.Attempt > 0 {
 				summary.AttemptCount = record.Attempt
 			}

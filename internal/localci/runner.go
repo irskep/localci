@@ -236,6 +236,7 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, workDir string, 
 	cmd.Dir = workDir
 	cmd.Env = append(r.envForDir(workDir),
 		"LOCALCI_TASK_OUTPUT_DIR="+record.OutputDir,
+		"LOCALCI_TASK_ARTIFACTS_FILE="+taskArtifactsManifestPath(record.OutputDir),
 		"LOCALCI_TASK_CACHE_DIR="+record.TaskCacheDir,
 		"LOCALCI_CACHE_DIR="+record.SharedCacheDir,
 	)
@@ -294,6 +295,15 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, workDir string, 
 		record.Message = exitErr.Error()
 	default:
 		return TaskRecord{}, runErr
+	}
+
+	if markedArtifacts, err := readTaskArtifactsManifest(record.OutputDir); err != nil {
+		record.Status = TaskStatusFailed
+		record.Failure = "artifacts"
+		record.Message = err.Error()
+		runErr = errTaskFailed
+	} else {
+		record.MarkedArtifacts = markedArtifacts
 	}
 
 	if err := writeTaskRecord(record); err != nil {

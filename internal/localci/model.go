@@ -92,19 +92,35 @@ type RunSummary struct {
 }
 
 type TaskRecord struct {
-	Name                 string     `json:"name"`
-	ShortName            string     `json:"short_name"`
-	Attempt              int        `json:"attempt"`
-	OutputDir            string     `json:"output_dir"`
-	TaskCacheDir         string     `json:"task_cache_dir"`
-	SharedCacheDir       string     `json:"shared_cache_dir"`
-	Status               TaskStatus `json:"status"`
-	StartedAt            time.Time  `json:"started_at"`
-	FinishedAt           time.Time  `json:"finished_at,omitempty"`
-	DurationMilliseconds int64      `json:"duration_ms,omitempty"`
-	ExitCode             *int       `json:"exit_code,omitempty"`
-	Failure              string     `json:"failure,omitempty"`
-	Message              string     `json:"message,omitempty"`
+	Name                 string           `json:"name"`
+	ShortName            string           `json:"short_name"`
+	Attempt              int              `json:"attempt"`
+	OutputDir            string           `json:"output_dir"`
+	TaskCacheDir         string           `json:"task_cache_dir"`
+	SharedCacheDir       string           `json:"shared_cache_dir"`
+	Status               TaskStatus       `json:"status"`
+	StartedAt            time.Time        `json:"started_at"`
+	FinishedAt           time.Time        `json:"finished_at,omitempty"`
+	DurationMilliseconds int64            `json:"duration_ms,omitempty"`
+	ExitCode             *int             `json:"exit_code,omitempty"`
+	Failure              string           `json:"failure,omitempty"`
+	Message              string           `json:"message,omitempty"`
+	MarkedArtifacts      []MarkedArtifact `json:"marked_artifacts,omitempty"`
+}
+
+type ArtifactAction string
+
+const (
+	ArtifactActionOpen     ArtifactAction = "open"
+	ArtifactActionDownload ArtifactAction = "download"
+	ArtifactActionReveal   ArtifactAction = "reveal"
+	ArtifactActionView     ArtifactAction = "view"
+)
+
+type MarkedArtifact struct {
+	Name   string         `json:"name"`
+	Path   string         `json:"path"`
+	Action ArtifactAction `json:"action"`
 }
 
 func newRunRecord(req InvokeRequest, startedAt time.Time) RunRecord {

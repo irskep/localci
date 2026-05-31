@@ -705,7 +705,8 @@ func ApplySelectedAttempt(paths Paths, repoDir string, commit string, task TaskS
 		task.Failure = attempt.Failure
 		task.OutputDir = paths.TaskAttemptDir(repoDir, commit, task.Name, attempt.Attempt)
 		task.OutputFiles = outputFilesOrNil(task.OutputDir)
-		task.Artifacts = buildArtifactViews(task.OutputDir, task.OutputFiles)
+		task.MarkedArtifacts = nil
+		task.Artifacts = buildArtifactViews(task.OutputDir, task.OutputFiles, nil)
 		return task
 	}
 
@@ -722,9 +723,10 @@ func ApplySelectedAttempt(paths Paths, repoDir string, commit string, task TaskS
 		task.Status = executionStatusFromTaskRecord(record)
 		task.DurationMilliseconds = record.DurationMilliseconds
 		task.Failure = record.Failure
+		task.MarkedArtifacts = append([]MarkedArtifact{}, record.MarkedArtifacts...)
 		task.OutputDir = record.OutputDir
 		task.OutputFiles = outputFilesOrNil(record.OutputDir)
-		task.Artifacts = buildArtifactViews(record.OutputDir, task.OutputFiles)
+		task.Artifacts = buildArtifactViews(record.OutputDir, task.OutputFiles, task.MarkedArtifacts)
 		return task
 	}
 

@@ -47,15 +47,18 @@ type TaskStatusView struct {
 	DurationMilliseconds int64             `json:"duration_ms"`
 	Failure              string            `json:"failure"`
 	Attempts             []TaskAttemptView `json:"attempts"`
+	MarkedArtifacts      []MarkedArtifact  `json:"marked_artifacts,omitempty"`
 }
 
 type ArtifactView struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
-	Path        string `json:"path"`
-	IsText      bool   `json:"is_text,omitempty"`
-	RawURL      string `json:"raw_url,omitempty"`
-	DownloadURL string `json:"download_url,omitempty"`
+	Name        string         `json:"name"`
+	DisplayName string         `json:"display_name"`
+	Path        string         `json:"path"`
+	MarkedName  string         `json:"marked_name,omitempty"`
+	Action      ArtifactAction `json:"action,omitempty"`
+	IsText      bool           `json:"is_text,omitempty"`
+	RawURL      string         `json:"raw_url,omitempty"`
+	DownloadURL string         `json:"download_url,omitempty"`
 }
 
 type TaskAttemptView struct {
@@ -106,11 +109,13 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 		var artifacts []ArtifactView
 		var durationMilliseconds int64
 		var failure string
+		var markedArtifacts []MarkedArtifact
 		if record, ok := taskRecords[task.Name]; ok {
 			outputDir = record.OutputDir
 			attempt = record.Attempt
 			status = executionStatusFromTaskRecord(record)
-			artifacts = buildArtifactViews(record.OutputDir, outputFilesOrNil(record.OutputDir))
+			markedArtifacts = append([]MarkedArtifact{}, record.MarkedArtifacts...)
+			artifacts = buildArtifactViews(record.OutputDir, outputFilesOrNil(record.OutputDir), markedArtifacts)
 			durationMilliseconds = record.DurationMilliseconds
 			failure = record.Failure
 		}
@@ -133,7 +138,7 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 			return CommitStatusView{}, err
 		}
 		if len(artifacts) == 0 {
-			artifacts = buildArtifactViews(outputDir, outputFiles)
+			artifacts = buildArtifactViews(outputDir, outputFiles, markedArtifacts)
 		}
 
 		view.Tasks = append(view.Tasks, TaskStatusView{
@@ -148,6 +153,7 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 			DurationMilliseconds: durationMilliseconds,
 			Failure:              failure,
 			Attempts:             attempts,
+			MarkedArtifacts:      markedArtifacts,
 		})
 	}
 
@@ -328,7 +334,7 @@ func listTaskAttemptRecords(paths Paths, repoDir string, commit string, taskName
 	return records, nil
 }
 
-func buildArtifactViews(outputDir string, files []string) []ArtifactView {
+func buildArtifactViews(outputDir string, files []string, markedArtifacts []MarkedArtifact) []ArtifactView {
 	artifacts := make([]ArtifactView, 0, len(files))
 	for _, file := range files {
 		displayName := relativeArtifactName(outputDir, file)
@@ -341,7 +347,19 @@ func buildArtifactViews(outputDir string, files []string) []ArtifactView {
 			Path:        file,
 		})
 	}
+	artifacts = applyMarkedArtifactMetadata(artifacts, markedArtifacts)
 	sort.Slice(artifacts, func(i int, j int) bool {
+		leftMarked := markedArtifactIndex(artifacts[i], markedArtifacts)
+		rightMarked := markedArtifactIndex(artifacts[j], markedArtifacts)
+		if leftMarked >= 0 || rightMarked >= 0 {
+			if leftMarked < 0 {
+				return false
+			}
+			if rightMarked < 0 {
+				return true
+			}
+			return leftMarked < rightMarked
+		}
 		left := artifactSortKey(artifacts[i].DisplayName)
 		right := artifactSortKey(artifacts[j].DisplayName)
 		if left == right {
@@ -357,7 +375,7 @@ func relativeArtifactName(outputDir string, file string) string {
 	if err != nil {
 		return filepath.Base(file)
 	}
-	return relative
+	return filepath.ToSlash(relative)
 }
 
 func outputFilesOrNil(outputDir string) []string {
@@ -366,6 +384,29 @@ func outputFilesOrNil(outputDir string) []string {
 		return nil
 	}
 	return files
+}
+
+func applyMarkedArtifactMetadata(artifacts []ArtifactView, markedArtifacts []MarkedArtifact) []ArtifactView {
+	markedByPath := map[string]MarkedArtifact{}
+	for _, marked := range markedArtifacts {
+		markedByPath[marked.Path] = marked
+	}
+	for index := range artifacts {
+		if marked, ok := markedByPath[artifacts[index].DisplayName]; ok {
+			artifacts[index].MarkedName = marked.Name
+			artifacts[index].Action = marked.Action
+		}
+	}
+	return artifacts
+}
+
+func markedArtifactIndex(artifact ArtifactView, markedArtifacts []MarkedArtifact) int {
+	for index, marked := range markedArtifacts {
+		if marked.Path == artifact.DisplayName {
+			return index
+		}
+	}
+	return -1
 }
 
 func artifactSortKey(name string) int {
@@ -397,7 +438,9 @@ func PrimaryArtifact(task TaskStatusView) (ArtifactView, bool) {
 }
 
 func shouldHideArtifact(displayName string) bool {
-	return strings.EqualFold(displayName, "task.json") || strings.EqualFold(displayName, cancelMarkerName)
+	return strings.EqualFold(displayName, "task.json") ||
+		strings.EqualFold(displayName, cancelMarkerName) ||
+		strings.EqualFold(displayName, taskArtifactsManifestName)
 }
 
 func LoadPrimaryLog(task TaskStatusView) (string, string) {

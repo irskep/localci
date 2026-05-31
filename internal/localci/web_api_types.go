@@ -24,13 +24,15 @@ type apiTaskSummary struct {
 	Status               ExecutionStatus `json:"status"`
 	DurationMilliseconds int64           `json:"duration_ms"`
 	Failure              string          `json:"failure"`
+	Artifacts            []ArtifactView  `json:"artifacts,omitempty"`
 }
 
 type apiQueueEntry struct {
-	Repo    apiRepoSummary `json:"repo"`
-	Commit  string         `json:"commit"`
-	Task    string         `json:"task"`
-	Attempt int            `json:"attempt"`
+	Repo      apiRepoSummary `json:"repo"`
+	Commit    string         `json:"commit"`
+	Task      string         `json:"task"`
+	Attempt   int            `json:"attempt"`
+	Artifacts []ArtifactView `json:"artifacts,omitempty"`
 }
 
 type apiQueueResponse struct {

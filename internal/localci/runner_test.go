@@ -70,6 +70,10 @@ if [ "$1" = "run" ] && [ "$2" = "localci:first" ]; then
   printf 'first stdout\n'
   printf 'first stderr\n' >&2
   printf 'first output\n' >"$LOCALCI_TASK_OUTPUT_DIR/first.log"
+  printf '<!doctype html>\n' >"$LOCALCI_TASK_OUTPUT_DIR/index.html"
+  cat >"$LOCALCI_TASK_ARTIFACTS_FILE" <<'JSON'
+{"version":1,"artifacts":[{"name":"first html","path":"index.html","action":"open"}]}
+JSON
   exit 0
 fi
 if [ "$1" = "run" ] && [ "$2" = "localci:second" ]; then
@@ -135,6 +139,71 @@ exit 1
 				t.Fatalf("log %s missing for %s: %v", logName, task, err)
 			}
 		}
+	}
+
+	firstRecord, err := readTaskRecord(filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName("localci:first"), "attempt-001", "task.json"))
+	if err != nil {
+		t.Fatalf("readTaskRecord returned error: %v", err)
+	}
+	if got, want := firstRecord.MarkedArtifacts, []MarkedArtifact{{Name: "first html", Path: "index.html", Action: ArtifactActionOpen}}; len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("marked artifacts = %#v, want %#v", got, want)
+	}
+}
+
+func TestInvokeFailsWhenTaskArtifactManifestIsInvalid(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	initGitRepo(t, repoDir, "abc123")
+	rootDir := t.TempDir()
+	binDir := t.TempDir()
+
+	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
+set -eu
+if [ "$1" = "trust" ]; then
+  exit 0
+fi
+if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--all" ]; then
+  printf '%s\n' '[{"name":"localci:test"}]'
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "localci:test" ]; then
+  cat >"$LOCALCI_TASK_ARTIFACTS_FILE" <<'JSON'
+{"version":1,"artifacts":[{"name":"missing","path":"missing.html","action":"open"}]}
+JSON
+  exit 0
+fi
+exit 1
+`)
+
+	runner := Runner{
+		Paths:        Paths{Root: rootDir},
+		MiseBin:      filepath.Join(binDir, "mise"),
+		Env:          append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH")),
+		PollInterval: 10 * time.Millisecond,
+	}
+
+	result, err := runner.Invoke(context.Background(), InvokeRequest{
+		RepoDir: repoDir,
+		Commit:  "abc123",
+	})
+	if err != nil {
+		t.Fatalf("Invoke returned error: %v", err)
+	}
+	if result.Status != RunStatusFailed {
+		t.Fatalf("Run status = %q, want %q", result.Status, RunStatusFailed)
+	}
+
+	taskPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName("localci:test"), "attempt-001", "task.json")
+	record, err := readTaskRecord(taskPath)
+	if err != nil {
+		t.Fatalf("readTaskRecord returned error: %v", err)
+	}
+	if record.Failure != "artifacts" {
+		t.Fatalf("record failure = %q, want artifacts", record.Failure)
+	}
+	if !strings.Contains(record.Message, "path does not exist") {
+		t.Fatalf("record message = %q, want missing path detail", record.Message)
 	}
 }
 

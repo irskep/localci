@@ -218,10 +218,15 @@ onUnmounted(() => store.unsubscribeTask())
               <li v-for="artifact in task.artifacts" :key="artifact.display_name">
                 <i :class="artifactPrimaryIcon(artifact)" aria-hidden="true"></i>
                 <a
+                  class="artifact-label"
+                  :class="{ 'artifact-label-marked': artifact.marked_name }"
                   :href="artifactPrimaryHref(artifact)"
                   :aria-label="`${artifactPrimaryLabel(artifact)}: ${artifact.display_name}`"
                 >
-                  {{ artifact.display_name }}
+                  <span v-if="artifact.marked_name" class="artifact-title">
+                    {{ artifact.marked_name }}
+                  </span>
+                  <span class="artifact-path">{{ artifact.display_name }}</span>
                 </a>
                 <ArtifactActions
                   :path="artifact.path"
@@ -377,13 +382,47 @@ onUnmounted(() => store.unsubscribeTask())
   min-width: 0;
 }
 
-.artifact-list a {
+.artifact-label {
+  display: grid;
   flex: 1 1 auto;
+  gap: var(--app-space-1);
   min-width: 0;
   padding: var(--app-space-3) 0;
+}
+
+.artifact-label:hover {
+  text-decoration: none;
+}
+
+.artifact-label:not(.artifact-label-marked) {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.artifact-label:not(.artifact-label-marked) .artifact-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artifact-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.artifact-label:hover .artifact-title,
+.artifact-label:hover .artifact-path {
+  text-decoration: underline;
+}
+
+.artifact-path {
+  min-width: 0;
+}
+
+.artifact-label-marked .artifact-path {
+  color: var(--p-text-muted-color);
+  font-size: var(--p-form-field-sm-font-size);
+  overflow-wrap: anywhere;
 }
 
 .task-log-view {

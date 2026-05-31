@@ -32,4 +32,12 @@ artifact_site="${LOCALCI_TASK_OUTPUT_DIR:?LOCALCI_TASK_OUTPUT_DIR is required}/s
 rm -rf "$artifact_site"
 mkdir -p "$artifact_site"
 cp -R site/. "$artifact_site/"
+cat >"${LOCALCI_TASK_ARTIFACTS_FILE:?LOCALCI_TASK_ARTIFACTS_FILE is required}" <<'JSON'
+{
+  "version": 1,
+  "artifacts": [
+    {"name": "docs html", "path": "site/index.html", "action": "open"}
+  ]
+}
+JSON
 '''

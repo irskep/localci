@@ -4,6 +4,7 @@ set -eu
 printf 'cwd: %s\n' "$(pwd)"
 
 : "${LOCALCI_TASK_OUTPUT_DIR:?}"
+: "${LOCALCI_TASK_ARTIFACTS_FILE:?}"
 
 site_dir="$LOCALCI_TASK_OUTPUT_DIR/static-site"
 mkdir -p "$site_dir"
@@ -52,3 +53,11 @@ cat >"$site_dir/mark.svg" <<'SVG'
 </svg>
 SVG
 
+cat >"$LOCALCI_TASK_ARTIFACTS_FILE" <<'JSON'
+{
+  "version": 1,
+  "artifacts": [
+    {"name": "static site", "path": "static-site/index.html", "action": "open"}
+  ]
+}
+JSON
