@@ -1,5 +1,6 @@
 .cache/
 .tmp/
+.vscode/
 bin/
 .pnpm-store/
 .rodney/
