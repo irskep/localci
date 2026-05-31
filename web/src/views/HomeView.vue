@@ -132,7 +132,6 @@ async function loadCurrentPage(): Promise<void> {
                       {{ entry.task }}
                     </RouterLink>
                     <div class="queue-meta">
-                      <span class="queue-state">{{ entry.state }}</span>
                       <RepoLink
                         :repo-path="entry.repo.repo_path"
                         :repo-label="entry.repo.repo_label"
@@ -209,11 +208,6 @@ async function loadCurrentPage(): Promise<void> {
   min-width: 0;
   color: var(--p-text-muted-color);
   font-size: var(--p-form-field-sm-font-size);
-}
-
-.queue-state {
-  color: var(--p-text-color);
-  font-weight: 600;
 }
 
 .queue-panel-content {
