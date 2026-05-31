@@ -2,6 +2,10 @@
 
 <!-- loosely based on https://keepachangelog.com/en/1.0.0/ -->
 
+## 0.2.9 - 2026-05-31
+
+- Improve appearance of boosted artifacts
+
 ## 0.2.8 - 2026-05-31
 
 - Fix GitHub CI and release checks for tasks that declare artifact metadata.

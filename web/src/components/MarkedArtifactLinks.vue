@@ -25,6 +25,24 @@ function action(artifact: ArtifactView): string {
   return 'open'
 }
 
+function actionIcon(artifact: ArtifactView): string {
+  switch (action(artifact)) {
+    case 'download':
+      return 'pi pi-download'
+    case 'reveal':
+      return 'pi pi-folder-open'
+    case 'view':
+      return 'pi pi-eye'
+    default:
+      return 'pi pi-external-link'
+  }
+}
+
+function actionLabel(artifact: ArtifactView): string {
+  const value = action(artifact)
+  return value.slice(0, 1).toUpperCase() + value.slice(1)
+}
+
 function href(artifact: ArtifactView): string {
   if (artifact.action === 'download' && artifact.download_url) return artifact.download_url
   if (artifact.action === 'open' && artifact.raw_url) return artifact.raw_url
@@ -45,8 +63,13 @@ function href(artifact: ArtifactView): string {
     class="marked-artifact-link"
     :href="href(artifact)"
   >
-    {{ label(artifact) }}
-    <span class="marked-artifact-action">{{ action(artifact) }}</span>
+    <span class="marked-artifact-label">{{ label(artifact) }}</span>
+    <i
+      class="marked-artifact-action"
+      :class="actionIcon(artifact)"
+      :title="actionLabel(artifact)"
+      :aria-label="actionLabel(artifact)"
+    ></i>
   </a>
 </template>
 
@@ -54,7 +77,7 @@ function href(artifact: ArtifactView): string {
 .marked-artifact-link {
   display: inline-flex;
   align-items: center;
-  gap: var(--app-space-1);
+  gap: var(--app-inline-icon-gap);
   padding: 0 var(--app-space-2);
   border: 1px solid var(--p-content-border-color);
   border-radius: var(--p-content-border-radius);
@@ -62,7 +85,12 @@ function href(artifact: ArtifactView): string {
   font-size: var(--p-form-field-sm-font-size);
 }
 
+.marked-artifact-label {
+  min-width: 0;
+}
+
 .marked-artifact-action {
   color: var(--p-text-muted-color);
+  font-size: var(--app-inline-icon-font-size);
 }
 </style>

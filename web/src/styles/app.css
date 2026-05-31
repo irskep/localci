@@ -11,6 +11,8 @@
   --app-page-padding: var(--app-page-block-padding) var(--p-overlay-modal-padding)
     calc(var(--p-overlay-modal-padding) * 2);
   --app-item-padding: var(--p-list-option-padding);
+  --app-inline-icon-font-size: 0.8rem;
+  --app-inline-icon-gap: var(--p-navigation-item-gap);
   --app-log-font-size: var(--p-form-field-sm-font-size);
   --app-log-line-height: 1.45;
   --app-page-background: var(--p-surface-50);
