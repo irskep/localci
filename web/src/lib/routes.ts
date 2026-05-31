@@ -1,4 +1,4 @@
-export type RouteKind = 'repo-index' | 'repo' | 'commit' | 'task' | 'attempt' | 'artifact'
+export type RouteKind = 'repo' | 'commit' | 'task' | 'attempt' | 'artifact'
 
 export type ParsedRepoRoute = {
   kind: RouteKind
@@ -50,14 +50,6 @@ export function parseRepoRoute(pathname: string): ParsedRepoRoute {
   const trimmed = pathname.replace(/^\/+|\/+$/g, '')
   const segments = trimmed === '' ? [] : trimmed.split('/').map(decodeURIComponent)
 
-  if (segments.length === 1 && segments[0] === 'repo') {
-    return {
-      kind: 'repo-index',
-      repoPath: '',
-      apiPath: '/api/repo',
-    }
-  }
-
   if (segments[0] !== 'repo') {
     throw new Error(`unsupported route: ${pathname}`)
   }
@@ -65,6 +57,9 @@ export function parseRepoRoute(pathname: string): ParsedRepoRoute {
   const commitIndex = segments.indexOf('commit')
   if (commitIndex < 0) {
     const repoPath = segments.slice(1).join('/')
+    if (!repoPath) {
+      throw new Error(`missing repo path in route: ${pathname}`)
+    }
     return {
       kind: 'repo',
       repoPath,

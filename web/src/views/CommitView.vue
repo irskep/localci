@@ -128,7 +128,14 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
 
 .commit-subject {
   min-width: 0;
+  width: fit-content;
+  max-width: 100%;
+  padding: var(--app-space-2) var(--app-space-3);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: var(--p-border-radius-sm);
+  background: var(--p-content-hover-background);
   color: var(--p-text-muted-color);
+  font-family: var(--app-mono-font-family);
   font-size: var(--p-form-field-lg-font-size);
   overflow-wrap: anywhere;
 }

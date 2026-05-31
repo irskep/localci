@@ -115,7 +115,6 @@ async function loadCurrentPage(): Promise<void> {
                   v-for="entry in queueDisplayRows.slice(0, 6)"
                   :key="`${entry.repo.repo_path}:${entry.commit}:${entry.task}:${entry.attempt}`"
                   class="queue-entry"
-                  :class="`queue-entry-${entry.state}`"
                 >
                   <i
                     :class="
@@ -147,14 +146,6 @@ async function loadCurrentPage(): Promise<void> {
               <div v-else class="empty-state">Queue is idle.</div>
             </div>
           </PPanel>
-
-          <PPanel header="Repo">
-            <ul class="artifact-list">
-              <li v-for="repo in repoRows" :key="repo.repo_path">
-                <RepoLink :repo-path="repo.repo_path" :repo-label="repo.repo_label" />
-              </li>
-            </ul>
-          </PPanel>
         </aside>
       </section>
     </template>
@@ -176,27 +167,6 @@ async function loadCurrentPage(): Promise<void> {
   min-height: calc(100vh - var(--app-page-block-padding) * 4);
 }
 
-.artifact-list {
-  display: grid;
-  gap: var(--app-space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.artifact-list li {
-  display: flex;
-  align-items: center;
-  gap: var(--app-space-3);
-  min-width: 0;
-}
-
-.artifact-list a {
-  min-width: 0;
-  padding: var(--app-space-3) 0;
-  overflow-wrap: anywhere;
-}
-
 .queue-list {
   position: relative;
   display: grid;
@@ -212,16 +182,6 @@ async function loadCurrentPage(): Promise<void> {
   align-items: start;
   gap: var(--app-space-3);
   min-width: 0;
-  padding: var(--app-space-2);
-  border-radius: var(--p-border-radius-sm);
-  transition:
-    background-color 160ms ease,
-    box-shadow 160ms ease;
-}
-
-.queue-entry-running {
-  background: color-mix(in srgb, var(--p-primary-color) 10%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-primary-color) 18%, transparent);
 }
 
 .queue-entry > .run-task-icon {

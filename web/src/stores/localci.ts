@@ -71,6 +71,7 @@ export const useLocalciStore = defineStore('localci', () => {
     () => queue.value?.pending.length ?? home.value?.queue.pending.length ?? 0,
   )
   const activeEntry = computed(() => queue.value?.active ?? home.value?.queue.active)
+  const repos = computed(() => home.value?.repos ?? [])
   const currentTask = computed(() => {
     switch (taskRequest.value.state) {
       case 'loaded':
@@ -472,6 +473,7 @@ export const useLocalciStore = defineStore('localci', () => {
     queueCount,
     revealArtifact,
     repoLoaded,
+    repos,
     retryTask,
     subscribeCommit,
     subscribeHome,

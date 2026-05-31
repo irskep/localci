@@ -657,7 +657,15 @@ function taskSummaryStatusLabel(status: string): string {
 
 .commit-subject {
   min-width: 0;
+  width: fit-content;
+  max-width: 100%;
+  padding: var(--app-space-1) var(--app-space-2);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: var(--p-border-radius-sm);
+  background: var(--p-content-hover-background);
   color: var(--p-text-muted-color);
+  font-family: var(--app-mono-font-family);
+  font-size: var(--p-form-field-sm-font-size);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

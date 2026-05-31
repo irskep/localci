@@ -3,7 +3,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import ArtifactView from '@/views/ArtifactView.vue'
 import CommitView from '@/views/CommitView.vue'
 import HomeView from '@/views/HomeView.vue'
-import RepoIndexView from '@/views/RepoIndexView.vue'
 import RepoRouteView from '@/views/RepoRouteView.vue'
 import TaskView from '@/views/TaskView.vue'
 
@@ -17,8 +16,7 @@ const router = createRouter({
     },
     {
       path: '/repo',
-      name: 'repo-index',
-      component: RepoIndexView,
+      redirect: '/',
     },
     {
       path: '/repo/:repoPath(.*)/commit/:commit/task/:taskName/attempt/:attempt/artifact/:artifactPath(.*)',

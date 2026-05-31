@@ -1,13 +1,33 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import type { MenuItem } from 'primevue/menuitem'
+
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import type { BreadcrumbItem } from '@/components/AppBreadcrumbs.vue'
+import { repoPathURL } from '@/lib/routes'
+import { useLocalciStore } from '@/stores/localci'
 import { useNotificationStore } from '@/stores/notifications'
 
 defineProps<{
   items: BreadcrumbItem[]
 }>()
 
+const router = useRouter()
+const store = useLocalciStore()
 const notifications = useNotificationStore()
+const repoMenu = ref()
+const repoMenuItems = computed<MenuItem[]>(() =>
+  store.repos.map((repo) => ({
+    label: repo.repo_label,
+    icon: 'pi pi-folder',
+    command: () => router.push(repoPathURL(repo.repo_path)),
+  })),
+)
+
+function toggleRepoMenu(event: MouseEvent): void {
+  repoMenu.value?.toggle(event)
+}
 </script>
 
 <template>
@@ -35,6 +55,20 @@ const notifications = useNotificationStore()
         <i class="pi pi-book" aria-hidden="true"></i>
         <span>Docs</span>
       </a>
+      <PButton
+        v-if="repoMenuItems.length > 0"
+        class="top-bar-repos"
+        label="Repos"
+        icon="pi pi-folder"
+        icon-pos="left"
+        size="small"
+        severity="secondary"
+        text
+        aria-haspopup="menu"
+        aria-label="Open repo menu"
+        @click="toggleRepoMenu"
+      />
+      <PMenu ref="repoMenu" :model="repoMenuItems" popup />
     </div>
   </div>
 </template>
@@ -64,6 +98,10 @@ const notifications = useNotificationStore()
 }
 
 .top-bar-notifications {
+  flex: none;
+}
+
+.top-bar-repos {
   flex: none;
 }
 
