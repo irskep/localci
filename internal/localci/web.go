@@ -298,16 +298,12 @@ func (s WebServer) handleRetry(w http.ResponseWriter, r *http.Request) {
 		attempt = entry.Attempt
 	} else {
 		var enqueueErr error
-		attempt, enqueueErr = s.Queue.NextAttempt(repoDir, commit, taskName)
+		entry, enqueueErr = s.Queue.Enqueue(repoDir, commit, taskName)
 		if enqueueErr != nil {
 			http.Error(w, enqueueErr.Error(), http.StatusInternalServerError)
 			return
 		}
-		entry, enqueueErr = s.Queue.EnqueueRun(repoDir, commit, []string{taskName})
-		if enqueueErr != nil {
-			http.Error(w, enqueueErr.Error(), http.StatusInternalServerError)
-			return
-		}
+		attempt = entry.Attempt
 		if s.Events != nil {
 			s.Events.EntryChanged(entry)
 		}

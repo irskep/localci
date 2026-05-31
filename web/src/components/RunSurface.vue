@@ -375,6 +375,12 @@ function taskSummaryStatusLabel(status: string): string {
   if (status === 'not-run') return 'not run'
   return status
 }
+
+function taskAttemptLabel(task: TaskSummary): string {
+  if (task.attempt <= 1) return ''
+  if (task.attempt_count > task.attempt) return `attempt ${task.attempt} of ${task.attempt_count}`
+  return `attempt ${task.attempt}`
+}
 </script>
 
 <template>
@@ -436,7 +442,10 @@ function taskSummaryStatusLabel(status: string): string {
               >
                 <span v-if="taskIndex > 0">, </span>
                 <RouterLink :to="taskURL(repoPath, run.commit, item.task.name)">
-                  {{ item.label }}
+                  {{ item.label
+                  }}<span v-if="taskAttemptLabel(item.task)" class="run-task-attempt">
+                    {{ taskAttemptLabel(item.task) }}</span
+                  >
                 </RouterLink>
               </template>
               <span v-if="issueTaskMoreCount(packageGroup) > 0">
@@ -490,7 +499,10 @@ function taskSummaryStatusLabel(status: string): string {
                     :to="taskURL(repoPath, run.commit, item.task.name)"
                   >
                     <i :class="taskGroupIcon(group)" aria-hidden="true"></i>
-                    {{ item.label }}
+                    {{ item.label
+                    }}<span v-if="taskAttemptLabel(item.task)" class="run-task-attempt">
+                      {{ taskAttemptLabel(item.task) }}</span
+                    >
                   </RouterLink>
                 </span>
               </div>
@@ -508,7 +520,10 @@ function taskSummaryStatusLabel(status: string): string {
               <template v-for="(item, taskIndex) in packageGroup.tasks" :key="item.task.name">
                 <span v-if="taskIndex > 0">, </span>
                 <RouterLink :to="taskURL(repoPath, run.commit, item.task.name)">
-                  {{ item.label }}
+                  {{ item.label
+                  }}<span v-if="taskAttemptLabel(item.task)" class="run-task-attempt">
+                    {{ taskAttemptLabel(item.task) }}</span
+                  >
                 </RouterLink>
               </template>
             </span>
@@ -566,7 +581,10 @@ function taskSummaryStatusLabel(status: string): string {
                   :to="taskURL(repoPath, run.commit, item.task.name)"
                 >
                   <i :class="taskGroupIcon(group)" aria-hidden="true"></i>
-                  {{ item.label }}
+                  {{ item.label
+                  }}<span v-if="taskAttemptLabel(item.task)" class="run-task-attempt">
+                    {{ taskAttemptLabel(item.task) }}</span
+                  >
                 </RouterLink>
               </span>
             </div>
@@ -581,7 +599,10 @@ function taskSummaryStatusLabel(status: string): string {
             <template v-for="(item, taskIndex) in packageGroup.tasks" :key="item.task.name">
               <span v-if="taskIndex > 0">, </span>
               <RouterLink :to="taskURL(repoPath, run.commit, item.task.name)">
-                {{ item.label }}
+                {{ item.label
+                }}<span v-if="taskAttemptLabel(item.task)" class="run-task-attempt">
+                  {{ taskAttemptLabel(item.task) }}</span
+                >
               </RouterLink>
             </template>
           </span>
@@ -605,7 +626,10 @@ function taskSummaryStatusLabel(status: string): string {
             :to="taskURL(repoPath, run.commit, task.name)"
           >
             <i :class="taskStatusIcon(task)" aria-hidden="true"></i>
-            {{ task.short_name }}
+            {{ task.short_name
+            }}<span v-if="taskAttemptLabel(task)" class="run-task-attempt">
+              {{ taskAttemptLabel(task) }}</span
+            >
           </RouterLink>
         </span>
       </div>
@@ -785,6 +809,12 @@ function taskSummaryStatusLabel(status: string): string {
   display: inline-flex;
   align-items: center;
   gap: var(--app-space-1);
+}
+
+.run-task-attempt {
+  margin-left: var(--app-space-1);
+  color: var(--p-text-muted-color);
+  font-size: var(--p-form-field-sm-font-size);
 }
 
 @media (max-width: 720px) {

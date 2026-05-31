@@ -31,6 +31,7 @@ type QueueEntry struct {
 	TaskKey        string         `json:"task_key,omitempty"`
 	RequestedTasks []string       `json:"requested_tasks,omitempty"`
 	Attempt        int            `json:"attempt,omitempty"`
+	Prepared       bool           `json:"prepared,omitempty"`
 	EnqueuedAt     time.Time      `json:"enqueued_at"`
 }
 
@@ -62,7 +63,18 @@ func (s QueueStore) EnqueueWithOptions(repoDir string, commit string, taskName s
 	queueMutationMu.Lock()
 	defer queueMutationMu.Unlock()
 
-	return s.enqueueTaskLocked(repoDir, commit, taskName, noClone)
+	return s.enqueueTaskLocked(repoDir, commit, taskName, noClone, false)
+}
+
+func (s QueueStore) EnqueuePrepared(repoDir string, commit string, taskName string) (QueueEntry, error) {
+	return s.EnqueuePreparedWithOptions(repoDir, commit, taskName, false)
+}
+
+func (s QueueStore) EnqueuePreparedWithOptions(repoDir string, commit string, taskName string, noClone bool) (QueueEntry, error) {
+	queueMutationMu.Lock()
+	defer queueMutationMu.Unlock()
+
+	return s.enqueueTaskLocked(repoDir, commit, taskName, noClone, true)
 }
 
 func (s QueueStore) EnqueueRun(repoDir string, commit string, requestedTasks []string) (QueueEntry, error) {
@@ -99,7 +111,7 @@ func (s QueueStore) enqueueRunLocked(repoDir string, commit string, requestedTas
 	return entry, nil
 }
 
-func (s QueueStore) enqueueTaskLocked(repoDir string, commit string, taskName string, noClone bool) (QueueEntry, error) {
+func (s QueueStore) enqueueTaskLocked(repoDir string, commit string, taskName string, noClone bool, prepared bool) (QueueEntry, error) {
 	enqueuedAt := s.now()
 	attempt, err := s.nextAttemptLocked(repoDir, commit, taskName)
 	if err != nil {
@@ -114,6 +126,7 @@ func (s QueueStore) enqueueTaskLocked(repoDir string, commit string, taskName st
 		TaskName:   taskName,
 		TaskKey:    sanitizeTaskName(taskName),
 		Attempt:    attempt,
+		Prepared:   prepared,
 		EnqueuedAt: enqueuedAt,
 	}
 

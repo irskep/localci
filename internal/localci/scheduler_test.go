@@ -37,9 +37,9 @@ exit 1
 			return now
 		},
 	}
-	entry, err := queue.Enqueue(repoDir, "abc123", "localci:test")
+	entry, err := queue.EnqueuePrepared(repoDir, "abc123", "localci:test")
 	if err != nil {
-		t.Fatalf("Enqueue returned error: %v", err)
+		t.Fatalf("EnqueuePrepared returned error: %v", err)
 	}
 
 	runner := Runner{
@@ -162,6 +162,75 @@ exit 1
 	}
 }
 
+func TestSchedulerRunNextPreparesDirectTaskEntry(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := t.TempDir()
+	binDir := t.TempDir()
+	initGitRepo(t, repoDir, "abc123")
+	paths := Paths{Root: root}
+
+	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
+set -eu
+if [ "$1" = "trust" ]; then
+  exit 0
+fi
+if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--all" ]; then
+  printf '%s\n' '[{"name":"localci:setup"},{"name":"localci:test"}]'
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "localci:setup" ]; then
+  touch setup.marker
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "localci:test" ]; then
+  test -f README.md
+  test -f setup.marker
+  printf 'direct task output\n'
+  exit 0
+fi
+exit 1
+`)
+
+	queue := QueueStore{Paths: paths}
+	entry, err := queue.Enqueue(repoDir, "abc123", "localci:test")
+	if err != nil {
+		t.Fatalf("Enqueue returned error: %v", err)
+	}
+	if entry.Prepared {
+		t.Fatalf("direct queue entry Prepared = true, want false")
+	}
+
+	runner := Runner{
+		Paths:        paths,
+		MiseBin:      filepath.Join(binDir, "mise"),
+		Env:          append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH")),
+		PollInterval: 10 * time.Millisecond,
+	}
+	scheduler := Scheduler{
+		Queue:  queue,
+		Runner: runner,
+	}
+
+	result, err := scheduler.RunNext(context.Background())
+	if err != nil {
+		t.Fatalf("RunNext returned error: %v", err)
+	}
+	if result.Task.Status != TaskStatusSucceeded {
+		t.Fatalf("task status = %q, want %q", result.Task.Status, TaskStatusSucceeded)
+	}
+
+	combinedPath := filepath.Join(result.Task.OutputDir, combinedLogName)
+	combined, err := os.ReadFile(combinedPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", combinedPath, err)
+	}
+	if !strings.Contains(string(combined), "direct task output") {
+		t.Fatalf("combined log = %q, want direct task output", string(combined))
+	}
+}
+
 func TestSchedulerRunNextRespectsExistingActiveTask(t *testing.T) {
 	t.Parallel()
 
@@ -219,8 +288,8 @@ exit 1
 `)
 
 	queue := QueueStore{Paths: paths}
-	if _, err := queue.Enqueue(repoDir, "abc123", "localci:test"); err != nil {
-		t.Fatalf("Enqueue returned error: %v", err)
+	if _, err := queue.EnqueuePrepared(repoDir, "abc123", "localci:test"); err != nil {
+		t.Fatalf("EnqueuePrepared returned error: %v", err)
 	}
 
 	runner := Runner{

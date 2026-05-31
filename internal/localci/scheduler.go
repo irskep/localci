@@ -56,6 +56,14 @@ func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
 		return s.expandRun(ctx, entry)
 	}
 
+	if !entry.Prepared {
+		return s.runUnpreparedTask(ctx, entry)
+	}
+
+	return s.runPreparedTask(ctx, entry)
+}
+
+func (s Scheduler) runPreparedTask(ctx context.Context, entry QueueEntry) (RunNextResult, error) {
 	req := InvokeRequest{
 		RepoDir: entry.RepoDir,
 		Commit:  entry.Commit,
@@ -86,6 +94,115 @@ func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
 		return result, runErr
 	}
 
+	return result, nil
+}
+
+func (s Scheduler) runUnpreparedTask(ctx context.Context, entry QueueEntry) (RunNextResult, error) {
+	req := InvokeRequest{
+		RepoDir: entry.RepoDir,
+		Commit:  entry.Commit,
+		NoClone: entry.NoClone,
+	}
+	workDir := entry.RepoDir
+	clones := s.cloneManager()
+	if !entry.NoClone {
+		info, err := clones.Prepare(ctx, entry.RepoDir, entry.Commit)
+		if err != nil {
+			task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
+			if recordErr != nil {
+				return RunNextResult{}, recordErr
+			}
+			_ = clones.Cleanup(entry.RepoDir, entry.Commit)
+			return RunNextResult{DidWork: true, Entry: entry, Task: task, Run: run}, errTaskFailed
+		}
+		workDir = info.Worktree
+	}
+
+	if err := s.Runner.Trust(ctx, workDir); err != nil {
+		task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
+		if recordErr != nil {
+			return RunNextResult{}, recordErr
+		}
+		if !entry.NoClone {
+			_ = clones.Cleanup(entry.RepoDir, entry.Commit)
+		}
+		return RunNextResult{DidWork: true, Entry: entry, Task: task, Run: run}, errTaskFailed
+	}
+
+	tasks, err := s.Runner.DiscoverTasks(ctx, workDir)
+	if err != nil {
+		task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
+		if recordErr != nil {
+			return RunNextResult{}, recordErr
+		}
+		if !entry.NoClone {
+			_ = clones.Cleanup(entry.RepoDir, entry.Commit)
+		}
+		return RunNextResult{DidWork: true, Entry: entry, Task: task, Run: run}, errTaskFailed
+	}
+	tasks = filterRequestedTasks(tasks, []string{entry.TaskName})
+
+	setup, userTasks, hasSetup := splitSetupTask(tasks)
+	run, err := ensureRunRecordWithTasks(s.Runner.Paths, req, tasks, s.Runner.now())
+	if err != nil {
+		return RunNextResult{}, err
+	}
+
+	var setupRecord TaskRecord
+	if hasSetup {
+		var setupErr error
+		setupRecord, setupErr = s.Runner.runTask(ctx, req, workDir, setup, 0)
+		run, err = upsertTaskRecord(s.Runner.Paths, req, setupRecord, s.Runner.now())
+		if err != nil {
+			return RunNextResult{}, err
+		}
+		if setupErr != nil {
+			if !entry.NoClone {
+				_ = clones.Cleanup(entry.RepoDir, entry.Commit)
+			}
+			return RunNextResult{DidWork: true, Entry: entry, Task: setupRecord, Run: run}, setupErr
+		}
+	}
+
+	var task Task
+	found := false
+	for _, candidate := range userTasks {
+		if candidate.Name == entry.TaskName {
+			task = candidate
+			found = true
+			break
+		}
+	}
+	if !found {
+		err := errors.New("task not found")
+		task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
+		if recordErr != nil {
+			return RunNextResult{}, recordErr
+		}
+		if !entry.NoClone {
+			_ = clones.Cleanup(entry.RepoDir, entry.Commit)
+		}
+		return RunNextResult{DidWork: true, Entry: entry, Task: task, Run: run}, errTaskFailed
+	}
+
+	taskRecord, runErr := s.Runner.runTask(ctx, req, workDir, task, entry.Attempt)
+	run, err = upsertTaskRecord(s.Runner.Paths, req, taskRecord, s.Runner.now())
+	if err != nil {
+		return RunNextResult{}, err
+	}
+	if s.Events != nil {
+		s.Events.EntryChanged(entry)
+	}
+
+	result := RunNextResult{
+		DidWork: true,
+		Entry:   entry,
+		Task:    taskRecord,
+		Run:     run,
+	}
+	if runErr != nil {
+		return result, runErr
+	}
 	return result, nil
 }
 
@@ -170,7 +287,7 @@ func (s Scheduler) expandRun(ctx context.Context, entry QueueEntry) (RunNextResu
 		if active {
 			continue
 		}
-		queued, err := s.Queue.Enqueue(entry.RepoDir, entry.Commit, task.Name)
+		queued, err := s.Queue.EnqueuePrepared(entry.RepoDir, entry.Commit, task.Name)
 		if err != nil {
 			return RunNextResult{}, err
 		}
@@ -242,7 +359,7 @@ func (s Scheduler) expandNoCloneRun(ctx context.Context, entry QueueEntry) (RunN
 		if active {
 			continue
 		}
-		queued, err := s.Queue.EnqueueWithOptions(entry.RepoDir, entry.Commit, task.Name, true)
+		queued, err := s.Queue.EnqueuePreparedWithOptions(entry.RepoDir, entry.Commit, task.Name, true)
 		if err != nil {
 			return RunNextResult{}, err
 		}
