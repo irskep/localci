@@ -17,7 +17,7 @@ defineProps<{
 .top-bar-link {
   display: inline-flex;
   align-items: center;
-  gap: var(--app-space-2);
+  gap: var(--app-space-3);
   flex: none;
   font-size: var(--p-form-field-sm-font-size);
   font-weight: 500;

@@ -56,8 +56,8 @@ function toggleRepoMenu(event: MouseEvent): void {
         v-if="repoMenuItems.length > 0"
         class="top-bar-action top-bar-repos"
         label="Repos"
-        icon="pi pi-folder"
-        icon-pos="left"
+        icon="pi pi-chevron-down"
+        icon-pos="right"
         size="small"
         severity="secondary"
         text
