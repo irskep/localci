@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import { shortCommit } from '@/lib/api'
+import { entityKindIcon } from '@/lib/entity-icons'
 import { commitURL } from '@/lib/routes'
 
 const props = defineProps<{
@@ -11,11 +12,12 @@ const props = defineProps<{
 }>()
 
 const label = computed(() => props.label ?? shortCommit(props.commit))
+const icon = entityKindIcon('commit')
 </script>
 
 <template>
   <RouterLink :to="commitURL(repoPath, commit)" class="icon-link mono">
-    <i class="pi pi-play-circle" aria-hidden="true"></i>
+    <i :class="icon" aria-hidden="true"></i>
     <span>{{ label }}</span>
   </RouterLink>
 </template>

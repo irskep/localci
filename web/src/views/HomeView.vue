@@ -78,7 +78,7 @@ async function loadCurrentPage(): Promise<void> {
 
 <template>
   <main class="page">
-    <TopBar :items="[{ label: 'Home' }]" />
+    <TopBar :items="[{ kind: 'home', label: 'Home' }]" />
 
     <PMessage v-if="store.error" severity="error" :closable="false">{{ store.error }}</PMessage>
     <div v-if="store.loading && !store.home" class="loading-state">

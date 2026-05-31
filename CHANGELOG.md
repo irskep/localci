@@ -4,13 +4,10 @@
 
 ## Unreleased
 
-- Add a web task history page for reviewing one task across commits.
-- Add task history to `localci history --task` and the terminal dashboard.
-- Add task-declared artifact links so important outputs can surface directly in run lists, queue rows, task pages, CLI output, and the terminal dashboard.
-- Simplify the web home page by merging active work into the queue panel and moving repo navigation into the top bar.
-- Improve web navigation with visible breadcrumb links and consistent top bar link styling.
-- Fix web UI retries so newly queued attempts open immediately instead of briefly showing a daemon reconnecting state.
-- Mark the selected attempt in the web task page attempts list.
+- Add task history across the web UI, CLI, and terminal dashboard.
+- Add task-declared artifact links so important outputs are surfaced directly across web, CLI, and TUI views.
+- Improve web run navigation with a merged active/queued panel, repo navigation in the top bar, Menubar-based controls, canonical breadcrumb icons, and clearer task attempt handling.
+- Fix web retry flows so newly queued attempts open and execute correctly.
 
 ## 0.2.6 - 2026-05-31
 

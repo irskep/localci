@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { entityKindIcon } from '@/lib/entity-icons'
 import { repoPathURL } from '@/lib/routes'
 
 const props = defineProps<{
@@ -10,11 +11,12 @@ const props = defineProps<{
 }>()
 
 const label = computed(() => props.label ?? props.repoLabel ?? props.repoPath)
+const icon = entityKindIcon('repo')
 </script>
 
 <template>
   <RouterLink :to="repoPathURL(repoPath)" class="icon-link">
-    <i class="pi pi-folder" aria-hidden="true"></i>
+    <i :class="icon" aria-hidden="true"></i>
     <span>{{ label }}</span>
   </RouterLink>
 </template>

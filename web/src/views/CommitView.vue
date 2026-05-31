@@ -46,12 +46,13 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
   <main class="page">
     <TopBar
       :items="[
-        { label: 'Home', to: '/' },
+        { kind: 'home', label: 'Home', to: '/' },
         {
+          kind: 'repo',
           label: store.currentCommit?.repo.repo_label ?? parsed.repoPath,
           to: repoPathURL(parsed.repoPath),
         },
-        { label: parsed.commit ? shortCommit(parsed.commit) : 'Commit' },
+        { kind: 'commit', label: parsed.commit ? shortCommit(parsed.commit) : 'Commit' },
       ]"
     />
 

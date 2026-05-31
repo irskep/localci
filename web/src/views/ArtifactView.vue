@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router'
 import TopBar from '@/components/TopBar.vue'
 import ArtifactActions from '@/components/ArtifactActions.vue'
 import { shortCommit } from '@/lib/api'
+import { entityKindIcon } from '@/lib/entity-icons'
 import { attemptURL, commitURL, parseRepoRoute, repoPathURL, taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
@@ -13,6 +14,7 @@ const route = useRoute()
 const store = useLocalciStore()
 const parsed = computed(() => parseRepoRoute(route.path))
 const taskName = computed(() => store.currentArtifact?.task ?? parsed.value.taskName ?? 'Task')
+const artifactIcon = entityKindIcon('artifact')
 const title = computed(() => {
   const artifact =
     parsed.value.artifactPath ?? store.currentArtifact?.artifact.display_name ?? 'Artifact'
@@ -35,16 +37,19 @@ onUnmounted(() => store.unsubscribeArtifact())
   <main class="page artifact-page">
     <TopBar
       :items="[
-        { label: 'Home', to: '/' },
+        { kind: 'home', label: 'Home', to: '/' },
         {
+          kind: 'repo',
           label: store.currentArtifact?.repo.repo_label ?? parsed.repoPath,
           to: repoPathURL(parsed.repoPath),
         },
         {
+          kind: 'commit',
           label: parsed.commit ? shortCommit(parsed.commit) : 'Commit',
           to: parsed.commit ? commitURL(parsed.repoPath, parsed.commit) : undefined,
         },
         {
+          kind: 'task',
           label: taskName,
           to:
             parsed.commit && parsed.taskName
@@ -52,13 +57,14 @@ onUnmounted(() => store.unsubscribeArtifact())
               : undefined,
         },
         {
+          kind: 'attempt',
           label: parsed.attempt ? `attempt ${parsed.attempt}` : 'Attempt',
           to:
             parsed.commit && parsed.taskName && parsed.attempt
               ? attemptURL(parsed.repoPath, parsed.commit, parsed.taskName, parsed.attempt)
               : undefined,
         },
-        { label: parsed.artifactPath ?? 'Artifact' },
+        { kind: 'artifact', label: parsed.artifactPath ?? 'Artifact' },
       ]"
     />
 
@@ -86,7 +92,7 @@ onUnmounted(() => store.unsubscribeArtifact())
         store.currentArtifact.content
       }}</pre>
       <div v-else class="artifact-fallback">
-        <i class="pi pi-file" aria-hidden="true"></i>
+        <i :class="artifactIcon" aria-hidden="true"></i>
         <div>
           <p>This artifact is not a text file.</p>
           <p class="muted">Open it in the browser or download it.</p>

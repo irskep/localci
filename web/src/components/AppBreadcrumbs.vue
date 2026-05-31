@@ -2,7 +2,10 @@
 import { computed } from 'vue'
 import type { MenuItem } from 'primevue/menuitem'
 
+import { entityKindIcon, type EntityKind } from '@/lib/entity-icons'
+
 export type BreadcrumbItem = {
+  kind: EntityKind
   label: string
   to?: string
 }
@@ -14,6 +17,7 @@ const props = defineProps<{
 const model = computed<MenuItem[]>(() =>
   props.items.map((item) => ({
     label: item.label,
+    icon: entityKindIcon(item.kind),
     route: item.to,
     to: item.to,
   })),
@@ -25,12 +29,12 @@ const model = computed<MenuItem[]>(() =>
     <template #item="{ item, props }">
       <RouterLink v-if="item.route" v-slot="{ href, navigate }" :to="item.route" custom>
         <a :href="href" v-bind="props.action" class="breadcrumb-link" @click="navigate">
-          <img v-if="item.label === 'Home'" src="/logo.svg" alt="" class="breadcrumb-logo" />
+          <i v-if="item.icon" :class="item.icon" aria-hidden="true"></i>
           <span v-bind="props.label">{{ item.label }}</span>
         </a>
       </RouterLink>
       <span v-else v-bind="props.action">
-        <img v-if="item.label === 'Home'" src="/logo.svg" alt="" class="breadcrumb-logo" />
+        <i v-if="item.icon" :class="item.icon" aria-hidden="true"></i>
         <span v-bind="props.label">{{ item.label }}</span>
       </span>
     </template>
@@ -42,12 +46,6 @@ const model = computed<MenuItem[]>(() =>
 .breadcrumbs {
   padding: 0;
   background: transparent;
-}
-
-.breadcrumb-logo {
-  width: 1em;
-  height: 1em;
-  flex: none;
 }
 
 .breadcrumb-link {

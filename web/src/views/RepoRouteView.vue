@@ -60,8 +60,8 @@ async function loadCurrentPage(): Promise<void> {
   <main class="page">
     <TopBar
       :items="[
-        { label: 'Home', to: '/' },
-        { label: store.currentRepo?.repo.repo_label ?? parsed.repoPath },
+        { kind: 'home', label: 'Home', to: '/' },
+        { kind: 'repo', label: store.currentRepo?.repo.repo_label ?? parsed.repoPath },
       ]"
     />
 

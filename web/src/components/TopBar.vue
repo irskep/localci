@@ -51,52 +51,55 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="top-bar">
-    <AppBreadcrumbs :items="items" />
-    <PMenubar class="top-bar-menu" :model="topBarItems" aria-label="Top navigation" />
-  </div>
+  <PMenubar class="top-bar" :model="topBarItems" aria-label="Top navigation">
+    <template #start>
+      <img src="/logo.svg" alt="LocalCI" class="top-bar-logo" />
+      <AppBreadcrumbs :items="items" />
+      <slot name="left-actions"></slot>
+    </template>
+  </PMenubar>
 </template>
 
 <style scoped>
-.top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+:global(.top-bar.p-menubar) {
   gap: var(--app-space-4);
   margin-bottom: var(--app-page-block-padding);
-  min-width: 0;
-}
-
-.top-bar-menu {
-  flex: none;
-}
-
-:global(.top-bar-menu.p-menubar) {
   padding: 0;
   border: 0;
   background: transparent;
+  min-width: 0;
 }
 
-:global(.top-bar-menu .p-menubar-root-list) {
+:global(.top-bar .p-menubar-start) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-5);
+  min-width: 0;
+  margin-right: auto;
+}
+
+.top-bar-logo {
+  display: block;
+  flex: none;
+  width: auto;
+  height: 40px;
+}
+
+:global(.top-bar .p-menubar-root-list) {
   gap: var(--app-space-2);
 }
 
-:global(.top-bar-menu .p-menubar-item-content) {
+:global(.top-bar .p-menubar-item-content) {
   border-radius: var(--p-content-border-radius);
 }
 
-:global(.top-bar-menu .p-menubar-item-link) {
+:global(.top-bar .p-menubar-item-link) {
   gap: var(--app-space-3);
   padding-block: var(--app-space-2);
 }
 
 @media (max-width: 640px) {
-  .top-bar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .top-bar-menu {
+  :global(.top-bar .p-menubar-start) {
     width: 100%;
   }
 }

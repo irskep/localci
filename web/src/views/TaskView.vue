@@ -124,16 +124,19 @@ onUnmounted(() => store.unsubscribeTask())
   <main class="page task-page">
     <TopBar
       :items="[
-        { label: 'Home', to: '/' },
+        { kind: 'home', label: 'Home', to: '/' },
         {
+          kind: 'repo',
           label: taskResponse?.repo.repo_label ?? parsed.repoPath,
           to: repoPathURL(parsed.repoPath),
         },
         {
+          kind: 'commit',
           label: parsed.commit ? shortCommit(parsed.commit) : 'Commit',
           to: parsed.commit ? commitURL(parsed.repoPath, parsed.commit) : undefined,
         },
         {
+          kind: 'task',
           label: taskName,
           to:
             parsed.kind === 'attempt' && parsed.commit && parsed.taskName
@@ -141,10 +144,20 @@ onUnmounted(() => store.unsubscribeTask())
               : undefined,
         },
         ...(parsed.kind === 'attempt' && parsed.attempt
-          ? [{ label: `attempt ${parsed.attempt}` }]
+          ? [{ kind: 'attempt' as const, label: `attempt ${parsed.attempt}` }]
           : []),
       ]"
-    />
+    >
+      <template #left-actions>
+        <RouterLink
+          v-if="parsed.taskName"
+          :to="repoTaskURL(parsed.repoPath, parsed.taskName)"
+          class="top-bar-action-link"
+        >
+          <PButton label="History" size="small" severity="secondary" text icon="pi pi-history" />
+        </RouterLink>
+      </template>
+    </TopBar>
 
     <PMessage v-if="taskError && !task" severity="error" :closable="false">{{
       taskError
@@ -158,19 +171,6 @@ onUnmounted(() => store.unsubscribeTask())
       <section class="task-layout">
         <aside class="task-sidebar">
           <div class="panel-actions">
-            <RouterLink
-              v-if="parsed.taskName"
-              :to="repoTaskURL(parsed.repoPath, parsed.taskName)"
-              class="panel-action-link"
-            >
-              <PButton
-                label="History"
-                size="small"
-                severity="secondary"
-                outlined
-                icon="pi pi-history"
-              />
-            </RouterLink>
             <PButton
               :label="canceling ? 'Canceling...' : 'Cancel'"
               size="small"
@@ -322,7 +322,7 @@ onUnmounted(() => store.unsubscribeTask())
   gap: var(--p-navigation-item-gap);
 }
 
-.panel-action-link {
+.top-bar-action-link {
   display: inline-flex;
   text-decoration: none;
 }
