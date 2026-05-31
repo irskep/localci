@@ -58,4 +58,5 @@ jobs:
           LOCALCI_CACHE_DIR: ${{ runner.temp }}/localci/cache
           LOCALCI_TASK_CACHE_DIR: ${{ runner.temp }}/localci/task-cache/${{ matrix.slug }}
           LOCALCI_TASK_OUTPUT_DIR: ${{ runner.temp }}/localci/out/${{ matrix.slug }}
+          LOCALCI_TASK_ARTIFACTS_FILE: ${{ runner.temp }}/localci/out/${{ matrix.slug }}/localci.artifacts.json
         run: mise run '${{ matrix.task }}'
