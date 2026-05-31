@@ -2,6 +2,10 @@
 
 <!-- loosely based on https://keepachangelog.com/en/1.0.0/ -->
 
+## 0.2.6 - 2026-05-31
+
+- Show commit subjects in run lists and commit headers so runs are easier to tell apart.
+
 ## 0.2.5 - 2026-05-31
 
 - Fix terminal dashboard artifact tabs so tasks with many artifacts remain browsable.
