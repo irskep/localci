@@ -137,7 +137,7 @@ async function loadCurrentPage(): Promise<void> {
                         :repo-label="entry.repo.repo_label"
                       />
                       <span>{{ shortCommit(entry.commit) }}</span>
-                      <span v-if="entry.attempt > 0">attempt {{ entry.attempt }}</span>
+                      <span v-if="entry.attempt > 1">attempt {{ entry.attempt }}</span>
                     </div>
                   </div>
                 </li>
