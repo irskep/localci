@@ -4,14 +4,17 @@ import { useRoute } from 'vue-router'
 
 import TopBar from '@/components/TopBar.vue'
 import RepoLink from '@/components/RepoLink.vue'
-import RunLink from '@/components/RunLink.vue'
 import RunList from '@/components/RunList.vue'
 import SetupEmptyState from '@/components/SetupEmptyState.vue'
 import WebsocketStatus from '@/components/WebsocketStatus.vue'
-import { shortCommit } from '@/lib/api'
+import { shortCommit, type QueueEntry } from '@/lib/api'
 import { taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
+
+type QueueDisplayEntry = QueueEntry & {
+  state: 'running' | 'queued'
+}
 
 const store = useLocalciStore()
 const route = useRoute()
@@ -20,13 +23,16 @@ const recentRows = computed(() => store.home?.recent_commits ?? [])
 const repoRows = computed(() => store.home?.repos ?? [])
 const queueRows = computed(() => store.home?.queue.pending ?? [])
 const active = computed(() => store.home?.queue.active)
+const queueDisplayRows = computed<QueueDisplayEntry[]>(() => [
+  ...(active.value ? [{ ...active.value, state: 'running' as const }] : []),
+  ...queueRows.value.map((entry) => ({ ...entry, state: 'queued' as const })),
+])
 const isFreshEmpty = computed(
   () =>
     !!store.home &&
     recentRows.value.length === 0 &&
     repoRows.value.length === 0 &&
-    queueRows.value.length === 0 &&
-    !active.value,
+    queueDisplayRows.value.length === 0,
 )
 const currentBefore = computed(() => queryString(route.query.before))
 const newerPage = computed(() => {
@@ -95,47 +101,51 @@ async function loadCurrentPage(): Promise<void> {
         </div>
 
         <aside class="stack">
-          <PPanel header="Active Now">
-            <div class="active-panel-content">
-              <WebsocketStatus />
-              <div v-if="active" class="inline-link-list">
-                <RepoLink :repo-path="active.repo.repo_path" :repo-label="active.repo.repo_label" />
-                <RunLink :repo-path="active.repo.repo_path" :commit="active.commit" />
-                <RouterLink :to="taskURL(active.repo.repo_path, active.commit, active.task)">
-                  {{ active.task }}
-                </RouterLink>
-              </div>
-              <div v-else class="empty-state">No task is running.</div>
-            </div>
-          </PPanel>
-
           <PPanel header="Queue">
-            <ul v-if="queueRows.length > 0" class="queue-list">
-              <li
-                v-for="entry in queueRows.slice(0, 6)"
-                :key="`${entry.repo.repo_path}:${entry.commit}:${entry.task}`"
-                class="queue-entry"
+            <div class="queue-panel-content">
+              <WebsocketStatus />
+              <TransitionGroup
+                v-if="queueDisplayRows.length > 0"
+                tag="ul"
+                name="queue-row"
+                class="queue-list"
+                appear
               >
-                <i class="pi pi-clock run-task-icon run-task-icon-queued" aria-hidden="true"></i>
-                <div class="queue-entry-body">
-                  <RouterLink
-                    class="queue-task"
-                    :to="taskURL(entry.repo.repo_path, entry.commit, entry.task)"
-                  >
-                    {{ entry.task }}
-                  </RouterLink>
-                  <div class="queue-meta">
-                    <RepoLink
-                      :repo-path="entry.repo.repo_path"
-                      :repo-label="entry.repo.repo_label"
-                    />
-                    <span>{{ shortCommit(entry.commit) }}</span>
-                    <span v-if="entry.attempt > 0">attempt {{ entry.attempt }}</span>
+                <li
+                  v-for="entry in queueDisplayRows.slice(0, 6)"
+                  :key="`${entry.repo.repo_path}:${entry.commit}:${entry.task}:${entry.attempt}`"
+                  class="queue-entry"
+                  :class="`queue-entry-${entry.state}`"
+                >
+                  <i
+                    :class="
+                      entry.state === 'running'
+                        ? 'pi pi-spin pi-spinner run-task-icon run-task-icon-running'
+                        : 'pi pi-clock run-task-icon run-task-icon-queued'
+                    "
+                    aria-hidden="true"
+                  ></i>
+                  <div class="queue-entry-body">
+                    <RouterLink
+                      class="queue-task"
+                      :to="taskURL(entry.repo.repo_path, entry.commit, entry.task)"
+                    >
+                      {{ entry.task }}
+                    </RouterLink>
+                    <div class="queue-meta">
+                      <span class="queue-state">{{ entry.state }}</span>
+                      <RepoLink
+                        :repo-path="entry.repo.repo_path"
+                        :repo-label="entry.repo.repo_label"
+                      />
+                      <span>{{ shortCommit(entry.commit) }}</span>
+                      <span v-if="entry.attempt > 0">attempt {{ entry.attempt }}</span>
+                    </div>
                   </div>
-                </div>
-              </li>
-            </ul>
-            <div v-else class="empty-state">Queue is idle.</div>
+                </li>
+              </TransitionGroup>
+              <div v-else class="empty-state">Queue is idle.</div>
+            </div>
           </PPanel>
 
           <PPanel header="Repo">
@@ -188,6 +198,7 @@ async function loadCurrentPage(): Promise<void> {
 }
 
 .queue-list {
+  position: relative;
   display: grid;
   gap: var(--app-space-3);
   margin: 0;
@@ -201,6 +212,16 @@ async function loadCurrentPage(): Promise<void> {
   align-items: start;
   gap: var(--app-space-3);
   min-width: 0;
+  padding: var(--app-space-2);
+  border-radius: var(--p-border-radius-sm);
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.queue-entry-running {
+  background: color-mix(in srgb, var(--p-primary-color) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-primary-color) 18%, transparent);
 }
 
 .queue-entry > .run-task-icon {
@@ -230,18 +251,34 @@ async function loadCurrentPage(): Promise<void> {
   font-size: var(--p-form-field-sm-font-size);
 }
 
-.active-panel-content {
+.queue-state {
+  color: var(--p-text-color);
+  font-weight: 600;
+}
+
+.queue-panel-content {
   display: grid;
   gap: var(--app-space-3);
   min-width: 0;
 }
 
-.inline-link-list {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--app-space-3);
-  min-width: 0;
+.queue-row-enter-active,
+.queue-row-leave-active,
+.queue-row-move {
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.queue-row-enter-from,
+.queue-row-leave-to {
+  opacity: 0;
+  transform: translateY(calc(var(--app-space-2) * -1));
+}
+
+.queue-row-leave-active {
+  position: absolute;
+  width: 100%;
 }
 
 @media (max-width: 860px) {
