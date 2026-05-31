@@ -11,6 +11,8 @@ import type {
   QueueResponse,
   RevealArtifactResponse,
   RepoResponse,
+  RepoSummary,
+  RepoTaskHistoryResponse,
   RetryResponse,
   TaskResponse,
 } from '@/lib/api'
@@ -24,7 +26,9 @@ import {
   parseHomeResponse,
   parseQueueResponse,
   parseRevealArtifactResponse,
+  parseRepoListResponse,
   parseRepoResponse,
+  parseRepoTaskHistoryResponse,
   parseRetryResponse,
   parseTaskResponse,
   postJSON,
@@ -49,8 +53,10 @@ type EventStream = {
 
 export const useLocalciStore = defineStore('localci', () => {
   const home = ref<HomeResponse | null>(null)
+  const repoList = ref<RepoSummary[]>([])
   const queue = ref<QueueResponse | null>(null)
   const currentRepo = ref<RepoResponse | null>(null)
+  const currentRepoTaskHistory = ref<RepoTaskHistoryResponse | null>(null)
   const currentCommit = ref<CommitResponse | null>(null)
   const taskRequest = ref<RequestState<TaskResponse>>({ state: 'idle' })
   const artifactList = ref<ArtifactListResponse | null>(null)
@@ -58,8 +64,10 @@ export const useLocalciStore = defineStore('localci', () => {
   const loading = ref(false)
   const error = ref('')
   const homeLoaded = ref(false)
+  const repoListLoaded = ref(false)
   const queueLoaded = ref(false)
   const repoLoaded = ref(false)
+  const repoTaskHistoryLoaded = ref(false)
   const commitLoaded = ref(false)
   const taskLoaded = ref(false)
   const artifactLoaded = ref(false)
@@ -71,7 +79,7 @@ export const useLocalciStore = defineStore('localci', () => {
     () => queue.value?.pending.length ?? home.value?.queue.pending.length ?? 0,
   )
   const activeEntry = computed(() => queue.value?.active ?? home.value?.queue.active)
-  const repos = computed(() => home.value?.repos ?? [])
+  const repos = computed(() => (repoListLoaded.value ? repoList.value : (home.value?.repos ?? [])))
   const currentTask = computed(() => {
     switch (taskRequest.value.state) {
       case 'loaded':
@@ -102,6 +110,8 @@ export const useLocalciStore = defineStore('localci', () => {
     const result = await load(() => getJSON('/api', parseHomeResponse))
     if (result) {
       home.value = result
+      repoList.value = result.repos
+      repoListLoaded.value = true
       queue.value = result.queue
     }
     homeLoaded.value = true
@@ -113,6 +123,8 @@ export const useLocalciStore = defineStore('localci', () => {
     const result = await load(() => getJSON(`/api${query}`, parseHomeResponse))
     if (result) {
       home.value = result
+      repoList.value = result.repos
+      repoListLoaded.value = true
       queue.value = result.queue
     }
     homeLoaded.value = true
@@ -122,9 +134,20 @@ export const useLocalciStore = defineStore('localci', () => {
     homeLoaded.value = false
     subscribePage('/api', parseHomeResponse, (data) => {
       home.value = data
+      repoList.value = data.repos
+      repoListLoaded.value = true
       queue.value = data.queue
       homeLoaded.value = true
     })
+  }
+
+  async function loadRepos(): Promise<void> {
+    if (repoListLoaded.value) return
+    const result = await load(() => getJSON('/api/repo', parseRepoListResponse))
+    if (result) {
+      repoList.value = result
+      repoListLoaded.value = true
+    }
   }
 
   async function loadQueue(): Promise<void> {
@@ -167,6 +190,15 @@ export const useLocalciStore = defineStore('localci', () => {
     subscribePage(apiPath, parseRepoResponse, (data) => {
       currentRepo.value = data
       repoLoaded.value = true
+    })
+  }
+
+  function subscribeRepoTaskHistory(apiPath: string): void {
+    repoTaskHistoryLoaded.value = false
+    currentRepoTaskHistory.value = null
+    subscribePage(apiPath, parseRepoTaskHistoryResponse, (data) => {
+      currentRepoTaskHistory.value = data
+      repoTaskHistoryLoaded.value = true
     })
   }
 
@@ -451,6 +483,7 @@ export const useLocalciStore = defineStore('localci', () => {
     currentArtifact,
     currentCommit,
     currentRepo,
+    currentRepoTaskHistory,
     currentTask,
     error,
     artifactLoaded,
@@ -466,6 +499,7 @@ export const useLocalciStore = defineStore('localci', () => {
     loadQueue,
     loadRepo,
     loadRepoPage,
+    loadRepos,
     loadTask,
     loading,
     queue,
@@ -473,12 +507,15 @@ export const useLocalciStore = defineStore('localci', () => {
     queueCount,
     revealArtifact,
     repoLoaded,
+    repoListLoaded,
+    repoTaskHistoryLoaded,
     repos,
     retryTask,
     subscribeCommit,
     subscribeHome,
     subscribeQueue,
     subscribeRepo,
+    subscribeRepoTaskHistory,
     taskErrorFor,
     taskLoaded,
     taskLoadingFor,

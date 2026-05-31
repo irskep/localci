@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CommitSubject from '@/components/CommitSubject.vue'
 import RepoLink from '@/components/RepoLink.vue'
 import RunLink from '@/components/RunLink.vue'
 import {
@@ -390,9 +391,10 @@ function taskSummaryStatusLabel(status: string): string {
         >
           {{ activityRelativeTime(run) }}
         </time>
-        <div v-if="commitSubject(run.annotations)" class="commit-subject">
-          {{ commitSubject(run.annotations) }}
-        </div>
+        <CommitSubject
+          v-if="commitSubject(run.annotations)"
+          :subject="commitSubject(run.annotations)"
+        />
       </div>
       <div class="run-meta-secondary">
         <RepoLink v-if="showRepo" :repo-path="repoPath" :repo-label="repoLabel" />
@@ -653,22 +655,6 @@ function taskSummaryStatusLabel(status: string): string {
 
 .run-meta-time {
   font-size: var(--p-form-field-sm-font-size);
-}
-
-.commit-subject {
-  min-width: 0;
-  width: fit-content;
-  max-width: 100%;
-  padding: var(--app-space-1) var(--app-space-2);
-  border: 1px solid var(--p-content-border-color);
-  border-radius: var(--p-border-radius-sm);
-  background: var(--p-content-hover-background);
-  color: var(--p-text-muted-color);
-  font-family: var(--app-mono-font-family);
-  font-size: var(--p-form-field-sm-font-size);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .attribute-list {

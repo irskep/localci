@@ -49,6 +49,20 @@ export type RepoResponse = {
   newer_before?: string
 }
 
+export type RepoTaskHistoryResponse = {
+  repo: RepoSummary
+  task: string
+  short_name: string
+  runs: RepoTaskHistoryItem[]
+}
+
+export type RepoTaskHistoryItem = {
+  commit: string
+  annotations?: Record<string, string>
+  task: TaskSummary
+  activity_at: string
+}
+
 export type CommitResponse = {
   repo: RepoSummary
   commit: CommitStatusView
@@ -204,6 +218,10 @@ export function parseHomeResponse(value: unknown): HomeResponse {
   }
 }
 
+export function parseRepoListResponse(value: unknown): RepoSummary[] {
+  return asArray(value, 'repos').map(parseRepoSummary)
+}
+
 export function parseQueueResponse(value: unknown): QueueResponse {
   const data = asObject(value, 'queue')
   return {
@@ -219,6 +237,16 @@ export function parseRepoResponse(value: unknown): RepoResponse {
     commits: asArray(data.commits, 'repo.commits').map(parseCommitSummary),
     next_before: optionalString(data.next_before, 'repo.next_before'),
     newer_before: optionalString(data.newer_before, 'repo.newer_before'),
+  }
+}
+
+export function parseRepoTaskHistoryResponse(value: unknown): RepoTaskHistoryResponse {
+  const data = asObject(value, 'repo task history')
+  return {
+    repo: parseRepoSummary(data.repo),
+    task: asString(data.task, 'repo_task_history.task'),
+    short_name: asString(data.short_name, 'repo_task_history.short_name'),
+    runs: asArray(data.runs, 'repo_task_history.runs').map(parseRepoTaskHistoryItem),
   }
 }
 
@@ -325,6 +353,16 @@ function parseCommitSummary(value: unknown): CommitSummary {
     annotations: parseOptionalStringRecord(data.annotations, 'commit.annotations'),
     tasks: asArray(data.tasks, 'commit.tasks').map(parseTaskSummary),
     activity_at: asString(data.activity_at, 'commit.activity_at'),
+  }
+}
+
+function parseRepoTaskHistoryItem(value: unknown): RepoTaskHistoryItem {
+  const data = asObject(value, 'repo task history item')
+  return {
+    commit: asString(data.commit, 'repo_task_history_item.commit'),
+    annotations: parseOptionalStringRecord(data.annotations, 'repo_task_history_item.annotations'),
+    task: parseTaskSummary(data.task),
+    activity_at: asString(data.activity_at, 'repo_task_history_item.activity_at'),
   }
 }
 

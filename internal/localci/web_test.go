@@ -146,6 +146,7 @@ func TestWebServerAPI(t *testing.T) {
 	run.FinishedAt = record.FinishedAt
 	run.DiscoveredTasks = []Task{{Name: "localci:test"}}
 	run.TaskResults = []TaskRecord{record}
+	run.Annotations = map[string]string{"commit_subject": "Add task history"}
 	run.RefreshSummary()
 	if err := writeRunRecord(paths, run); err != nil {
 		t.Fatalf("writeRunRecord returned error: %v", err)
@@ -223,6 +224,25 @@ func TestWebServerAPI(t *testing.T) {
 	}
 
 	taskPath := url.PathEscape("localci:test")
+	resp, err = http.Get(baseURL + "/api/repo/" + repoRoutePath + "/task/" + taskPath)
+	if err != nil {
+		t.Fatalf("GET repo task history api returned error: %v", err)
+	}
+	var taskHistory apiRepoTaskHistoryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&taskHistory); err != nil {
+		t.Fatalf("Decode repo task history returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if taskHistory.Task != "localci:test" || taskHistory.ShortName != "test" {
+		t.Fatalf("unexpected task history metadata: %#v", taskHistory)
+	}
+	if len(taskHistory.Runs) != 1 || taskHistory.Runs[0].Commit != commit || taskHistory.Runs[0].Task.Status != ExecutionStatusSucceeded {
+		t.Fatalf("unexpected task history runs: %#v", taskHistory.Runs)
+	}
+	if taskHistory.Runs[0].Annotations["commit_subject"] != "Add task history" {
+		t.Fatalf("task history annotations = %#v", taskHistory.Runs[0].Annotations)
+	}
+
 	taskAPIBase := baseURL + "/api/repo/" + repoRoutePath + "/commit/" + commit + "/task/" + taskPath
 	resp, err = http.Get(taskAPIBase)
 	if err != nil {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { MenuItem } from 'primevue/menuitem'
 
@@ -24,6 +24,10 @@ const repoMenuItems = computed<MenuItem[]>(() =>
     command: () => router.push(repoPathURL(repo.repo_path)),
   })),
 )
+
+onMounted(() => {
+  void store.loadRepos()
+})
 
 function toggleRepoMenu(event: MouseEvent): void {
   repoMenu.value?.toggle(event)

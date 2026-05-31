@@ -53,6 +53,20 @@ type apiRepoResponse struct {
 	NewerBefore string             `json:"newer_before,omitempty"`
 }
 
+type apiRepoTaskHistoryResponse struct {
+	Repo      apiRepoSummary           `json:"repo"`
+	Task      string                   `json:"task"`
+	ShortName string                   `json:"short_name"`
+	Runs      []apiRepoTaskHistoryItem `json:"runs"`
+}
+
+type apiRepoTaskHistoryItem struct {
+	Commit      string            `json:"commit"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	Task        apiTaskSummary    `json:"task"`
+	ActivityAt  time.Time         `json:"activity_at"`
+}
+
 type apiCommitResponse struct {
 	Repo   apiRepoSummary   `json:"repo"`
 	Commit CommitStatusView `json:"commit"`

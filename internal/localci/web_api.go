@@ -150,15 +150,7 @@ func (s WebServer) handleAPIRepoRoutes(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	commitIndex := indexOfSegment(segments, "commit")
-	var repoSegments []string
-	var tail []string
-	if commitIndex < 0 {
-		repoSegments = segments
-	} else {
-		repoSegments = segments[:commitIndex]
-		tail = segments[commitIndex:]
-	}
+	repoSegments, tail := splitRepoRouteTail(segments)
 
 	repoDir, err := s.repoDirFromRoute(repoSegments)
 	if err != nil {
@@ -181,6 +173,19 @@ func (s WebServer) handleAPIRepoRoutes(w http.ResponseWriter, r *http.Request, s
 			return
 		}
 		s.handleAPIRepoCommitIndex(w, repoDir)
+		return
+	}
+
+	if tail[0] == "task" {
+		if len(tail) != 2 {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w, http.MethodGet)
+			return
+		}
+		s.handleAPIRepoTaskHistory(w, repoDir, tail[1])
 		return
 	}
 
@@ -295,6 +300,19 @@ func (s WebServer) handleAPIRepo(w http.ResponseWriter, r *http.Request, repoDir
 		NextBefore:  runPage.NextBefore,
 		NewerBefore: runPage.NewerBefore,
 	})
+}
+
+func (s WebServer) handleAPIRepoTaskHistory(w http.ResponseWriter, repoDir string, taskName string) {
+	resp, err := s.apiRepoTaskHistory(repoDir, taskName)
+	if err != nil {
+		if errorsIsRecordNotFound(err) {
+			writeAPIError(w, http.StatusNotFound, fmt.Errorf("repo not found"))
+			return
+		}
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s WebServer) handleAPIRepoCommitIndex(w http.ResponseWriter, repoDir string) {
@@ -646,6 +664,51 @@ func (s WebServer) buildRunCommitSummaries(runs []RunRecord) ([]apiCommitSummary
 	return views, nil
 }
 
+func (s WebServer) apiRepoTaskHistory(repoDir string, taskName string) (apiRepoTaskHistoryResponse, error) {
+	commits, err := HistoryReader{Paths: s.Paths}.ListRepoCommits(repoDir)
+	if err != nil {
+		return apiRepoTaskHistoryResponse{}, err
+	}
+	summaries, err := s.buildRepoCommitSummaries(repoDir, commits)
+	if err != nil {
+		return apiRepoTaskHistoryResponse{}, err
+	}
+	repo, err := s.apiRepoSummary(repoDir)
+	if err != nil {
+		return apiRepoTaskHistoryResponse{}, err
+	}
+
+	resp := apiRepoTaskHistoryResponse{
+		Repo:      repo,
+		Task:      taskName,
+		ShortName: trimTaskPrefix(taskName),
+		Runs:      make([]apiRepoTaskHistoryItem, 0, len(summaries)),
+	}
+	for _, summary := range summaries {
+		task, ok := findAPITaskSummary(summary.Tasks, taskName)
+		if !ok {
+			continue
+		}
+		resp.ShortName = task.ShortName
+		resp.Runs = append(resp.Runs, apiRepoTaskHistoryItem{
+			Commit:      summary.Commit,
+			Annotations: cloneAnnotations(summary.Annotations),
+			Task:        task,
+			ActivityAt:  summary.ActivityAt,
+		})
+	}
+	return resp, nil
+}
+
+func findAPITaskSummary(tasks []apiTaskSummary, name string) (apiTaskSummary, bool) {
+	for _, task := range tasks {
+		if task.Name == name {
+			return task, true
+		}
+	}
+	return apiTaskSummary{}, false
+}
+
 func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered []Task, queued []QueueEntry, active *ActiveTask) (apiCommitSummary, error) {
 	records := map[string]TaskRecord{}
 	for _, record := range run.TaskResults {
@@ -785,6 +848,24 @@ func indexOfSegment(segments []string, target string) int {
 		}
 	}
 	return -1
+}
+
+func splitRepoRouteTail(segments []string) ([]string, []string) {
+	commitIndex := indexOfSegment(segments, "commit")
+	taskIndex := indexOfSegment(segments, "task")
+	tailIndex := -1
+	switch {
+	case commitIndex >= 0 && taskIndex >= 0:
+		tailIndex = min(commitIndex, taskIndex)
+	case commitIndex >= 0:
+		tailIndex = commitIndex
+	case taskIndex >= 0:
+		tailIndex = taskIndex
+	}
+	if tailIndex < 0 {
+		return segments, nil
+	}
+	return segments[:tailIndex], segments[tailIndex:]
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

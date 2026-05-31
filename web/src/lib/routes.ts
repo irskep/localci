@@ -1,4 +1,4 @@
-export type RouteKind = 'repo' | 'commit' | 'task' | 'attempt' | 'artifact'
+export type RouteKind = 'repo' | 'repo-task' | 'commit' | 'task' | 'attempt' | 'artifact'
 
 export type ParsedRepoRoute = {
   kind: RouteKind
@@ -24,6 +24,10 @@ export function commitURL(repoPath: string, commit: string): string {
 
 export function taskURL(repoPath: string, commit: string, taskName: string): string {
   return `${commitURL(repoPath, commit)}/task/${encodePathSegment(taskName)}`
+}
+
+export function repoTaskURL(repoPath: string, taskName: string): string {
+  return `${repoPathURL(repoPath)}/task/${encodePathSegment(taskName)}`
 }
 
 export function attemptURL(
@@ -55,6 +59,24 @@ export function parseRepoRoute(pathname: string): ParsedRepoRoute {
   }
 
   const commitIndex = segments.indexOf('commit')
+  const taskIndex = segments.indexOf('task')
+  if (taskIndex > 1 && (commitIndex < 0 || taskIndex < commitIndex)) {
+    const repoPath = segments.slice(1, taskIndex).join('/')
+    const taskName = segments[taskIndex + 1]
+    if (!taskName) {
+      throw new Error(`missing task in route: ${pathname}`)
+    }
+    if (segments.length !== taskIndex + 2) {
+      throw new Error(`unsupported repo task route: ${pathname}`)
+    }
+    return {
+      kind: 'repo-task',
+      repoPath,
+      taskName,
+      apiPath: `/api${pathname}`,
+    }
+  }
+
   if (commitIndex < 0) {
     const repoPath = segments.slice(1).join('/')
     if (!repoPath) {

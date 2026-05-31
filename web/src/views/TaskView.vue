@@ -10,6 +10,7 @@ import {
   commitURL,
   parseRepoRoute,
   repoPathURL,
+  repoTaskURL,
   taskURL,
 } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
@@ -151,22 +152,33 @@ onUnmounted(() => store.unsubscribeTask())
     <template v-if="task && parsed.commit && parsed.taskName">
       <section class="task-layout">
         <aside class="task-sidebar">
+          <div class="panel-actions">
+            <RouterLink
+              v-if="parsed.taskName"
+              :to="repoTaskURL(parsed.repoPath, parsed.taskName)"
+              class="panel-action-link"
+            >
+              <PButton
+                label="History"
+                size="small"
+                severity="secondary"
+                outlined
+                icon="pi pi-history"
+              />
+            </RouterLink>
+            <PButton
+              :label="canceling ? 'Canceling...' : 'Cancel'"
+              size="small"
+              severity="danger"
+              outlined
+              icon="pi pi-stop-circle"
+              :loading="canceling"
+              :disabled="!canCancel || canceling"
+              @click="cancel"
+            />
+            <PButton label="Retry" size="small" icon="pi pi-refresh" @click="retry" />
+          </div>
           <PPanel header="Attempts">
-            <template #icons>
-              <div class="panel-actions">
-                <PButton
-                  :label="canceling ? 'Canceling...' : 'Cancel'"
-                  size="small"
-                  severity="danger"
-                  outlined
-                  icon="pi pi-stop-circle"
-                  :loading="canceling"
-                  :disabled="!canCancel || canceling"
-                  @click="cancel"
-                />
-                <PButton label="Retry" size="small" icon="pi pi-refresh" @click="retry" />
-              </div>
-            </template>
             <ul class="attempt-list">
               <li v-for="attempt in task.attempts" :key="attempt.attempt">
                 <RouterLink
@@ -285,8 +297,13 @@ onUnmounted(() => store.unsubscribeTask())
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--p-navigation-item-gap);
+}
+
+.panel-action-link {
+  display: inline-flex;
+  text-decoration: none;
 }
 
 .attempt-list,

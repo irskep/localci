@@ -189,15 +189,7 @@ func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 		return resp, nil
 	}
 
-	commitIndex := indexOfSegment(segments, "commit")
-	var repoSegments []string
-	var tail []string
-	if commitIndex < 0 {
-		repoSegments = segments
-	} else {
-		repoSegments = segments[:commitIndex]
-		tail = segments[commitIndex:]
-	}
+	repoSegments, tail := splitRepoRouteTail(segments)
 
 	repoDir, err := s.repoDirFromRoute(repoSegments)
 	if err != nil {
@@ -222,6 +214,12 @@ func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 			NextBefore:  runPage.NextBefore,
 			NewerBefore: runPage.NewerBefore,
 		}, nil
+	}
+	if tail[0] == "task" {
+		if len(tail) != 2 {
+			return nil, fmt.Errorf("unsupported repo task resource: %s", strings.Join(tail, "/"))
+		}
+		return s.apiRepoTaskHistory(repoDir, tail[1])
 	}
 	if len(tail) < 2 || tail[0] != "commit" {
 		return nil, fmt.Errorf("unsupported repo resource: %s", strings.Join(segments, "/"))

@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import TopBar from '@/components/TopBar.vue'
+import CommitSubject from '@/components/CommitSubject.vue'
 import {
   commitSubject,
   displayAnnotationEntries,
@@ -68,9 +69,11 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
         "
         class="commit-meta"
       >
-        <div v-if="commitSubject(commit.annotations)" class="commit-subject">
-          {{ commitSubject(commit.annotations) }}
-        </div>
+        <CommitSubject
+          v-if="commitSubject(commit.annotations)"
+          :subject="commitSubject(commit.annotations)"
+          size="large"
+        />
         <div v-if="displayAnnotationEntries(commit.annotations).length > 0" class="attribute-list">
           <PTag
             v-for="attribute in displayAnnotationEntries(commit.annotations)"
@@ -81,7 +84,12 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
         </div>
       </section>
 
-      <PDataTable :value="tasks" data-key="name" size="small" class="table-surface">
+      <PDataTable
+        :value="tasks"
+        data-key="name"
+        size="small"
+        class="table-surface commit-task-table"
+      >
         <template #header>Tasks</template>
         <PColumn header="Task">
           <template #body="{ data }">
@@ -122,22 +130,9 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
 <style scoped>
 .commit-meta {
   display: grid;
-  gap: var(--app-space-2);
+  gap: var(--app-space-3);
   min-width: 0;
-}
-
-.commit-subject {
-  min-width: 0;
-  width: fit-content;
-  max-width: 100%;
-  padding: var(--app-space-2) var(--app-space-3);
-  border: 1px solid var(--p-content-border-color);
-  border-radius: var(--p-border-radius-sm);
-  background: var(--p-content-hover-background);
-  color: var(--p-text-muted-color);
-  font-family: var(--app-mono-font-family);
-  font-size: var(--p-form-field-lg-font-size);
-  overflow-wrap: anywhere;
+  margin-bottom: var(--app-space-5);
 }
 
 .attribute-list {

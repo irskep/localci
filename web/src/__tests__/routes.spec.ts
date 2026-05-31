@@ -23,4 +23,13 @@ describe('parseRepoRoute', () => {
       artifactPath: 'dist/index.html',
     })
   })
+
+  it('parses a repo task history route with encoded task names', () => {
+    expect(parseRepoRoute('/repo/cli/localci/task/%2F%2Fweb%3Alocalci%3Atest')).toMatchObject({
+      kind: 'repo-task',
+      repoPath: 'cli/localci',
+      taskName: '//web:localci:test',
+      apiPath: '/api/repo/cli/localci/task/%2F%2Fweb%3Alocalci%3Atest',
+    })
+  })
 })
