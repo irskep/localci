@@ -2,7 +2,7 @@
 
 <!-- loosely based on https://keepachangelog.com/en/1.0.0/ -->
 
-## Unreleased
+## 0.2.7 - 2026-05-31
 
 - Add task history across the web UI, CLI, and terminal dashboard.
 - Add task-declared artifact links so important outputs are surfaced directly across web, CLI, and TUI views.
