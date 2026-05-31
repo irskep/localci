@@ -30,9 +30,10 @@ function mountRunSurface(
   tasks: TaskSummary[],
   props: Partial<InstanceType<typeof RunSurface>['$props']> = {},
 ) {
+  const runProp = props.run ?? run(tasks)
   return mount(RunSurface, {
     props: {
-      run: run(tasks),
+      run: runProp,
       repoPath: 'cli/localci',
       ...props,
     },
@@ -86,6 +87,22 @@ describe('RunSurface', () => {
     expect(meter.text()).toContain('"label":"queued","value":1')
     expect(meter.text()).toContain('"label":"not run","value":1')
     expect(wrapper.text()).toContain('1/4 complete')
+  })
+
+  it('renders commit subjects apart from generic annotations', () => {
+    const wrapper = mountRunSurface([task('succeeded', 'build')], {
+      run: {
+        ...run([task('succeeded', 'build')]),
+        annotations: {
+          branch: 'main',
+          commit_subject: 'Fix artifact tab overflow',
+        },
+      },
+    })
+
+    expect(wrapper.find('.commit-subject').text()).toBe('Fix artifact tab overflow')
+    expect(wrapper.text()).toContain('branch: main')
+    expect(wrapper.text()).not.toContain('commit_subject')
   })
 
   it('groups high-volume runs by package path', () => {

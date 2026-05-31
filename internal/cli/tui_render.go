@@ -214,6 +214,9 @@ func (m tuiModel) renderSelectedRunDetail(theme tuiTheme, height int, width int)
 		bar.Width = max(8, width-8)
 		lines = append(lines, bar.ViewAs(runProgress(run.Tasks)))
 	}
+	if subject := run.Annotations[localci.AnnotationCommitSubject]; subject != "" {
+		lines = append(lines, truncate("message: "+subject, width-4))
+	}
 	if branch := run.Annotations["branch"]; branch != "" {
 		lines = append(lines, truncate("branch: "+branch, width-4))
 	}

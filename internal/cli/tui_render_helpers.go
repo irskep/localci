@@ -20,6 +20,9 @@ func runListLine(run tuiCommitSummary, width int) string {
 		mark = "✓"
 	}
 	line := fmt.Sprintf("%s %s  %s  %s  %s", mark, run.Repo.DisplayLabel(), shortCommit(run.Commit), taskCountsShort(run.Tasks), timeAgo(run.ActivityAt))
+	if subject := run.Annotations[localci.AnnotationCommitSubject]; subject != "" && width >= 64 {
+		line += "  " + subject
+	}
 	if branch := run.Annotations["branch"]; branch != "" && width >= 72 {
 		line += "  " + branch
 	}

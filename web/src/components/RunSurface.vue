@@ -2,7 +2,8 @@
 import RepoLink from '@/components/RepoLink.vue'
 import RunLink from '@/components/RunLink.vue'
 import {
-  annotationEntries,
+  commitSubject,
+  displayAnnotationEntries,
   displayTaskStatus,
   displayStatusSeverity,
   taskStatusIcon,
@@ -389,13 +390,16 @@ function taskSummaryStatusLabel(status: string): string {
         >
           {{ activityRelativeTime(run) }}
         </time>
+        <div v-if="commitSubject(run.annotations)" class="commit-subject">
+          {{ commitSubject(run.annotations) }}
+        </div>
       </div>
       <div class="run-meta-secondary">
         <RepoLink v-if="showRepo" :repo-path="repoPath" :repo-label="repoLabel" />
         <span v-else>{{ repoLabel ?? repoPath }}</span>
         <span class="attribute-list">
           <PTag
-            v-for="attribute in annotationEntries(run.annotations)"
+            v-for="attribute in displayAnnotationEntries(run.annotations)"
             :key="attribute.key"
             severity="secondary"
             :value="`${attribute.key}: ${attribute.value}`"
@@ -649,6 +653,14 @@ function taskSummaryStatusLabel(status: string): string {
 
 .run-meta-time {
   font-size: var(--p-form-field-sm-font-size);
+}
+
+.commit-subject {
+  min-width: 0;
+  color: var(--p-text-muted-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .attribute-list {

@@ -2,12 +2,16 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"localci/internal/localci"
 )
 
 func TestDiscoverRepoFromNestedCWD(t *testing.T) {
@@ -325,6 +329,34 @@ func TestAppRunRejectsInvalidAnnotations(t *testing.T) {
 	}
 }
 
+func TestRunAnnotationsIncludeCommitSubjectOnlyForClonedRuns(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	initRealGitRepo(t, repoDir)
+	commit, err := localci.GitHeadCommit(context.Background(), repoDir)
+	if err != nil {
+		t.Fatalf("GitHeadCommit returned error: %v", err)
+	}
+
+	app := App{}
+	cloned, err := app.runAnnotations(context.Background(), repoDir, commit, false, nil)
+	if err != nil {
+		t.Fatalf("runAnnotations returned error: %v", err)
+	}
+	if got, want := cloned[localci.AnnotationCommitSubject], "initial"; got != want {
+		t.Fatalf("cloned commit subject = %q, want %q", got, want)
+	}
+
+	noClone, err := app.runAnnotations(context.Background(), repoDir, commit+"*", true, nil)
+	if err != nil {
+		t.Fatalf("no-clone runAnnotations returned error: %v", err)
+	}
+	if got := noClone[localci.AnnotationCommitSubject]; got != "" {
+		t.Fatalf("no-clone commit subject = %q, want empty", got)
+	}
+}
+
 func TestSelectedHistoryStatusesRejectsUnknownStatus(t *testing.T) {
 	t.Parallel()
 
@@ -577,5 +609,28 @@ func writeGitFile(t *testing.T, repoDir string) {
 
 	if err := os.WriteFile(filepath.Join(repoDir, ".git"), []byte("gitdir: /tmp/worktree\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile .git returned error: %v", err)
+	}
+}
+
+func initRealGitRepo(t *testing.T, repoDir string) {
+	t.Helper()
+
+	runGit(t, repoDir, "init")
+	runGit(t, repoDir, "config", "user.email", "localci@example.test")
+	runGit(t, repoDir, "config", "user.name", "localci")
+	if err := os.WriteFile(filepath.Join(repoDir, "README.md"), []byte("test repo\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile README returned error: %v", err)
+	}
+	runGit(t, repoDir, "add", "README.md")
+	runGit(t, repoDir, "commit", "-m", "initial")
+}
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, string(output))
 	}
 }

@@ -77,8 +77,13 @@ func (a App) runPostcommit(flags cliFlags) error {
 		return err
 	}
 
+	ctx := context.Background()
 	client := localci.DaemonClient{Paths: runner.Paths}
-	enqueued, err := client.Postcommit(context.Background(), repo, commit, mergedAnnotations(localci.GitAnnotations(context.Background(), repo), flags.Annotation), requestedTasks)
+	annotations, err := a.runAnnotations(ctx, repo, commit, false, flags.Annotation)
+	if err != nil {
+		return err
+	}
+	enqueued, err := client.Postcommit(ctx, repo, commit, annotations, requestedTasks)
 	if err != nil {
 		return err
 	}
@@ -128,9 +133,13 @@ func (a App) runRun(flags cliFlags) error {
 		return err
 	}
 
+	ctx := context.Background()
 	client := localci.DaemonClient{Paths: runner.Paths}
-	annotations := mergedAnnotations(localci.GitAnnotations(context.Background(), repo), flags.Annotation)
-	enqueued, err := client.EnqueueRun(context.Background(), repo, commit, annotations, requestedTasks, flags.NoClone)
+	annotations, err := a.runAnnotations(ctx, repo, commit, flags.NoClone, flags.Annotation)
+	if err != nil {
+		return err
+	}
+	enqueued, err := client.EnqueueRun(ctx, repo, commit, annotations, requestedTasks, flags.NoClone)
 	if err != nil {
 		return err
 	}
@@ -290,10 +299,15 @@ func (a App) runInvoke(flags cliFlags) error {
 		return err
 	}
 
-	result, err := runner.Invoke(context.Background(), localci.InvokeRequest{
+	ctx := context.Background()
+	annotations, err := a.runAnnotations(ctx, repo, commit, flags.NoClone, flags.Annotation)
+	if err != nil {
+		return err
+	}
+	result, err := runner.Invoke(ctx, localci.InvokeRequest{
 		RepoDir:        repo,
 		Commit:         commit,
-		Annotations:    mergedAnnotations(localci.GitAnnotations(context.Background(), repo), flags.Annotation),
+		Annotations:    annotations,
 		RequestedTasks: requestedTasks,
 		NoClone:        flags.NoClone,
 	})
@@ -481,6 +495,23 @@ func mergedAnnotations(base map[string]string, override map[string]string) map[s
 		merged[key] = value
 	}
 	return merged
+}
+
+func (a App) runAnnotations(ctx context.Context, repo string, commit string, noClone bool, override map[string]string) (map[string]string, error) {
+	base := localci.GitAnnotations(ctx, repo)
+	if !noClone {
+		subject, err := localci.GitCommitSubject(ctx, repo, commit)
+		if err != nil {
+			return nil, err
+		}
+		if subject != "" {
+			if base == nil {
+				base = map[string]string{}
+			}
+			base[localci.AnnotationCommitSubject] = subject
+		}
+	}
+	return mergedAnnotations(base, override), nil
 }
 
 func writeJSON(w io.Writer, value any) error {

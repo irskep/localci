@@ -4,6 +4,8 @@ import { useRoute } from 'vue-router'
 
 import TopBar from '@/components/TopBar.vue'
 import {
+  commitSubject,
+  displayAnnotationEntries,
   displayStatusSeverity,
   displayTaskFailure,
   displayTaskStatus,
@@ -59,6 +61,26 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
     </div>
 
     <template v-if="commit">
+      <section
+        v-if="
+          commitSubject(commit.annotations) ||
+          displayAnnotationEntries(commit.annotations).length > 0
+        "
+        class="commit-meta"
+      >
+        <div v-if="commitSubject(commit.annotations)" class="commit-subject">
+          {{ commitSubject(commit.annotations) }}
+        </div>
+        <div v-if="displayAnnotationEntries(commit.annotations).length > 0" class="attribute-list">
+          <PTag
+            v-for="attribute in displayAnnotationEntries(commit.annotations)"
+            :key="attribute.key"
+            severity="secondary"
+            :value="`${attribute.key}: ${attribute.value}`"
+          />
+        </div>
+      </section>
+
       <PDataTable :value="tasks" data-key="name" size="small" class="table-surface">
         <template #header>Tasks</template>
         <PColumn header="Task">
@@ -96,3 +118,25 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
     </template>
   </main>
 </template>
+
+<style scoped>
+.commit-meta {
+  display: grid;
+  gap: var(--app-space-2);
+  min-width: 0;
+}
+
+.commit-subject {
+  min-width: 0;
+  color: var(--p-text-muted-color);
+  font-size: var(--p-form-field-lg-font-size);
+  overflow-wrap: anywhere;
+}
+
+.attribute-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--app-space-2);
+  min-width: 0;
+}
+</style>

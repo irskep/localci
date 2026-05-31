@@ -48,9 +48,15 @@ func (a App) printCommitHeader(title string, view localci.CommitStatusView) {
 		{"commit", view.Commit},
 		{"summary", localci.SummarizeCommit(view)},
 	}
+	if subject := view.Annotations[localci.AnnotationCommitSubject]; subject != "" {
+		rows = append(rows, [2]string{"message", subject})
+	}
 	if len(view.Annotations) > 0 {
 		keys := make([]string, 0, len(view.Annotations))
 		for key := range view.Annotations {
+			if key == localci.AnnotationCommitSubject {
+				continue
+			}
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)

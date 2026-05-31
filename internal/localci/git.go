@@ -9,8 +9,9 @@ import (
 )
 
 const (
-	AnnotationBranch   = "branch"
-	AnnotationWorktree = "worktree"
+	AnnotationBranch        = "branch"
+	AnnotationCommitSubject = "commit_subject"
+	AnnotationWorktree      = "worktree"
 )
 
 func GitAnnotations(ctx context.Context, repoDir string) map[string]string {
@@ -29,6 +30,14 @@ func GitAnnotations(ctx context.Context, repoDir string) map[string]string {
 
 func GitHeadCommit(ctx context.Context, repoDir string) (string, error) {
 	return GitResolveCommit(ctx, repoDir, "HEAD")
+}
+
+func GitCommitSubject(ctx context.Context, repoDir string, commit string) (string, error) {
+	subject, err := gitOutput(ctx, repoDir, "show", "-s", "--format=%s", commit)
+	if err != nil {
+		return "", fmt.Errorf("read git commit subject for %q: %w", commit, err)
+	}
+	return strings.TrimSpace(subject), nil
 }
 
 func GitResolveCommit(ctx context.Context, repoDir string, commitish string) (string, error) {

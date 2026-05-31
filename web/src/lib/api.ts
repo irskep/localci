@@ -145,6 +145,8 @@ export type ArtifactView = {
   download_url?: string
 }
 
+export const COMMIT_SUBJECT_ANNOTATION = 'commit_subject'
+
 type Validator<T> = (value: unknown) => T
 
 export async function getJSON<T>(path: string, validate?: Validator<T>): Promise<T> {
@@ -554,9 +556,19 @@ export function shortCommit(commit: string): string {
 }
 
 export function formatAnnotations(annotations?: Record<string, string>): string {
-  return annotationEntries(annotations)
+  return displayAnnotationEntries(annotations)
     .map(({ key, value }) => `${key}: ${value}`)
     .join(', ')
+}
+
+export function commitSubject(annotations?: Record<string, string>): string {
+  return annotations?.[COMMIT_SUBJECT_ANNOTATION] ?? ''
+}
+
+export function displayAnnotationEntries(
+  annotations?: Record<string, string>,
+): Array<{ key: string; value: string }> {
+  return annotationEntries(annotations).filter(({ key }) => key !== COMMIT_SUBJECT_ANNOTATION)
 }
 
 export function annotationEntries(

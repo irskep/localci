@@ -36,7 +36,8 @@ func TestPrintStatusSummaryUsesStructuredRows(t *testing.T) {
 		RepoDir: "/repo",
 		Commit:  "abc123",
 		Annotations: map[string]string{
-			"branch": "main",
+			localci.AnnotationBranch:        "main",
+			localci.AnnotationCommitSubject: "Fix artifact tab overflow",
 		},
 		Tasks: []localci.TaskStatusView{
 			{
@@ -64,6 +65,7 @@ func TestPrintStatusSummaryUsesStructuredRows(t *testing.T) {
 		"repo     /repo\n",
 		"commit   abc123\n",
 		"summary  1 passed, 1 failed, 0 timed out, 0 not run\n",
+		"message  Fix artifact tab overflow\n",
 		"branch   main\n",
 		"status  task   attempt  duration  failure\n",
 		"ok      build  1        1.2s      -",
@@ -72,6 +74,9 @@ func TestPrintStatusSummaryUsesStructuredRows(t *testing.T) {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("status summary missing %q:\n%s", want, rendered)
 		}
+	}
+	if strings.Contains(rendered, localci.AnnotationCommitSubject) {
+		t.Fatalf("status summary rendered raw commit subject annotation:\n%s", rendered)
 	}
 }
 
