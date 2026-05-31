@@ -335,6 +335,25 @@ func TestWebServerAPI(t *testing.T) {
 	if retryResp.URL != expectedRetryURL {
 		t.Fatalf("retry URL = %q, want attempt route", retryResp.URL)
 	}
+	entries, err := queue.List()
+	if err != nil {
+		t.Fatalf("List after retry returned error: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Kind != QueueEntryKindTask || entries[0].TaskName != "localci:test" || entries[0].Attempt != retryResp.Attempt {
+		t.Fatalf("queue after retry = %#v, want concrete task attempt %d", entries, retryResp.Attempt)
+	}
+	resp, err = http.Get(taskAPIBase + "/attempt/3")
+	if err != nil {
+		t.Fatalf("GET retry attempt returned error: %v", err)
+	}
+	var retryAttemptResp apiTaskResponse
+	if err := json.NewDecoder(resp.Body).Decode(&retryAttemptResp); err != nil {
+		t.Fatalf("Decode retry attempt returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if retryAttemptResp.Task.Attempt != 3 || retryAttemptResp.Task.Status != ExecutionStatusQueued {
+		t.Fatalf("retry attempt response = %#v, want queued attempt 3", retryAttemptResp.Task)
+	}
 
 	reqCancel, err := http.NewRequest(http.MethodPost, taskAPIBase+"/cancel", nil)
 	if err != nil {
@@ -352,7 +371,7 @@ func TestWebServerAPI(t *testing.T) {
 	if cancelResp.Active || cancelResp.Pending != 1 || !cancelResp.Canceled {
 		t.Fatalf("cancel response = %#v, want pending cancellation", cancelResp)
 	}
-	entries, err := queue.List()
+	entries, err = queue.List()
 	if err != nil {
 		t.Fatalf("List after cancel returned error: %v", err)
 	}

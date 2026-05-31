@@ -27,6 +27,11 @@ const taskResponse = computed(() => store.taskResponseFor(parsed.value.apiPath))
 const task = computed(() => taskResponse.value?.task)
 const taskError = computed(() => store.taskErrorFor(parsed.value.apiPath))
 const taskName = computed(() => task.value?.name ?? parsed.value.taskName ?? 'Task')
+const selectedAttempt = computed(() =>
+  parsed.value.kind === 'attempt' && parsed.value.attempt
+    ? parsed.value.attempt
+    : task.value?.attempt,
+)
 const canCancel = computed(
   () => task.value?.status === 'running' || task.value?.status === 'queued',
 )
@@ -183,8 +188,19 @@ onUnmounted(() => store.unsubscribeTask())
               <li v-for="attempt in task.attempts" :key="attempt.attempt">
                 <RouterLink
                   :to="attemptURL(parsed.repoPath, parsed.commit, parsed.taskName, attempt.attempt)"
+                  :class="{ 'attempt-link-current': attempt.attempt === selectedAttempt }"
+                  :aria-current="attempt.attempt === selectedAttempt ? 'page' : undefined"
                 >
-                  <span>attempt {{ attempt.attempt }}</span>
+                  <span class="attempt-label">
+                    <i
+                      class="pi pi-chevron-right attempt-current-icon"
+                      :class="{
+                        'attempt-current-icon-hidden': attempt.attempt !== selectedAttempt,
+                      }"
+                      aria-hidden="true"
+                    ></i>
+                    <span>attempt {{ attempt.attempt }}</span>
+                  </span>
                   <span>
                     <PTag
                       :severity="displayStatusSeverity(attempt)"
@@ -326,6 +342,28 @@ onUnmounted(() => store.unsubscribeTask())
   padding: var(--app-item-padding);
   border: 1px solid var(--p-content-border-color);
   border-radius: var(--p-content-border-radius);
+}
+
+.attempt-list a.attempt-link-current {
+  border-color: color-mix(in srgb, var(--p-primary-color) 55%, var(--p-content-border-color));
+  background: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
+}
+
+.attempt-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-2);
+  min-width: 0;
+}
+
+.attempt-current-icon {
+  width: var(--p-icon-size);
+  color: var(--p-primary-color);
+  font-size: var(--p-icon-size);
+}
+
+.attempt-current-icon-hidden {
+  visibility: hidden;
 }
 
 .artifact-list {

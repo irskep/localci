@@ -488,7 +488,7 @@ func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit 
 		enqueued = false
 	} else {
 		var enqueueErr error
-		entry, enqueueErr = s.Queue.EnqueueRun(repoDir, commit, []string{taskName})
+		entry, enqueueErr = s.Queue.Enqueue(repoDir, commit, taskName)
 		if enqueueErr != nil {
 			writeAPIError(w, http.StatusInternalServerError, enqueueErr)
 			return
@@ -498,12 +498,7 @@ func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit 
 		}
 	}
 
-	attempt, err := s.Queue.NextAttempt(repoDir, commit, taskName)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err)
-		return
-	}
-	route, err := AttemptRoutePath(repoDir, commit, taskName, attempt)
+	route, err := AttemptRoutePath(repoDir, commit, taskName, entry.Attempt)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
@@ -517,7 +512,7 @@ func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit 
 		Repo:     repo,
 		Commit:   commit,
 		Task:     taskName,
-		Attempt:  attempt,
+		Attempt:  entry.Attempt,
 		URL:      route,
 		Enqueued: enqueued,
 	})
