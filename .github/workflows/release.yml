@@ -49,6 +49,7 @@ jobs:
         env:
           LOCALCI_TASK_CACHE_DIR: ${{ runner.temp }}/localci/task-cache/release-checks
           LOCALCI_TASK_OUTPUT_DIR: ${{ runner.temp }}/localci/out/release-checks
+          LOCALCI_TASK_ARTIFACTS_FILE: ${{ runner.temp }}/localci/out/release-checks/localci.artifacts.json
         run: |
           set -eu
           mise run localci:build
