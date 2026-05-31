@@ -55,7 +55,7 @@ func (r StatusReader) readTaskRecords(repoDir string, commit string) ([]TaskReco
 			}
 			return err
 		}
-		if d.IsDir() || d.Name() != "task.json" {
+		if d.IsDir() || d.Name() != taskRecordFileName {
 			return nil
 		}
 

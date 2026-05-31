@@ -480,7 +480,7 @@ func TestWebServerServesRawArtifacts(t *testing.T) {
 		t.Fatalf("Content-Disposition = %q, want attachment index.html", got)
 	}
 
-	resp, err = http.Get(baseURL + strings.Replace(rawPath, "static-site/index.html", "task.json", 1))
+	resp, err = http.Get(baseURL + strings.Replace(rawPath, "static-site/index.html", taskRecordFileName, 1))
 	if err != nil {
 		t.Fatalf("GET internal artifact returned error: %v", err)
 	}

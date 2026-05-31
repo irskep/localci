@@ -8,12 +8,14 @@ import (
 	"path/filepath"
 )
 
+const taskRecordFileName = "localci.task.json"
+
 func writeRunRecord(paths Paths, record RunRecord) error {
 	return (RunRepository{Paths: paths}).WriteRun(record)
 }
 
 func writeTaskRecord(record TaskRecord) error {
-	path := filepath.Join(record.OutputDir, "task.json")
+	path := filepath.Join(record.OutputDir, taskRecordFileName)
 	return writeJSONFile(path, record)
 }
 

@@ -313,7 +313,7 @@ func listTaskAttemptRecords(paths Paths, repoDir string, commit string, taskName
 			}
 			return err
 		}
-		if d.IsDir() || d.Name() != "task.json" {
+		if d.IsDir() || d.Name() != taskRecordFileName {
 			return nil
 		}
 
@@ -413,7 +413,7 @@ func artifactSortKey(name string) int {
 	switch strings.ToLower(name) {
 	case "combined.log":
 		return 0
-	case "task.json":
+	case taskRecordFileName:
 		return 100
 	default:
 		if strings.HasPrefix(name, "bin/") {
@@ -438,7 +438,7 @@ func PrimaryArtifact(task TaskStatusView) (ArtifactView, bool) {
 }
 
 func shouldHideArtifact(displayName string) bool {
-	return strings.EqualFold(displayName, "task.json") ||
+	return strings.EqualFold(displayName, taskRecordFileName) ||
 		strings.EqualFold(displayName, cancelMarkerName) ||
 		strings.EqualFold(displayName, taskArtifactsManifestName)
 }

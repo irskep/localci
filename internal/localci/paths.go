@@ -94,7 +94,7 @@ func (p Paths) TaskAttemptDir(repoDir string, commit string, task string, attemp
 }
 
 func (p Paths) TaskRecordPath(repoDir string, commit string, task string, attempt int) string {
-	return filepath.Join(p.TaskAttemptDir(repoDir, commit, task, attempt), "task.json")
+	return filepath.Join(p.TaskAttemptDir(repoDir, commit, task, attempt), taskRecordFileName)
 }
 
 func normalizeRepoDir(repoDir string) string {

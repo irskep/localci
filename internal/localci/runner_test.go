@@ -129,7 +129,7 @@ exit 1
 
 	for _, task := range []string{"localci:first", "localci:second"} {
 		taskDir := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName(task), "attempt-001")
-		taskPath := filepath.Join(taskDir, "task.json")
+		taskPath := filepath.Join(taskDir, taskRecordFileName)
 		if _, err := os.Stat(taskPath); err != nil {
 			t.Fatalf("task record missing for %s at %s: %v", task, taskPath, err)
 		}
@@ -141,7 +141,7 @@ exit 1
 		}
 	}
 
-	firstRecord, err := readTaskRecord(filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName("localci:first"), "attempt-001", "task.json"))
+	firstRecord, err := readTaskRecord(filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName("localci:first"), "attempt-001", taskRecordFileName))
 	if err != nil {
 		t.Fatalf("readTaskRecord returned error: %v", err)
 	}
@@ -194,7 +194,7 @@ exit 1
 		t.Fatalf("Run status = %q, want %q", result.Status, RunStatusFailed)
 	}
 
-	taskPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName("localci:test"), "attempt-001", "task.json")
+	taskPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName("localci:test"), "attempt-001", taskRecordFileName)
 	record, err := readTaskRecord(taskPath)
 	if err != nil {
 		t.Fatalf("readTaskRecord returned error: %v", err)
@@ -248,7 +248,7 @@ exit 1
 	}
 
 	for _, attempt := range []string{"attempt-001", "attempt-002"} {
-		taskPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName("localci:test"), attempt, "task.json")
+		taskPath := filepath.Join(rootDir, normalizeRepoDir(repoDir), "abc123", "out", sanitizeTaskName("localci:test"), attempt, taskRecordFileName)
 		if _, err := os.Stat(taskPath); err != nil {
 			t.Fatalf("task record missing for %s at %s: %v", attempt, taskPath, err)
 		}
