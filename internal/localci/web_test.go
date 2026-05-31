@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -425,6 +426,7 @@ func TestWebServerServesRawArtifacts(t *testing.T) {
 		t.Fatalf("raw index status = %d, want 200 without redirect", resp.StatusCode)
 	}
 	assertRawArtifact(t, baseURL+rawPath, "text/html", files["static-site/index.html"])
+	assertRawArtifact(t, baseURL+strings.TrimSuffix(rawPath, "index.html"), "text/html", files["static-site/index.html"])
 
 	assertRawArtifact(t, baseURL+strings.Replace(rawPath, "index.html", "style.css", 1), "text/css", files["static-site/style.css"])
 	assertRawArtifact(t, baseURL+strings.Replace(rawPath, "index.html", "mark.svg", 1), "image/svg+xml", files["static-site/mark.svg"])
@@ -446,6 +448,68 @@ func TestWebServerServesRawArtifacts(t *testing.T) {
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("internal artifact status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestParseRawArtifactRouteUsesIndexForTrailingSlash(t *testing.T) {
+	t.Parallel()
+
+	repoDir := filepath.Join(t.TempDir(), "team", "repo")
+	rawPath, err := RawArtifactRoutePath(repoDir, "abc123", "//web:localci:static-artifacts", 1, "static-site/index.html")
+	if err != nil {
+		t.Fatalf("RawArtifactRoutePath returned error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, strings.TrimSuffix(rawPath, "index.html"), nil)
+	route, err := (WebServer{}).parseRawArtifactRoute(req)
+	if err != nil {
+		t.Fatalf("parseRawArtifactRoute returned error: %v", err)
+	}
+	want := rawArtifactRoute{
+		RepoDir:      filepath.Clean(repoDir),
+		Commit:       "abc123",
+		TaskName:     "//web:localci:static-artifacts",
+		Attempt:      1,
+		ArtifactPath: "static-site/index.html",
+	}
+	if route != want {
+		t.Fatalf("parsed route = %#v, want %#v", route, want)
+	}
+}
+
+func TestRawArtifactDisplayName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		segments      []string
+		trailingSlash bool
+		want          string
+		wantErr       bool
+	}{
+		{name: "file", segments: []string{"static-site", "style.css"}, want: "static-site/style.css"},
+		{name: "directory index", segments: []string{"static-site"}, trailingSlash: true, want: "static-site/index.html"},
+		{name: "missing path", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := rawArtifactDisplayName(tt.segments, tt.trailingSlash)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("rawArtifactDisplayName returned nil error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("rawArtifactDisplayName returned error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("rawArtifactDisplayName = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

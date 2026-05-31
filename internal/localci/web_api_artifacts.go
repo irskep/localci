@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 func (s WebServer) handleAPIArtifactIndex(w http.ResponseWriter, repoDir string, commit string, taskName string, attempt int) {
@@ -111,12 +112,12 @@ func (s WebServer) handleRawArtifact(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, "GET, HEAD")
 		return
 	}
-	repoDir, commit, taskName, attempt, artifactPath, err := s.parseRawArtifactRoute(r)
+	route, err := s.parseRawArtifactRoute(r)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	task, artifact, err := s.artifactForRoute(repoDir, commit, taskName, attempt, artifactPath)
+	task, artifact, err := s.artifactForRoute(route.RepoDir, route.Commit, route.TaskName, route.Attempt, route.ArtifactPath)
 	if err != nil {
 		if errorsIsRecordNotFound(err) {
 			http.NotFound(w, r)
@@ -166,36 +167,62 @@ func serveRawArtifactContent(w http.ResponseWriter, r *http.Request, artifactPat
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 }
 
-func (s WebServer) parseRawArtifactRoute(r *http.Request) (string, string, string, int, string, error) {
-	segments, err := splitEscapedPath(requestEscapedPath(r))
+type rawArtifactRoute struct {
+	RepoDir      string
+	Commit       string
+	TaskName     string
+	Attempt      int
+	ArtifactPath string
+}
+
+func (s WebServer) parseRawArtifactRoute(r *http.Request) (rawArtifactRoute, error) {
+	escapedPath := requestEscapedPath(r)
+	segments, err := splitEscapedPath(escapedPath)
 	if err != nil {
-		return "", "", "", 0, "", err
+		return rawArtifactRoute{}, err
 	}
 	if len(segments) < 10 || segments[0] != "artifacts" || segments[1] != "repo" {
-		return "", "", "", 0, "", fmt.Errorf("unsupported artifact route")
+		return rawArtifactRoute{}, fmt.Errorf("unsupported artifact route")
 	}
 	commitIndex := indexOfSegment(segments[2:], "commit")
 	if commitIndex < 0 {
-		return "", "", "", 0, "", fmt.Errorf("artifact route missing commit")
+		return rawArtifactRoute{}, fmt.Errorf("artifact route missing commit")
 	}
 	commitIndex += 2
 	repoDir, err := s.repoDirFromRoute(segments[2:commitIndex])
 	if err != nil {
-		return "", "", "", 0, "", err
+		return rawArtifactRoute{}, err
 	}
 	tail := segments[commitIndex:]
 	if len(tail) < 7 || tail[0] != "commit" || tail[2] != "task" || tail[4] != "attempt" {
-		return "", "", "", 0, "", fmt.Errorf("unsupported artifact route")
+		return rawArtifactRoute{}, fmt.Errorf("unsupported artifact route")
 	}
 	attempt, err := strconv.Atoi(tail[5])
 	if err != nil || attempt <= 0 {
-		return "", "", "", 0, "", fmt.Errorf("attempt must be a positive integer")
+		return rawArtifactRoute{}, fmt.Errorf("attempt must be a positive integer")
 	}
-	artifactPath := path.Join(tail[6:]...)
+	artifactPath, err := rawArtifactDisplayName(tail[6:], strings.HasSuffix(escapedPath, "/"))
+	if err != nil {
+		return rawArtifactRoute{}, err
+	}
+	return rawArtifactRoute{
+		RepoDir:      repoDir,
+		Commit:       tail[1],
+		TaskName:     tail[3],
+		Attempt:      attempt,
+		ArtifactPath: artifactPath,
+	}, nil
+}
+
+func rawArtifactDisplayName(segments []string, trailingSlash bool) (string, error) {
+	artifactPath := path.Join(segments...)
 	if artifactPath == "" || artifactPath == "." {
-		return "", "", "", 0, "", fmt.Errorf("artifact path is required")
+		return "", fmt.Errorf("artifact path is required")
 	}
-	return repoDir, tail[1], tail[3], attempt, artifactPath, nil
+	if trailingSlash {
+		artifactPath = path.Join(artifactPath, "index.html")
+	}
+	return artifactPath, nil
 }
 
 func (s WebServer) enrichTaskArtifacts(repoDir string, commit string, task TaskStatusView) TaskStatusView {
