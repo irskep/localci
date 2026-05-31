@@ -21,6 +21,8 @@ func (m *tuiModel) applyData(data any) {
 		m.repos = append([]tuiRepoSummary{}, typed...)
 	case tuiRepoResponse:
 		m.repo = &typed
+	case tuiRepoTaskHistoryResponse:
+		m.taskHistory = &typed
 	case tuiCommitResponse:
 		m.commit = &typed
 	case tuiTaskResponse:
@@ -124,6 +126,8 @@ func (m tuiModel) loadRoute(route tuiRoute) tea.Cmd {
 			data, err = m.client.loadQueue(ctx)
 		case tuiViewRepo:
 			data, err = m.client.loadRepo(ctx, route.apiPath)
+		case tuiViewRepoTaskHistory:
+			data, err = m.client.loadRepoTaskHistory(ctx, route.apiPath)
 		case tuiViewCommit:
 			data, err = m.client.loadCommit(ctx, route.apiPath)
 		case tuiViewTask:
@@ -258,6 +262,10 @@ func decodeRouteData(route tuiRoute, raw json.RawMessage) (any, error) {
 		return data, err
 	case tuiViewRepo:
 		var data tuiRepoResponse
+		err := json.Unmarshal(raw, &data)
+		return data, err
+	case tuiViewRepoTaskHistory:
+		var data tuiRepoTaskHistoryResponse
 		err := json.Unmarshal(raw, &data)
 		return data, err
 	case tuiViewCommit:

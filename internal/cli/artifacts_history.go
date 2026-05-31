@@ -144,15 +144,17 @@ func artifactRowValues(row cliArtifactRow) []string {
 }
 
 type cliHistoryRow struct {
-	Commit    string                  `json:"commit"`
-	Task      string                  `json:"task,omitempty"`
-	ShortTask string                  `json:"short_task,omitempty"`
-	Status    localci.ExecutionStatus `json:"status,omitempty"`
-	Attempt   int                     `json:"attempt,omitempty"`
-	Duration  string                  `json:"duration,omitempty"`
-	Failure   string                  `json:"failure,omitempty"`
-	Summary   string                  `json:"summary,omitempty"`
-	Updated   string                  `json:"updated"`
+	Commit       string                  `json:"commit"`
+	Annotations  map[string]string       `json:"annotations,omitempty"`
+	Task         string                  `json:"task,omitempty"`
+	ShortTask    string                  `json:"short_task,omitempty"`
+	Status       localci.ExecutionStatus `json:"status,omitempty"`
+	Attempt      int                     `json:"attempt,omitempty"`
+	AttemptCount int                     `json:"attempt_count,omitempty"`
+	Duration     string                  `json:"duration,omitempty"`
+	Failure      string                  `json:"failure,omitempty"`
+	Summary      string                  `json:"summary,omitempty"`
+	Updated      string                  `json:"updated"`
 }
 
 type cliHistoryOutput struct {
@@ -199,9 +201,10 @@ func (a App) runHistory(flags cliFlags) error {
 				continue
 			}
 			rows = append(rows, cliHistoryRow{
-				Commit:  run.Commit,
-				Summary: localci.SummarizeCommit(view),
-				Updated: timeAgo(localci.RunActivityAt(run)),
+				Commit:      run.Commit,
+				Annotations: cloneStringMap(run.Annotations),
+				Summary:     localci.SummarizeCommit(view),
+				Updated:     timeAgo(localci.RunActivityAt(run)),
 			})
 		} else {
 			taskName, err := resolveTaskName(view.Tasks, flags.Task)
@@ -213,14 +216,16 @@ func (a App) runHistory(flags cliFlags) error {
 					continue
 				}
 				rows = append(rows, cliHistoryRow{
-					Commit:    run.Commit,
-					Task:      task.Name,
-					ShortTask: task.ShortName,
-					Status:    task.Status,
-					Attempt:   task.Attempt,
-					Duration:  durationLabel(task.DurationMilliseconds),
-					Failure:   task.Failure,
-					Updated:   timeAgo(localci.RunActivityAt(run)),
+					Commit:       run.Commit,
+					Annotations:  cloneStringMap(run.Annotations),
+					Task:         task.Name,
+					ShortTask:    task.ShortName,
+					Status:       task.Status,
+					Attempt:      task.Attempt,
+					AttemptCount: task.AttemptCount,
+					Duration:     durationLabel(task.DurationMilliseconds),
+					Failure:      task.Failure,
+					Updated:      timeAgo(localci.RunActivityAt(run)),
 				})
 			}
 		}
@@ -315,8 +320,8 @@ func printHistoryRunRows(w io.Writer, rows []cliHistoryRow) {
 }
 
 func printHistoryTaskRows(w io.Writer, rows []cliHistoryRow) {
-	headers := []string{"commit", "status", "attempt", "duration", "failure", "updated"}
-	widths := []int{len(headers[0]), len(headers[1]), len(headers[2]), len(headers[3]), len(headers[4]), len(headers[5])}
+	headers := []string{"commit", "message", "status", "attempt", "duration", "failure", "updated"}
+	widths := []int{len(headers[0]), len(headers[1]), len(headers[2]), len(headers[3]), len(headers[4]), len(headers[5]), len(headers[6])}
 	for _, row := range rows {
 		values := historyTaskValues(row)
 		for i, value := range values {
@@ -333,7 +338,7 @@ func printHistoryTaskRows(w io.Writer, rows []cliHistoryRow) {
 		rendered := make([]string, len(values))
 		for i, value := range values {
 			value = padRight(value, widths[i])
-			if i == 1 {
+			if i == 2 {
 				rendered[i] = styleStatus(row.Status, value)
 			} else {
 				rendered[i] = value
@@ -348,5 +353,20 @@ func historyTaskValues(row cliHistoryRow) []string {
 	if failure == "" {
 		failure = "-"
 	}
-	return []string{shortCommit(row.Commit), statusLabel(row.Status), fmt.Sprintf("%d", row.Attempt), row.Duration, failure, row.Updated}
+	subject := row.Annotations[localci.AnnotationCommitSubject]
+	if subject == "" {
+		subject = "-"
+	}
+	return []string{shortCommit(row.Commit), subject, statusLabel(row.Status), attemptLabel(row.Attempt, row.AttemptCount), row.Duration, failure, row.Updated}
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }

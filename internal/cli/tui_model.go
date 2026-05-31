@@ -18,6 +18,7 @@ const (
 	tuiViewRepos
 	tuiViewQueue
 	tuiViewRepo
+	tuiViewRepoTaskHistory
 	tuiViewCommit
 	tuiViewTask
 	tuiViewArtifacts
@@ -48,6 +49,7 @@ type tuiModel struct {
 	repos           []tuiRepoSummary
 	queue           *tuiQueueResponse
 	repo            *tuiRepoResponse
+	taskHistory     *tuiRepoTaskHistoryResponse
 	commit          *tuiCommitResponse
 	task            *tuiTaskResponse
 	artifacts       *tuiArtifactListResponse
@@ -88,6 +90,7 @@ type tuiKeyMap struct {
 	HomeView  key.Binding
 	Repos     key.Binding
 	Queue     key.Binding
+	History   key.Binding
 	Retry     key.Binding
 	Cancel    key.Binding
 	Artifacts key.Binding
@@ -114,6 +117,7 @@ func defaultTUIKeys() tuiKeyMap {
 		HomeView:  key.NewBinding(key.WithKeys("h"), key.WithHelp("h", "home")),
 		Repos:     key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "repos")),
 		Queue:     key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "queue")),
+		History:   key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "history")),
 		Retry:     key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "retry")),
 		Cancel:    key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "cancel")),
 		Artifacts: key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "artifacts")),
@@ -124,7 +128,7 @@ func defaultTUIKeys() tuiKeyMap {
 }
 
 func (k tuiKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Open, k.Back, k.PrevTab, k.NextTab, k.Artifacts, k.Edit, k.OpenFile, k.Finder, k.Help, k.Quit}
+	return []key.Binding{k.Open, k.Back, k.PrevTab, k.NextTab, k.History, k.Artifacts, k.Edit, k.OpenFile, k.Finder, k.Help, k.Quit}
 }
 
 func (k tuiKeyMap) FullHelp() [][]key.Binding {
@@ -132,7 +136,7 @@ func (k tuiKeyMap) FullHelp() [][]key.Binding {
 		{k.Open, k.Back, k.Quit, k.Help},
 		{k.Up, k.Down, k.PrevTab, k.NextTab, k.PageUp, k.PageDown, k.HomeKey, k.End},
 		{k.HomeView, k.Repos, k.Queue, k.Refresh},
-		{k.Retry, k.Cancel, k.Artifacts, k.Edit, k.OpenFile, k.Finder},
+		{k.History, k.Retry, k.Cancel, k.Artifacts, k.Edit, k.OpenFile, k.Finder},
 	}
 }
 
@@ -394,6 +398,11 @@ func (m tuiModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, m.keys.Artifacts):
 		if next, ok := m.artifactListRoute(); ok {
+			m = m.gotoRoute(next, true)
+			cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
+		}
+	case key.Matches(msg, m.keys.History):
+		if next, ok := m.taskHistoryRoute(); ok {
 			m = m.gotoRoute(next, true)
 			cmds = append(cmds, m.loadRoute(m.route), m.restartStream(m.route))
 		}

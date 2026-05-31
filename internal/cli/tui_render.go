@@ -52,6 +52,8 @@ func (m tuiModel) breadcrumbs() []string {
 		return []string{"Home", "Queue"}
 	case tuiViewRepo:
 		return []string{"Home", m.route.repoPath}
+	case tuiViewRepoTaskHistory:
+		return []string{"Home", m.route.repoPath, trimTaskLabel(m.route.task), "history"}
 	case tuiViewCommit:
 		return []string{"Home", m.route.repoPath, shortCommit(m.route.commit)}
 	case tuiViewTask:
@@ -128,6 +130,8 @@ func (m tuiModel) renderContent(theme tuiTheme, height int) string {
 		return m.renderQueue(theme, height)
 	case tuiViewRepo:
 		return m.renderRepo(theme, height)
+	case tuiViewRepoTaskHistory:
+		return m.renderRepoTaskHistory(theme, height)
 	case tuiViewCommit:
 		return m.renderCommit(theme, height)
 	case tuiViewTask:
@@ -280,6 +284,20 @@ func (m tuiModel) renderRepo(theme tuiTheme, height int) string {
 	}
 	if len(m.repo.Commits) == 0 {
 		rows = append(rows, theme.muted().Render("No runs for this repo."))
+	}
+	return renderTUIPanel(theme, m.width, height, strings.Join(rows, "\n"))
+}
+
+func (m tuiModel) renderRepoTaskHistory(theme tuiTheme, height int) string {
+	if m.taskHistory == nil {
+		return loadingText(m.loading)
+	}
+	rows := []string{theme.title().Render(m.taskHistory.ShortName + " history")}
+	for i, run := range visibleTaskHistoryRows(m.taskHistory.Runs, m.scroll, height-2) {
+		rows = append(rows, selectableLine(theme, m.scroll+i == m.cursor, taskHistoryLine(run, m.width-8)))
+	}
+	if len(m.taskHistory.Runs) == 0 {
+		rows = append(rows, theme.muted().Render("No history recorded for this task."))
 	}
 	return renderTUIPanel(theme, m.width, height, strings.Join(rows, "\n"))
 }

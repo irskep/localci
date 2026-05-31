@@ -29,6 +29,26 @@ func runListLine(run tuiCommitSummary, width int) string {
 	return truncate(line, width)
 }
 
+func taskHistoryLine(run tuiRepoTaskHistoryItem, width int) string {
+	subject := run.Annotations[localci.AnnotationCommitSubject]
+	if subject == "" {
+		subject = "No commit subject"
+	}
+	line := fmt.Sprintf(
+		"%s  %s  %s  attempt %s  %s  %s",
+		shortCommit(run.Commit),
+		subject,
+		statusLabel(run.Task.Status),
+		attemptLabel(run.Task.Attempt, run.Task.AttemptCount),
+		durationLabel(run.Task.DurationMilliseconds),
+		timeAgo(run.ActivityAt),
+	)
+	if run.Task.Failure != "" {
+		line += "  " + run.Task.Failure
+	}
+	return truncate(line, width)
+}
+
 func taskCountsShort(tasks []tuiTaskSummary) string {
 	counts := map[localci.ExecutionStatus]int{}
 	for _, task := range tasks {
@@ -213,6 +233,17 @@ func selectableBlock(theme tuiTheme, selected bool, block string) string {
 }
 
 func visibleRuns(items []tuiCommitSummary, start int, height int) []tuiCommitSummary {
+	if start < 0 {
+		start = 0
+	}
+	end := min(len(items), start+max(1, height))
+	if start > end {
+		start = end
+	}
+	return items[start:end]
+}
+
+func visibleTaskHistoryRows(items []tuiRepoTaskHistoryItem, start int, height int) []tuiRepoTaskHistoryItem {
 	if start < 0 {
 		start = 0
 	}

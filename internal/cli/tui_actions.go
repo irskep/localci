@@ -47,6 +47,13 @@ func (m tuiModel) cancelSelected() tea.Cmd {
 	}
 }
 
+func (m tuiModel) taskHistoryRoute() (tuiRoute, bool) {
+	if m.route.view != tuiViewTask || m.task == nil {
+		return tuiRoute{}, false
+	}
+	return tuiRepoTaskHistoryRoute(m.task.Repo, m.task.Task.Name), true
+}
+
 func (m tuiModel) editSelectedArtifact() tea.Cmd {
 	path := m.selectedArtifactPath()
 	if path == "" {
@@ -160,6 +167,13 @@ func (m tuiModel) selectedQueueEntry() (tuiQueueEntry, bool) {
 		return m.queue.Pending[m.cursor], true
 	}
 	return tuiQueueEntry{}, false
+}
+
+func (m tuiModel) selectedTaskHistoryRow() (tuiRepoTaskHistoryItem, bool) {
+	if m.taskHistory == nil || m.cursor < 0 || m.cursor >= len(m.taskHistory.Runs) {
+		return tuiRepoTaskHistoryItem{}, false
+	}
+	return m.taskHistory.Runs[m.cursor], true
 }
 
 func (m tuiModel) selectedTaskArtifactName() string {

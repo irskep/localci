@@ -176,6 +176,17 @@ func tuiRepoRoute(repo tuiRepoSummary) tuiRoute {
 	}
 }
 
+func tuiRepoTaskHistoryRoute(repo tuiRepoSummary, task string) tuiRoute {
+	return tuiRoute{
+		view:     tuiViewRepoTaskHistory,
+		apiPath:  path.Join("/api/repo", repo.RepoPath, "task", url.PathEscape(task)),
+		repoPath: repo.RepoPath,
+		repoDir:  repo.RepoDir,
+		task:     task,
+		title:    trimTaskLabel(task) + " history",
+	}
+}
+
 func tuiTaskRoute(repo tuiRepoSummary, commit string, task string) tuiRoute {
 	return tuiRoute{
 		view:     tuiViewTask,

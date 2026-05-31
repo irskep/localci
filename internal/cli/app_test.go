@@ -588,6 +588,38 @@ func TestPostcommitWaitInstruction(t *testing.T) {
 	}
 }
 
+func TestPrintHistoryTaskRowsIncludesCommitSubject(t *testing.T) {
+	t.Parallel()
+
+	output := cliHistoryOutput{
+		Repo: "/repo",
+		Task: "localci:test",
+		History: []cliHistoryRow{{
+			Commit: "abc123456789",
+			Annotations: map[string]string{
+				localci.AnnotationCommitSubject: "Fix task history",
+			},
+			Task:         "localci:test",
+			ShortTask:    "test",
+			Status:       localci.ExecutionStatusFailed,
+			Attempt:      2,
+			AttemptCount: 3,
+			Duration:     "54ms",
+			Failure:      "exit",
+			Updated:      "now",
+		}},
+	}
+
+	var buf bytes.Buffer
+	printHistoryOutput(&buf, output)
+	rendered := buf.String()
+	for _, want := range []string{"message", "Fix task history", "failed", "2/3", "exit"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("history output missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
 func testApp(_ string, cwd string) App {
 	return App{
 		Stdout: io.Discard,

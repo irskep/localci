@@ -55,6 +55,20 @@ type tuiRepoResponse struct {
 	NewerBefore string             `json:"newer_before,omitempty"`
 }
 
+type tuiRepoTaskHistoryResponse struct {
+	Repo      tuiRepoSummary           `json:"repo"`
+	Task      string                   `json:"task"`
+	ShortName string                   `json:"short_name"`
+	Runs      []tuiRepoTaskHistoryItem `json:"runs"`
+}
+
+type tuiRepoTaskHistoryItem struct {
+	Commit      string            `json:"commit"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	Task        tuiTaskSummary    `json:"task"`
+	ActivityAt  time.Time         `json:"activity_at"`
+}
+
 type tuiCommitSummary struct {
 	Repo        tuiRepoSummary    `json:"repo"`
 	Commit      string            `json:"commit"`
@@ -295,6 +309,12 @@ func (c *tuiClient) loadRepoIndex(ctx context.Context) ([]tuiRepoSummary, error)
 
 func (c *tuiClient) loadRepo(ctx context.Context, apiPath string) (tuiRepoResponse, error) {
 	var resp tuiRepoResponse
+	err := c.get(ctx, apiPath, &resp)
+	return resp, err
+}
+
+func (c *tuiClient) loadRepoTaskHistory(ctx context.Context, apiPath string) (tuiRepoTaskHistoryResponse, error) {
+	var resp tuiRepoTaskHistoryResponse
 	err := c.get(ctx, apiPath, &resp)
 	return resp, err
 }

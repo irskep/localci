@@ -79,6 +79,14 @@ func TaskRoutePath(repoDir string, commit string, taskName string) (string, erro
 	return path.Join(commitPath, "task", url.PathEscape(taskName)), nil
 }
 
+func RepoTaskRoutePath(repoDir string, taskName string) (string, error) {
+	repoPath, err := RouteRepoPath(repoDir)
+	if err != nil {
+		return "", err
+	}
+	return path.Join("/repo", repoPath, "task", url.PathEscape(taskName)), nil
+}
+
 func AttemptRoutePath(repoDir string, commit string, taskName string, attempt int) (string, error) {
 	taskPath, err := TaskRoutePath(repoDir, commit, taskName)
 	if err != nil {

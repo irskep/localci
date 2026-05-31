@@ -63,6 +63,11 @@ func (m tuiModel) maxCursor() int {
 			return 0
 		}
 		return max(0, len(m.repo.Commits)-1)
+	case tuiViewRepoTaskHistory:
+		if m.taskHistory == nil {
+			return 0
+		}
+		return max(0, len(m.taskHistory.Runs)-1)
 	case tuiViewCommit:
 		if m.commit == nil {
 			return 0
@@ -133,6 +138,12 @@ func (m tuiModel) openSelected() (tuiRoute, bool) {
 		}
 		run := m.repo.Commits[m.cursor]
 		return tuiCommitRoute(run.Repo, run.Commit), true
+	case tuiViewRepoTaskHistory:
+		row, ok := m.selectedTaskHistoryRow()
+		if !ok {
+			return tuiRoute{}, false
+		}
+		return tuiTaskRoute(m.taskHistory.Repo, row.Commit, m.taskHistory.Task), true
 	case tuiViewCommit:
 		task, ok := m.selectedCommitTask()
 		if !ok {

@@ -108,6 +108,60 @@ func TestTUIResponsesAcceptPaginationFields(t *testing.T) {
 	if repo.NextBefore != "older" || repo.NewerBefore != "newer" {
 		t.Fatalf("repo pagination fields = %q, %q; want older, newer", repo.NextBefore, repo.NewerBefore)
 	}
+
+	var taskHistory tuiRepoTaskHistoryResponse
+	if err := decodeStrict(`{"repo":{"repo_dir":"/repo","repo_path":"repo","repo_label":"repo"},"task":"localci:test","short_name":"test","runs":[]}`, &taskHistory); err != nil {
+		t.Fatalf("decode task history response: %v", err)
+	}
+	if taskHistory.Task != "localci:test" || taskHistory.ShortName != "test" {
+		t.Fatalf("task history metadata = %#v", taskHistory)
+	}
+}
+
+func TestTUITaskHistoryRouteAndRender(t *testing.T) {
+	t.Parallel()
+
+	repo := tuiRepoSummary{RepoDir: "/repo", RepoPath: "repo", RepoLabel: "repo"}
+	route := tuiRepoTaskHistoryRoute(repo, "localci:test")
+	if route.view != tuiViewRepoTaskHistory || route.apiPath != "/api/repo/repo/task/localci:test" {
+		t.Fatalf("task history route = %#v", route)
+	}
+
+	model := newTUIModel(nil, route)
+	model.width = 100
+	model.height = 20
+	model.taskHistory = &tuiRepoTaskHistoryResponse{
+		Repo:      repo,
+		Task:      "localci:test",
+		ShortName: "test",
+		Runs: []tuiRepoTaskHistoryItem{{
+			Commit: "abc123456789",
+			Annotations: map[string]string{
+				localci.AnnotationCommitSubject: "Fix task history",
+			},
+			Task: tuiTaskSummary{
+				Name:                 "localci:test",
+				ShortName:            "test",
+				Status:               localci.ExecutionStatusFailed,
+				Attempt:              2,
+				AttemptCount:         3,
+				DurationMilliseconds: 54,
+				Failure:              "exit",
+			},
+			ActivityAt: time.Now(),
+		}},
+	}
+
+	rendered := model.View()
+	for _, want := range []string{"test history", "abc123456789", "Fix task history", "failed", "attempt 2/3", "exit"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("task history view missing %q:\n%s", want, rendered)
+		}
+	}
+	next, ok := model.openSelected()
+	if !ok || next.view != tuiViewTask || next.commit != "abc123456789" || next.task != "localci:test" {
+		t.Fatalf("open selected = %#v, %v", next, ok)
+	}
 }
 
 func TestTUIArtifactTabsFitWidth(t *testing.T) {
