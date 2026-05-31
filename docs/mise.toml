@@ -5,10 +5,16 @@ pandoc = "3.9.0.2"
 [tasks.build]
 description = "Build and validate the Zensical documentation"
 depends = ["//docs:generated-docs"]
-run = [
-  "printf 'cwd: %s\\n' \"$(pwd)\"",
-  "zensical build --strict",
-]
+run = '''
+printf 'cwd: %s\n' "$(pwd)"
+zensical build --strict
+if [ -n "${LOCALCI_TASK_OUTPUT_DIR:-}" ]; then
+  artifact_site="$LOCALCI_TASK_OUTPUT_DIR/site"
+  rm -rf "$artifact_site"
+  mkdir -p "$artifact_site"
+  cp -R site/. "$artifact_site/"
+fi
+'''
 
 [tasks.serve]
 description = "Serve the Zensical documentation"

@@ -19,6 +19,8 @@ coding agent making the change does not have to block on the full suite before m
 LocalCI is deliberately small. It discovers mise tasks, queues them in a daemon, runs them against
 an isolated clone, and makes the results available from the CLI and a local web UI.
 
+The “why” of this project is covered in the GitHub README.
+
 What LocalCI is for
 
 - ✓ Run all checks even if you forget
