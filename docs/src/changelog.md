@@ -1,6 +1,11 @@
 # Changelog
 
 
+## 0.2.4 - 2026-05-31
+
+- Serve raw artifact directory URLs with trailing slashes as `index.html` when present.
+- Copy the built documentation site into the LocalCI docs task output so it is available from the web UI.
+
 ## 0.2.3 - 2026-05-30
 
 - Fix the terminal dashboard failing to load when API responses include pagination fields.
