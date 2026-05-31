@@ -5,6 +5,7 @@ import type { MenuItem } from 'primevue/menuitem'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import type { BreadcrumbItem } from '@/components/AppBreadcrumbs.vue'
+import TopBarLink from '@/components/TopBarLink.vue'
 import { repoPathURL } from '@/lib/routes'
 import { useLocalciStore } from '@/stores/localci'
 import { useNotificationStore } from '@/stores/notifications'
@@ -50,18 +51,10 @@ function toggleRepoMenu(event: MouseEvent): void {
         :disabled="!notifications.supported"
         @click="notifications.activate"
       />
-      <a
-        class="top-bar-docs"
-        href="https://steveasleep.com/localci/"
-        target="_blank"
-        rel="noreferrer"
-      >
-        <i class="pi pi-book" aria-hidden="true"></i>
-        <span>Docs</span>
-      </a>
+      <TopBarLink href="https://steveasleep.com/localci/" icon="pi pi-book" label="Docs" />
       <PButton
         v-if="repoMenuItems.length > 0"
-        class="top-bar-repos"
+        class="top-bar-action top-bar-repos"
         label="Repos"
         icon="pi pi-folder"
         icon-pos="left"
@@ -85,13 +78,6 @@ function toggleRepoMenu(event: MouseEvent): void {
   gap: var(--app-space-4);
   margin-bottom: var(--app-page-block-padding);
   min-width: 0;
-}
-
-.top-bar-docs {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--app-space-2);
-  flex: none;
 }
 
 .top-bar-actions {

@@ -13,7 +13,7 @@ import {
   shortCommit,
   type RepoTaskHistoryItem,
 } from '@/lib/api'
-import { commitURL, parseRepoRoute, repoPathURL, taskURL } from '@/lib/routes'
+import { parseRepoRoute, repoPathURL, taskURL } from '@/lib/routes'
 import { useDocumentTitle } from '@/lib/title'
 import { useLocalciStore } from '@/stores/localci'
 
@@ -78,7 +78,7 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
       <template #header>{{ history.short_name }} history</template>
       <PColumn header="Commit">
         <template #body="{ data }">
-          <RouterLink :to="commitURL(history.repo.repo_path, data.commit)" class="mono">
+          <RouterLink :to="taskURL(history.repo.repo_path, data.commit, history.task)" class="mono">
             {{ shortCommit(data.commit) }}
           </RouterLink>
         </template>
