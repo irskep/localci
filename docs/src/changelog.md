@@ -1,6 +1,10 @@
 # Changelog
 
 
+## 0.2.5 - 2026-05-31
+
+- Fix terminal dashboard artifact tabs so tasks with many artifacts remain browsable.
+
 ## 0.2.4 - 2026-05-31
 
 - Serve raw artifact directory URLs with trailing slashes as `index.html` when present.

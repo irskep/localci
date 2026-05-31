@@ -360,9 +360,16 @@ func (m tuiModel) renderArtifactTabs(theme tuiTheme, width int) string {
 	if m.task == nil || len(m.task.Task.Artifacts) == 0 {
 		return theme.muted().Render("No artifacts.")
 	}
-	parts := []string{}
-	for i, artifact := range m.task.Task.Artifacts {
-		label := artifact.DisplayName
+	artifacts := m.task.Task.Artifacts
+	start, end := artifactTabRange(len(artifacts), m.cursor, width)
+	visibleCount := max(1, end-start)
+	labelWidth := max(1, (width-(visibleCount*artifactTabChromeWidth))/visibleCount)
+	parts := make([]string, 0, visibleCount)
+	for i := start; i < end; i++ {
+		label := truncate(artifacts[i].DisplayName, labelWidth)
+		if len(artifacts) > visibleCount && i == m.cursor {
+			label = truncate(fmt.Sprintf("%d/%d %s", i+1, len(artifacts), artifacts[i].DisplayName), labelWidth)
+		}
 		if i == m.cursor {
 			parts = append(parts, theme.activeTab().Render(label))
 		} else {
@@ -372,6 +379,26 @@ func (m tuiModel) renderArtifactTabs(theme tuiTheme, width int) string {
 	tabs := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 	fill := strings.Repeat("─", max(0, width-lipgloss.Width(tabs)))
 	return tabs + theme.tabRule().Render(fill)
+}
+
+const (
+	artifactTabChromeWidth = 4
+	maxVisibleArtifactTabs = 4
+	minArtifactTabLabel    = 8
+)
+
+func artifactTabRange(count int, cursor int, width int) (int, int) {
+	if count <= 0 {
+		return 0, 0
+	}
+	maxTabs := min(count, maxVisibleArtifactTabs)
+	if width > 0 {
+		maxTabs = min(maxTabs, max(1, width/(artifactTabChromeWidth+minArtifactTabLabel)))
+	}
+	cursor = min(max(0, cursor), count-1)
+	start := cursor - maxTabs/2
+	start = min(max(0, start), max(0, count-maxTabs))
+	return start, start + maxTabs
 }
 
 func (m tuiModel) renderArtifacts(theme tuiTheme, height int) string {

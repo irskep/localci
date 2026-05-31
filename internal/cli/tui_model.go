@@ -124,7 +124,7 @@ func defaultTUIKeys() tuiKeyMap {
 }
 
 func (k tuiKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Open, k.Back, k.PrevTab, k.NextTab, k.Edit, k.OpenFile, k.Finder, k.Help, k.Quit}
+	return []key.Binding{k.Open, k.Back, k.PrevTab, k.NextTab, k.Artifacts, k.Edit, k.OpenFile, k.Finder, k.Help, k.Quit}
 }
 
 func (k tuiKeyMap) FullHelp() [][]key.Binding {

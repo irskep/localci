@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"localci/internal/localci"
 )
 
@@ -102,6 +104,46 @@ func TestTUIResponsesAcceptPaginationFields(t *testing.T) {
 	}
 	if repo.NextBefore != "older" || repo.NewerBefore != "newer" {
 		t.Fatalf("repo pagination fields = %q, %q; want older, newer", repo.NextBefore, repo.NewerBefore)
+	}
+}
+
+func TestTUIArtifactTabsFitWidth(t *testing.T) {
+	t.Parallel()
+
+	model := newTUIModel(nil, tuiRoute{view: tuiViewTask, apiPath: "/api", title: "Task"})
+	model.cursor = 3
+	model.task = &tuiTaskResponse{
+		Task: localci.TaskStatusView{
+			Artifacts: []localci.ArtifactView{
+				{DisplayName: "combined.log"},
+				{DisplayName: "static-site/index.html"},
+				{DisplayName: "static-site/mark.svg"},
+				{DisplayName: "static-site/style.css"},
+			},
+		},
+	}
+
+	const width = 80
+	rendered := model.renderArtifactTabs(tuiTheme{}, width)
+	if height := lipgloss.Height(rendered); height > 3 {
+		t.Fatalf("artifact tabs height = %d, want at most 3:\n%s", height, rendered)
+	}
+	for _, line := range splitLines(rendered) {
+		if got := lipgloss.Width(line); got > width {
+			t.Fatalf("artifact tab line width = %d, want <= %d:\n%s", got, width, rendered)
+		}
+	}
+}
+
+func TestTUIArtifactTabsUseBoundedWindow(t *testing.T) {
+	t.Parallel()
+
+	start, end := artifactTabRange(30, 16, 100)
+	if end-start > maxVisibleArtifactTabs {
+		t.Fatalf("visible tab count = %d, want <= %d", end-start, maxVisibleArtifactTabs)
+	}
+	if start > 16 || end <= 16 {
+		t.Fatalf("range = [%d, %d), want cursor 16 visible", start, end)
 	}
 }
 
