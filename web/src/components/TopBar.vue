@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import type { MenuItem } from 'primevue/menuitem'
 
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import type { BreadcrumbItem } from '@/components/AppBreadcrumbs.vue'
-import TopBarLink from '@/components/TopBarLink.vue'
 import { repoPathURL } from '@/lib/routes'
 import { useLocalciStore } from '@/stores/localci'
 import { useNotificationStore } from '@/stores/notifications'
@@ -17,56 +16,44 @@ defineProps<{
 const router = useRouter()
 const store = useLocalciStore()
 const notifications = useNotificationStore()
-const repoMenu = ref()
 const repoMenuItems = computed<MenuItem[]>(() =>
   store.repos.map((repo) => ({
     label: repo.repo_label,
-    icon: 'pi pi-folder',
     command: () => router.push(repoPathURL(repo.repo_path)),
   })),
 )
+const topBarItems = computed<MenuItem[]>(() => {
+  const items: MenuItem[] = [
+    {
+      label: notifications.label,
+      icon: notifications.icon,
+      disabled: !notifications.supported,
+      command: () => notifications.activate(),
+    },
+    {
+      label: 'Docs',
+      icon: 'pi pi-book',
+      url: 'https://steveasleep.com/localci/',
+    },
+  ]
+  if (repoMenuItems.value.length > 0) {
+    items.push({
+      label: 'Repos',
+      items: repoMenuItems.value,
+    })
+  }
+  return items
+})
 
 onMounted(() => {
   void store.loadRepos()
 })
-
-function toggleRepoMenu(event: MouseEvent): void {
-  repoMenu.value?.toggle(event)
-}
 </script>
 
 <template>
   <div class="top-bar">
     <AppBreadcrumbs :items="items" />
-    <div class="top-bar-actions">
-      <PButton
-        class="top-bar-notifications"
-        text
-        size="small"
-        :severity="notifications.severity"
-        :icon="notifications.icon"
-        :label="notifications.label"
-        :aria-label="notifications.label"
-        :title="notifications.label"
-        :disabled="!notifications.supported"
-        @click="notifications.activate"
-      />
-      <TopBarLink href="https://steveasleep.com/localci/" icon="pi pi-book" label="Docs" />
-      <PButton
-        v-if="repoMenuItems.length > 0"
-        class="top-bar-action top-bar-repos"
-        label="Repos"
-        icon="pi pi-chevron-down"
-        icon-pos="right"
-        size="small"
-        severity="secondary"
-        text
-        aria-haspopup="menu"
-        aria-label="Open repo menu"
-        @click="toggleRepoMenu"
-      />
-      <PMenu ref="repoMenu" :model="repoMenuItems" popup />
-    </div>
+    <PMenubar class="top-bar-menu" :model="topBarItems" aria-label="Top navigation" />
   </div>
 </template>
 
@@ -80,19 +67,27 @@ function toggleRepoMenu(event: MouseEvent): void {
   min-width: 0;
 }
 
-.top-bar-actions {
-  display: inline-flex;
-  align-items: center;
+.top-bar-menu {
+  flex: none;
+}
+
+:global(.top-bar-menu.p-menubar) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+:global(.top-bar-menu .p-menubar-root-list) {
+  gap: var(--app-space-2);
+}
+
+:global(.top-bar-menu .p-menubar-item-content) {
+  border-radius: var(--p-content-border-radius);
+}
+
+:global(.top-bar-menu .p-menubar-item-link) {
   gap: var(--app-space-3);
-  flex: none;
-}
-
-.top-bar-notifications {
-  flex: none;
-}
-
-.top-bar-repos {
-  flex: none;
+  padding-block: var(--app-space-2);
 }
 
 @media (max-width: 640px) {
@@ -101,9 +96,8 @@ function toggleRepoMenu(event: MouseEvent): void {
     flex-direction: column;
   }
 
-  .top-bar-actions {
+  .top-bar-menu {
     width: 100%;
-    justify-content: space-between;
   }
 }
 </style>
