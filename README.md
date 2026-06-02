@@ -8,6 +8,11 @@
 
 Full documentation: <https://steveasleep.com/localci/>
 
+```sh
+brew tap irskep/tap
+brew install localci
+```
+
 CI systems run lots of checks on every commit, so you can catch as many errors as possible before your code is published. LocalCI lets you use that strategy on your laptop, no server needed. A postcommit hook asks a daemon to run all your tests serially in isolated shallow git clones, and then you can monitor status and view history through various means (CLI, web interface, interactive terminal UI), just like you would with GitHub Actions.
 
 You can also have it run all tests on your working directory without cloning, as a quick way to check everything immediately.
