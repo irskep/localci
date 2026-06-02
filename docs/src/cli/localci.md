@@ -17,7 +17,8 @@ localci [flags]
 ### Options
 
 ```
-  -h, --help   help for localci
+  -h, --help      help for localci
+  -v, --version   version for localci
 ```
 
 ### SEE ALSO

@@ -21,7 +21,13 @@ LocalCI releases are driven by Git tags. A push of `vX.Y.Z` starts `.github/work
    - Keep only sections that have entries.
    - Release notes should be useful to users, not a raw commit log.
 
-4. Update pinned install versions everywhere they appear.
+4. Update the CLI version constant.
+
+   - Set `internal/cli/version.go` to the plain release version, for example
+     `0.1.0`.
+   - `localci --version` must print the same version that will be tagged.
+
+5. Update pinned install versions everywhere they appear.
 
    - First find the old version in the whole repo so no install snippet is missed:
 
@@ -35,21 +41,21 @@ LocalCI releases are driven by Git tags. A push of `vX.Y.Z` starts `.github/work
      `README.md` and `docs/src/getting-started.md`.
    - Use the plain version, for example `0.1.0`, not `v0.1.0`.
 
-5. Run local validation.
+6. Run local validation.
 
    ```sh
    mise run check
    mise run //docs:build
    ```
 
-6. Commit the release notes and install docs.
+7. Commit the release notes, CLI version, and install docs.
 
    ```sh
-   git add CHANGELOG.md README.md docs/src/getting-started.md
+   git add CHANGELOG.md README.md docs/src/getting-started.md internal/cli/version.go
    git commit -m "Release vX.Y.Z"
    ```
 
-7. Create and push the tag.
+8. Create and push the tag.
 
    ```sh
    git tag -a vX.Y.Z -m "vX.Y.Z"
@@ -57,20 +63,20 @@ LocalCI releases are driven by Git tags. A push of `vX.Y.Z` starts `.github/work
    git push origin vX.Y.Z
    ```
 
-8. Watch the release workflow.
+9. Watch the release workflow.
 
    ```sh
    gh run list --repo irskep/localci --workflow Release --limit 3
    gh run watch <run_id> --repo irskep/localci --exit-status
    ```
 
-9. Verify the GitHub release exists and contains binaries plus `checksums.txt`.
+10. Verify the GitHub release exists and contains binaries plus `checksums.txt`.
 
    ```sh
    gh release view vX.Y.Z --repo irskep/localci
    ```
 
-10. Start the next changelog section after the release succeeds unless the maintainer asks not to.
+11. Start the next changelog section after the release succeeds unless the maintainer asks not to.
 
    ```md
    ## X.Y.(Z+1) - Unreleased

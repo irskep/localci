@@ -2,6 +2,11 @@
 
 <!-- loosely based on https://keepachangelog.com/en/1.0.0/ -->
 
+## 0.2.10 - Unreleased
+
+- Add `localci --version`.
+- Add the MIT license.
+
 ## 0.2.9 - 2026-05-31
 
 - Improve appearance of boosted artifacts

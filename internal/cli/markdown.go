@@ -25,6 +25,7 @@ func GenerateMarkdownDocs(outDir string) error {
 
 	root := App{Stdout: io.Discard, Stderr: io.Discard}.newRootCommand()
 	root.DisableAutoGenTag = true
+	root.InitDefaultVersionFlag()
 	root.InitDefaultCompletionCmd()
 
 	if err := doc.GenMarkdownTreeCustom(root, outDir, func(filename string) string {

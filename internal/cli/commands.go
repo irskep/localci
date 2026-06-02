@@ -19,6 +19,7 @@ func (a App) newRootCommand() *cobra.Command {
 		Use:           "localci",
 		Short:         "Local post-commit validation runner",
 		Long:          "localci is a local post-commit validation runner.\n\nCommands that operate on a repo default to the nearest ancestor of the current directory that contains .git.",
+		Version:       Version,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -30,6 +31,7 @@ func (a App) newRootCommand() *cobra.Command {
 	}
 	cmd.SetOut(a.Stdout)
 	cmd.SetErr(a.Stderr)
+	cmd.SetVersionTemplate("{{.Name}} {{.Version}}\n")
 	cmd.SetCompletionCommandGroupID(managementGroupID)
 	cmd.AddGroup(
 		&cobra.Group{ID: managementGroupID, Title: "Management"},

@@ -118,6 +118,30 @@ func TestAppRunRecognizesRunUsage(t *testing.T) {
 	}
 }
 
+func TestAppRunPrintsVersion(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	app := App{
+		Stdout: &stdout,
+		Stderr: io.Discard,
+		Cwd:    "/repo",
+		CheckRequirements: func() error {
+			t.Fatal("CheckRequirements should not run for --version")
+			return nil
+		},
+	}
+
+	if err := app.Run([]string{"--version"}); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	want := "localci " + Version + "\n"
+	if got := stdout.String(); got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
+
 func TestRunNoCloneCommitLabel(t *testing.T) {
 	t.Parallel()
 
