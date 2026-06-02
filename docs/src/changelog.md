@@ -1,7 +1,7 @@
 # Changelog
 
 
-## 0.2.10 - Unreleased
+## 0.2.10 - 2026-06-02
 
 - Add `localci --version`.
 - Add the MIT license.
