@@ -27,19 +27,12 @@ LocalCI releases are driven by Git tags. A push of `vX.Y.Z` starts `.github/work
      `0.1.0`.
    - `localci --version` must print the same version that will be tagged.
 
-5. Update pinned install versions everywhere they appear.
+5. Check install references.
 
-   - First find the old version in the whole repo so no install snippet is missed:
-
-     ```sh
-     rg 'github:irskep/localci|0\.1\.0|v0\.1\.0'
-     ```
-
-     Replace `0.1.0` and `v0.1.0` with the previous release version you are
-     replacing.
-   - Update every intentional pinned LocalCI install version, including
-     `README.md` and `docs/src/getting-started.md`.
-   - Use the plain version, for example `0.1.0`, not `v0.1.0`.
+   - Homebrew via `irskep/tap` is the canonical install path, so docs should
+     not need release-by-release install version updates.
+   - If any legacy pinned LocalCI install snippets remain, update them or
+     intentionally remove them.
 
 6. Run local validation.
 
@@ -48,7 +41,7 @@ LocalCI releases are driven by Git tags. A push of `vX.Y.Z` starts `.github/work
    mise run //docs:build
    ```
 
-7. Commit the release notes, CLI version, and install docs.
+7. Commit the release notes, CLI version, and any install doc changes.
 
    ```sh
    git add CHANGELOG.md README.md docs/src/getting-started.md internal/cli/version.go

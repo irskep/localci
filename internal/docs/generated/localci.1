@@ -82,18 +82,27 @@ This guide gets a repository to the point where LocalCI runs checks
 after each commit.
 .SS Set up a repository
 .SS Install LocalCI
-LocalCI requires \c
+LocalCI runs \c
 .UR https://mise.en.dev
 Mise
 .UE \c
-\&.
-Install Mise first, then add LocalCI as a pinned GitHub release tool:
+\ tasks, so make sure Mise is installed before you configure a
+repository.
+.SS With brew
+.IP
+.EX
+brew tap irskep/tap
+brew install localci
+.EE
+.SS With mise
+If you want everyone working in a repository to use the same LocalCI
+toolchain, install LocalCI through mise\(cqs GitHub backend:
 .PP
 File: \f[CR]mise.toml\f[R]
 .IP
 .EX
 \f[B][tools]\f[R]
-\(dqgithub:irskep/localci\(dq = \(dq0.2.2\(dq
+\(dqgithub:irskep/localci\(dq = \(dq0.2.10\(dq
 .EE
 .IP
 .EX

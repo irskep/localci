@@ -5,6 +5,7 @@
 ## 0.2.11 - Unreleased
 
 - Fix docs deployment for release builds that publish artifact metadata.
+- Document Homebrew as the canonical install path.
 
 ## 0.2.10 - 2026-06-02
 

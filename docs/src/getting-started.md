@@ -6,11 +6,22 @@ This guide gets a repository to the point where LocalCI runs checks after each c
 
 ### Install LocalCI
 
-LocalCI requires [Mise](https://mise.en.dev). Install Mise first, then add LocalCI as a pinned GitHub release tool:
+LocalCI runs [Mise](https://mise.en.dev) tasks, so make sure Mise is installed before you configure a repository.
+
+#### With brew
+
+```sh
+brew tap irskep/tap
+brew install localci
+```
+
+#### With mise
+
+If you want everyone working in a repository to use the same LocalCI toolchain, install LocalCI through mise's GitHub backend:
 
 ```toml title="mise.toml"
 [tools]
-"github:irskep/localci" = "0.2.2"
+"github:irskep/localci" = "0.2.10"
 ```
 
 ```sh
