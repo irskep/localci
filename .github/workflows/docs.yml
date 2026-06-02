@@ -36,6 +36,7 @@ jobs:
           LOCALCI_CACHE_DIR: ${{ runner.temp }}/localci/cache
           LOCALCI_TASK_CACHE_DIR: ${{ runner.temp }}/localci/task-cache/docs
           LOCALCI_TASK_OUTPUT_DIR: ${{ runner.temp }}/localci/out/docs
+          LOCALCI_TASK_ARTIFACTS_FILE: ${{ runner.temp }}/localci/out/docs/localci.artifacts.json
         run: mise run //docs:localci:build
 
       - uses: actions/configure-pages@v5
