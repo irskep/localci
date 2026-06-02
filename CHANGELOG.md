@@ -2,6 +2,10 @@
 
 <!-- loosely based on https://keepachangelog.com/en/1.0.0/ -->
 
+## 0.2.11 - Unreleased
+
+- Fix docs deployment for release builds that publish artifact metadata.
+
 ## 0.2.10 - 2026-06-02
 
 - Add `localci --version`.
