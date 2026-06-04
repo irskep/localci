@@ -157,7 +157,7 @@ func queryRunPage(ctx context.Context, db *sql.DB, repoDir string, before time.T
 	args = append(args, limit)
 
 	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
-		select run_json
+		select repo_dir, run_json
 		from runs
 		%s
 		order by activity_at desc, repo_dir asc, commit_ref desc
@@ -221,7 +221,7 @@ func (r RunRepository) ListRuns() ([]RunRecord, error) {
 	defer db.Close()
 
 	rows, err := db.QueryContext(context.Background(), `
-		select run_json
+		select repo_dir, run_json
 		from runs
 		order by activity_at desc, repo_dir asc, commit_ref desc
 	`)
@@ -240,7 +240,7 @@ func (r RunRepository) ListRepoCommits(repoDir string) ([]RunRecord, error) {
 	defer db.Close()
 
 	rows, err := db.QueryContext(context.Background(), `
-		select run_json
+		select repo_dir, run_json
 		from runs
 		where repo_dir = ?
 		order by activity_at desc, commit_ref desc
@@ -260,15 +260,30 @@ func (r RunRepository) ListRepoCommits(repoDir string) ([]RunRecord, error) {
 }
 
 func scanRunRows(rows *sql.Rows) ([]RunRecord, error) {
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("scan run columns: %w", err)
+	}
 	runs := []RunRecord{}
 	for rows.Next() {
+		var repoDir string
 		var raw string
-		if err := rows.Scan(&raw); err != nil {
-			return nil, fmt.Errorf("scan run: %w", err)
+		switch len(columns) {
+		case 1:
+			if err := rows.Scan(&raw); err != nil {
+				return nil, fmt.Errorf("scan run: %w", err)
+			}
+		default:
+			if err := rows.Scan(&repoDir, &raw); err != nil {
+				return nil, fmt.Errorf("scan run: %w", err)
+			}
 		}
 		var run RunRecord
 		if err := json.Unmarshal([]byte(raw), &run); err != nil {
 			return nil, fmt.Errorf("decode run history: %w", err)
+		}
+		if strings.TrimSpace(run.RepoDir) == "" {
+			run.RepoDir = repoDir
 		}
 		runs = append(runs, run)
 	}
@@ -353,6 +368,8 @@ func ensureHistorySchema(ctx context.Context, db *sql.DB) error {
 		);
 		create index if not exists runs_activity_at_idx on runs (activity_at desc);
 		create index if not exists runs_repo_activity_at_idx on runs (repo_dir, activity_at desc);
+		create index if not exists runs_activity_order_idx on runs (activity_at desc, repo_dir asc, commit_ref desc);
+		create index if not exists runs_repo_activity_order_idx on runs (repo_dir, activity_at desc, commit_ref desc);
 	`); err != nil {
 		return fmt.Errorf("initialize history database: %w", err)
 	}

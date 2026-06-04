@@ -191,6 +191,11 @@ func TestWebServerAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /api returned error: %v", err)
 	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		t.Fatalf("GET /api returned status %d: %s", resp.StatusCode, string(body))
+	}
 	var home apiHomeResponse
 	if err := json.NewDecoder(resp.Body).Decode(&home); err != nil {
 		t.Fatalf("Decode home returned error: %v", err)

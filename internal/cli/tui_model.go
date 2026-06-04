@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -141,8 +142,9 @@ func (k tuiKeyMap) FullHelp() [][]key.Binding {
 }
 
 type tuiStreamState struct {
-	gen    int
-	cancel context.CancelFunc
+	gen        int
+	cancel     context.CancelFunc
+	retryDelay time.Duration
 }
 
 type tuiLoadedMsg struct {
@@ -180,6 +182,10 @@ type tuiEventMsg struct {
 }
 
 type tuiStreamStartedMsg struct{}
+type tuiReconnectMsg struct {
+	gen   int
+	route tuiRoute
+}
 type tuiTickMsg struct{}
 
 func newTUIModel(client *tuiClient, route tuiRoute) tuiModel {
@@ -306,7 +312,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notice = fmt.Sprintf("%s: %s", msg.action, msg.path)
 		}
 	case tuiStreamStartedMsg:
-		m.socketState = "connected"
+		m.socketState = "connecting"
 	case tuiEventMsg:
 		cmds = append(cmds, m.listenEvents())
 		if m.stream == nil || msg.gen != m.stream.gen {
@@ -315,11 +321,17 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.socketState = "reconnecting"
 			m.syncViewports(false)
-			cmds = append(cmds, m.startStream(m.route))
+			cmds = append(cmds, m.scheduleStreamReconnect(m.route, msg.gen))
 			break
 		}
 		m.socketState = "connected"
+		m.stream.retryDelay = 0
 		cmds = append(cmds, m.applyEvent(msg.event))
+	case tuiReconnectMsg:
+		if m.stream == nil || msg.gen != m.stream.gen || msg.route.apiPath != m.route.apiPath {
+			break
+		}
+		cmds = append(cmds, m.startStream(m.route))
 	case tuiTickMsg:
 		cmds = append(cmds, tickTUI())
 		if m.socketState != "connected" {

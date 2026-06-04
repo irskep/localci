@@ -158,6 +158,8 @@ type tuiClient struct {
 	httpClient *http.Client
 }
 
+const tuiWebSocketReadLimit = 16 << 20
+
 func newTUIClient(base string) (*tuiClient, error) {
 	parsed, err := url.Parse(strings.TrimSpace(base))
 	if err != nil {
@@ -226,6 +228,7 @@ func (c *tuiClient) readEvent(ctx context.Context, apiPath string) (tuiAPIEvent,
 		return tuiAPIEvent{}, err
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
+	conn.SetReadLimit(tuiWebSocketReadLimit)
 
 	_, data, err := conn.Read(ctx)
 	if err != nil {
@@ -252,6 +255,7 @@ func (c *tuiClient) streamEvents(ctx context.Context, apiPath string, handle fun
 		return err
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
+	conn.SetReadLimit(tuiWebSocketReadLimit)
 
 	for {
 		_, data, err := conn.Read(ctx)

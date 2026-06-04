@@ -1,10 +1,12 @@
 # Changelog
 
 
-## 0.2.11 - Unreleased
+## 0.2.11 - 2026-06-04
 
 - Fix docs deployment for release builds that publish artifact metadata.
 - Document Homebrew as the canonical install path.
+- Fix terminal dashboard websocket reconnect loops on large run snapshots.
+- Improve web and terminal dashboard run summaries so high-level artifact links avoid unnecessary output-directory scans.
 
 ## 0.2.10 - 2026-06-02
 

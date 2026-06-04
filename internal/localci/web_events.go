@@ -36,30 +36,31 @@ func (s WebServer) handleAPIEvents(w http.ResponseWriter, r *http.Request, segme
 		return
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
+	ctx := conn.CloseRead(r.Context())
 
 	events, unsubscribe := s.eventHub().Subscribe(resource)
 	defer unsubscribe()
 
-	if err := s.writeResourceSnapshot(r.Context(), conn, resource, EventTypeSnapshot); err != nil {
+	if err := s.writeResourceSnapshot(ctx, conn, resource, EventTypeSnapshot); err != nil {
 		_ = conn.Close(websocket.StatusInternalError, err.Error())
 		return
 	}
 
 	for {
 		select {
-		case <-r.Context().Done():
+		case <-ctx.Done():
 			return
 		case event, ok := <-events:
 			if !ok {
 				return
 			}
 			if event.Type == EventTypeAppend {
-				if err := writeWebSocketJSON(r.Context(), conn, event); err != nil {
+				if err := writeWebSocketJSON(ctx, conn, event); err != nil {
 					return
 				}
 				continue
 			}
-			if err := s.writeResourceSnapshot(r.Context(), conn, resource, EventTypeReplace); err != nil {
+			if err := s.writeResourceSnapshot(ctx, conn, resource, EventTypeReplace); err != nil {
 				_ = conn.Close(websocket.StatusInternalError, err.Error())
 				return
 			}
@@ -146,7 +147,12 @@ func (s WebServer) apiHomeSnapshot() (apiHomeResponse, error) {
 	if err != nil {
 		return apiHomeResponse{}, err
 	}
-	views, err := s.buildRunCommitSummaries(runPage.Runs)
+	repos = mergeRunRepos(repos, runPage.Runs)
+	repoSummaries, err := newAPIRepoSummaries(repos)
+	if err != nil {
+		return apiHomeResponse{}, err
+	}
+	views, err := s.buildRunCommitSummariesWithRepos(runPage.Runs, repoSummaries)
 	if err != nil {
 		return apiHomeResponse{}, err
 	}
@@ -162,7 +168,7 @@ func (s WebServer) apiHomeSnapshot() (apiHomeResponse, error) {
 		NewerBefore:   runPage.NewerBefore,
 	}
 	for _, repo := range repos {
-		summary, err := s.apiRepoSummary(repo.RepoDir)
+		summary, err := repoSummaries.repo(repo.RepoDir)
 		if err != nil {
 			return apiHomeResponse{}, err
 		}
@@ -178,9 +184,13 @@ func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
+		summaries, err := newAPIRepoSummaries(repos)
+		if err != nil {
+			return nil, err
+		}
 		resp := make([]apiRepoSummary, 0, len(repos))
 		for _, repo := range repos {
-			summary, err := s.apiRepoSummary(repo.RepoDir)
+			summary, err := summaries.repo(repo.RepoDir)
 			if err != nil {
 				return nil, err
 			}

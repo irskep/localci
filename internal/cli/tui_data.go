@@ -148,6 +148,9 @@ func (m tuiModel) restartStream(route tuiRoute) tea.Cmd {
 	if m.stream != nil && m.stream.cancel != nil {
 		m.stream.cancel()
 	}
+	if m.stream != nil {
+		m.stream.retryDelay = 0
+	}
 	return m.startStream(route)
 }
 
@@ -166,36 +169,44 @@ func (m tuiModel) startStream(route tuiRoute) tea.Cmd {
 	client := m.client
 	return func() tea.Msg {
 		go func() {
-			backoff := 250 * time.Millisecond
-			for {
+			err := client.streamEvents(ctx, route.apiPath, func(event tuiAPIEvent) bool {
 				select {
 				case <-ctx.Done():
-					return
-				default:
+					return false
+				case ch <- tuiEventMsg{gen: gen, event: event}:
+					return true
 				}
-				err := client.streamEvents(ctx, route.apiPath, func(event tuiAPIEvent) bool {
-					select {
-					case <-ctx.Done():
-						return false
-					case ch <- tuiEventMsg{gen: gen, event: event}:
-						return true
-					}
-				})
-				if err != nil {
-					select {
-					case <-ctx.Done():
-						return
-					case ch <- tuiEventMsg{gen: gen, err: err}:
-					}
-					time.Sleep(backoff)
-					if backoff < 5*time.Second {
-						backoff *= 2
-					}
-				}
+			})
+			if err == nil {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- tuiEventMsg{gen: gen, err: err}:
 			}
 		}()
 		return tuiStreamStartedMsg{}
 	}
+}
+
+func (m tuiModel) scheduleStreamReconnect(route tuiRoute, gen int) tea.Cmd {
+	if m.stream == nil {
+		return nil
+	}
+	delay := m.stream.retryDelay
+	if delay <= 0 {
+		delay = 250 * time.Millisecond
+	} else if delay < 5*time.Second {
+		delay *= 2
+	}
+	if delay > 5*time.Second {
+		delay = 5 * time.Second
+	}
+	m.stream.retryDelay = delay
+	return tea.Tick(delay, func(time.Time) tea.Msg {
+		return tuiReconnectMsg{gen: gen, route: route}
+	})
 }
 
 func (m tuiModel) listenEvents() tea.Cmd {

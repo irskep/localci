@@ -99,15 +99,21 @@ func (s WebServer) handleAPIHome(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	views, err := s.buildRunCommitSummaries(runPage.Runs)
+	repos = mergeRunRepos(repos, runPage.Runs)
+	repoSummaries, err := newAPIRepoSummaries(repos)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	views, err := s.buildRunCommitSummariesWithRepos(runPage.Runs, repoSummaries)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, fmt.Errorf("home commit summaries: %w", err))
 		return
 	}
 
 	queueResponse, err := s.apiQueueResponse()
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err)
+		writeAPIError(w, http.StatusInternalServerError, fmt.Errorf("home queue: %w", err))
 		return
 	}
 
@@ -119,9 +125,9 @@ func (s WebServer) handleAPIHome(w http.ResponseWriter, r *http.Request) {
 		NewerBefore:   runPage.NewerBefore,
 	}
 	for _, repo := range repos {
-		summary, err := s.apiRepoSummary(repo.RepoDir)
+		summary, err := repoSummaries.repo(repo.RepoDir)
 		if err != nil {
-			writeAPIError(w, http.StatusInternalServerError, err)
+			writeAPIError(w, http.StatusInternalServerError, fmt.Errorf("home repo list: %w", err))
 			return
 		}
 		resp.Repos = append(resp.Repos, summary)
@@ -257,9 +263,14 @@ func (s WebServer) handleAPIRepoIndex(w http.ResponseWriter, _ *http.Request) {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
+	summaries, err := newAPIRepoSummaries(repos)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
 	resp := make([]apiRepoSummary, 0, len(repos))
 	for _, repo := range repos {
-		summary, err := s.apiRepoSummary(repo.RepoDir)
+		summary, err := summaries.repo(repo.RepoDir)
 		if err != nil {
 			writeAPIError(w, http.StatusInternalServerError, err)
 			return
@@ -575,18 +586,32 @@ func (s WebServer) apiQueueResponse() (apiQueueResponse, error) {
 		return apiQueueResponse{}, err
 	}
 
+	hasActive := err == nil && strings.TrimSpace(active.RepoDir) != ""
+
+	repoDirs := make([]string, 0, len(queueEntries)+1)
+	if hasActive {
+		repoDirs = append(repoDirs, active.RepoDir)
+	}
+	for _, entry := range queueEntries {
+		repoDirs = append(repoDirs, entry.RepoDir)
+	}
+	summaries, err := s.apiRepoSummaries(repoDirs...)
+	if err != nil {
+		return apiQueueResponse{}, err
+	}
+
 	resp := apiQueueResponse{
 		Pending: make([]apiQueueEntry, 0, len(queueEntries)),
 	}
-	if err == nil {
-		activeEntry, err := s.apiQueueEntry(active.QueueEntry)
+	if hasActive {
+		activeEntry, err := s.apiQueueEntry(summaries, active.QueueEntry)
 		if err != nil {
 			return apiQueueResponse{}, err
 		}
 		resp.Active = &activeEntry
 	}
 	for _, entry := range queueEntries {
-		queueEntry, err := s.apiQueueEntry(entry)
+		queueEntry, err := s.apiQueueEntry(summaries, entry)
 		if err != nil {
 			return apiQueueResponse{}, err
 		}
@@ -595,16 +620,15 @@ func (s WebServer) apiQueueResponse() (apiQueueResponse, error) {
 	return resp, nil
 }
 
-func (s WebServer) apiQueueEntry(entry QueueEntry) (apiQueueEntry, error) {
-	repo, err := s.apiRepoSummary(entry.RepoDir)
+func (s WebServer) apiQueueEntry(summaries apiRepoSummaries, entry QueueEntry) (apiQueueEntry, error) {
+	repo, err := summaries.repo(entry.RepoDir)
 	if err != nil {
 		return apiQueueEntry{}, err
 	}
 	var artifacts []ArtifactView
 	if entry.TaskName != "" && entry.Attempt > 0 {
-		if task, err := s.selectedTaskStatus(entry.RepoDir, entry.Commit, entry.TaskName, entry.Attempt); err == nil {
-			task = s.enrichTaskArtifacts(entry.RepoDir, entry.Commit, task)
-			artifacts = markedArtifactViews(task)
+		if record, err := s.taskRecord(entry.RepoDir, entry.Commit, entry.TaskName, entry.Attempt); err == nil {
+			artifacts = s.markedArtifactViewsFromRecord(entry.RepoDir, entry.Commit, record)
 		}
 	}
 	return apiQueueEntry{
@@ -616,14 +640,82 @@ func (s WebServer) apiQueueEntry(entry QueueEntry) (apiQueueEntry, error) {
 	}, nil
 }
 
+func (s WebServer) taskRecord(repoDir string, commit string, taskName string, attempt int) (TaskRecord, error) {
+	run, err := (RunRepository{Paths: s.Paths}).ReadRun(repoDir, commit)
+	if err != nil {
+		return TaskRecord{}, err
+	}
+	for _, record := range run.TaskResults {
+		if record.Name == taskName && record.Attempt == attempt {
+			return record, nil
+		}
+	}
+	return TaskRecord{}, ErrRecordNotFound
+}
+
 func (s WebServer) apiRepoSummary(repoDir string) (apiRepoSummary, error) {
-	repoPath, err := RouteRepoPath(repoDir)
+	summaries, err := s.apiRepoSummaries(repoDir)
 	if err != nil {
 		return apiRepoSummary{}, err
 	}
-	repoLabel, err := s.repoLabel(repoDir)
+	return summaries.repo(repoDir)
+}
+
+type apiRepoSummaries struct {
+	labels map[string]string
+}
+
+func (s WebServer) apiRepoSummaries(extraRepoDirs ...string) (apiRepoSummaries, error) {
+	repos, err := (RunRepository{Paths: s.Paths}).ListRepoSummaries()
 	if err != nil {
-		return apiRepoSummary{}, err
+		return apiRepoSummaries{}, err
+	}
+	for _, repoDir := range extraRepoDirs {
+		if strings.TrimSpace(repoDir) != "" {
+			repos = append(repos, RepoHistory{RepoDir: repoDir})
+		}
+	}
+	return newAPIRepoSummaries(repos)
+}
+
+func newAPIRepoSummaries(repos []RepoHistory) (apiRepoSummaries, error) {
+	repoDirs := make([]string, 0, len(repos))
+	for _, repo := range repos {
+		if strings.TrimSpace(repo.RepoDir) != "" {
+			repoDirs = append(repoDirs, repo.RepoDir)
+		}
+	}
+	return apiRepoSummaries{labels: RepoLabelMap(repoDirs)}, nil
+}
+
+func mergeRunRepos(repos []RepoHistory, runs []RunRecord) []RepoHistory {
+	seen := map[string]bool{}
+	merged := make([]RepoHistory, 0, len(repos)+len(runs))
+	for _, repo := range repos {
+		if strings.TrimSpace(repo.RepoDir) == "" || seen[repo.RepoDir] {
+			continue
+		}
+		seen[repo.RepoDir] = true
+		merged = append(merged, repo)
+	}
+	for _, run := range runs {
+		if strings.TrimSpace(run.RepoDir) == "" || seen[run.RepoDir] {
+			continue
+		}
+		seen[run.RepoDir] = true
+		merged = append(merged, RepoHistory{RepoDir: run.RepoDir, RepoID: run.RepoID})
+	}
+	return merged
+}
+
+func (s apiRepoSummaries) repo(repoDir string) (apiRepoSummary, error) {
+	repoPath, err := RouteRepoPath(repoDir)
+	if err != nil {
+		return apiRepoSummary{}, fmt.Errorf("repo summary %q: %w", repoDir, err)
+	}
+	repoLabel := RepoDisplayLabel(repoDir, nil)
+	if label := strings.TrimSpace(s.labels[repoDir]); label != "" {
+		repoLabel = label
 	}
 	return apiRepoSummary{
 		RepoDir:   repoDir,
@@ -642,6 +734,18 @@ func (s WebServer) buildRepoCommitSummaries(repoDir string, commits []RunRecord)
 }
 
 func (s WebServer) buildRunCommitSummaries(runs []RunRecord) ([]apiCommitSummary, error) {
+	repoDirs := make([]string, 0, len(runs))
+	for _, run := range runs {
+		repoDirs = append(repoDirs, run.RepoDir)
+	}
+	summaries, err := s.apiRepoSummaries(repoDirs...)
+	if err != nil {
+		return nil, err
+	}
+	return s.buildRunCommitSummariesWithRepos(runs, summaries)
+}
+
+func (s WebServer) buildRunCommitSummariesWithRepos(runs []RunRecord, summaries apiRepoSummaries) ([]apiCommitSummary, error) {
 	queue, err := s.Queue.List()
 	if err != nil {
 		return nil, err
@@ -658,9 +762,9 @@ func (s WebServer) buildRunCommitSummaries(runs []RunRecord) ([]apiCommitSummary
 
 	views := make([]apiCommitSummary, 0, len(runs))
 	for _, run := range runs {
-		view, err := s.buildCommitSummary(run.RepoDir, run, run.DiscoveredTasks, queue, activePtr)
+		view, err := s.buildCommitSummary(summaries, run.RepoDir, run, run.DiscoveredTasks, queue, activePtr)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("commit summary %q: %w", run.Commit, err)
 		}
 		views = append(views, view)
 	}
@@ -712,7 +816,7 @@ func findAPITaskSummary(tasks []apiTaskSummary, name string) (apiTaskSummary, bo
 	return apiTaskSummary{}, false
 }
 
-func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered []Task, queued []QueueEntry, active *ActiveTask) (apiCommitSummary, error) {
+func (s WebServer) buildCommitSummary(summaries apiRepoSummaries, repoDir string, run RunRecord, discovered []Task, queued []QueueEntry, active *ActiveTask) (apiCommitSummary, error) {
 	records := map[string]TaskRecord{}
 	for _, record := range run.TaskResults {
 		records[record.Name] = record
@@ -741,13 +845,7 @@ func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered 
 			summary.Status = executionStatusFromTaskRecord(record)
 			summary.DurationMilliseconds = record.DurationMilliseconds
 			summary.Failure = record.Failure
-			summary.Artifacts = s.enrichMarkedArtifacts(repoDir, run.Commit, TaskStatusView{
-				Name:            task.Name,
-				Attempt:         record.Attempt,
-				OutputDir:       record.OutputDir,
-				MarkedArtifacts: record.MarkedArtifacts,
-				Artifacts:       buildArtifactViews(record.OutputDir, outputFilesOrNil(record.OutputDir), record.MarkedArtifacts),
-			})
+			summary.Artifacts = s.markedArtifactViewsFromRecord(repoDir, run.Commit, record)
 			if record.Attempt > 0 {
 				summary.AttemptCount = record.Attempt
 			}
@@ -769,7 +867,7 @@ func (s WebServer) buildCommitSummary(repoDir string, run RunRecord, discovered 
 		tasks = append(tasks, summary)
 	}
 
-	repo, err := s.apiRepoSummary(repoDir)
+	repo, err := summaries.repo(repoDir)
 	if err != nil {
 		return apiCommitSummary{}, err
 	}

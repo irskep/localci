@@ -237,6 +237,25 @@ func (s WebServer) enrichMarkedArtifacts(repoDir string, commit string, task Tas
 	return markedArtifactViews(task)
 }
 
+func (s WebServer) markedArtifactViewsFromRecord(repoDir string, commit string, record TaskRecord) []ArtifactView {
+	artifacts := make([]ArtifactView, 0, len(record.MarkedArtifacts))
+	for _, marked := range record.MarkedArtifacts {
+		artifact := ArtifactView{
+			Name:        filepath.Base(filepath.FromSlash(marked.Path)),
+			DisplayName: marked.Path,
+			Path:        filepath.Join(record.OutputDir, filepath.FromSlash(marked.Path)),
+			MarkedName:  marked.Name,
+			Action:      marked.Action,
+		}
+		if rawURL, err := RawArtifactRoutePath(repoDir, commit, record.Name, record.Attempt, artifact.DisplayName); err == nil {
+			artifact.RawURL = rawURL
+			artifact.DownloadURL = rawURL + "?download=1"
+		}
+		artifacts = append(artifacts, artifact)
+	}
+	return artifacts
+}
+
 func markedArtifactViews(task TaskStatusView) []ArtifactView {
 	artifacts := []ArtifactView{}
 	for _, artifact := range task.Artifacts {
