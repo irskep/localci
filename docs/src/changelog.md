@@ -1,6 +1,8 @@
 # Changelog
 
 
+## 0.2.12 - Unreleased
+
 ## 0.2.11 - 2026-06-04
 
 - Fix docs deployment for release builds that publish artifact metadata.
