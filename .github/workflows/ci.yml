@@ -44,6 +44,8 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install mise
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -eu
           curl https://mise.run | sh

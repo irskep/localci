@@ -36,6 +36,8 @@ jobs:
           printf 'VERSION=%s\n' "${tag#v}" >>"$GITHUB_ENV"
 
       - name: Install mise
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -eu
           curl https://mise.run | sh
@@ -121,6 +123,8 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install mise
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -eu
           curl https://mise.run | sh
