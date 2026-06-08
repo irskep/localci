@@ -25,6 +25,7 @@ localci [flags]
 
 * [localci artifacts](../localci_artifacts/)	 - Print filesystem paths for task artifacts
 * [localci cancel](../localci_cancel/)	 - Cancel queued or active work
+* [localci cat](../localci_cat/)	 - Print one artifact to stdout
 * [localci completion](../localci_completion/)	 - Generate the autocompletion script for the specified shell
 * [localci dash](../localci_dash/)	 - Open the terminal UI
 * [localci docs](../localci_docs/)	 - Run this to quickly learn everything localci can do

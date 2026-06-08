@@ -19,6 +19,7 @@ type cliFlags struct {
 	Failed     bool
 	Primary    bool
 	PathsOnly  bool
+	Raw        bool
 	Limit      int
 	Statuses   []string
 	Annotation map[string]string

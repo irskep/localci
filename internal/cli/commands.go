@@ -53,6 +53,7 @@ func (a App) newRootCommand() *cobra.Command {
 		a.newStatusCommand(),
 		a.newHistoryCommand(),
 		a.newArtifactsCommand(),
+		a.newCatCommand(),
 		a.newDocsCommand(),
 		a.newWebCommand(),
 		a.newDashCommand(),
@@ -265,23 +266,58 @@ func (a App) newArtifactsCommand() *cobra.Command {
 	)
 }
 
+func (a App) newCatCommand() *cobra.Command {
+	flags := cliFlags{}
+	cmd := &cobra.Command{
+		Use:     "cat [artifact-name]",
+		Short:   "Print one artifact to stdout",
+		Long:    "Print one selected task artifact to stdout. With no artifact name, cat prints the primary artifact.",
+		Example: "localci cat --failed\nlocalci cat --task noisy-fail\nlocalci cat report.txt --task build\nlocalci cat dist/app.tar.gz --task build --raw",
+		GroupID: viewingGroupID,
+		Args:    cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 1 {
+				flags.Artifact = args[0]
+			}
+			if err := a.checkRequirements(); err != nil {
+				return err
+			}
+			return a.runCat(flags)
+		},
+	}
+	addRepoCommitTaskFlags(cmd, &flags)
+	addAttemptFlag(cmd, &flags)
+	cmd.Flags().BoolVar(&flags.Failed, "failed", false, "show artifacts for failed and timed-out tasks")
+	cmd.Flags().BoolVar(&flags.Primary, "primary", false, "show primary artifacts")
+	cmd.Flags().BoolVar(&flags.Raw, "raw", false, "print raw artifact bytes")
+	return cmd
+}
+
 func (a App) newDocsCommand() *cobra.Command {
 	var plain bool
 	var roff bool
+	var cheatsheet bool
 	cmd := &cobra.Command{
 		Use:   "docs",
 		Short: "Run this to quickly learn everything localci can do",
-		Long:  "Read LocalCI's bundled narrative documentation. For command options, use localci --help or localci <command> --help.",
+		Long:  "Read LocalCI's bundled narrative documentation. For command options, use localci --help or localci <command> --help. For a compact command reference, use localci docs --cheatsheet.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if plain && roff {
-				return fmt.Errorf("--plain and --roff are mutually exclusive")
+			selected := 0
+			for _, enabled := range []bool{plain, roff, cheatsheet} {
+				if enabled {
+					selected++
+				}
 			}
-			return a.runDocs(docsFlags{Plain: plain, Roff: roff})
+			if selected > 1 {
+				return fmt.Errorf("--plain, --roff, and --cheatsheet are mutually exclusive")
+			}
+			return a.runDocs(docsFlags{Plain: plain, Roff: roff, Cheatsheet: cheatsheet})
 		},
 	}
 	cmd.Flags().BoolVar(&plain, "plain", false, "print plain text instead of opening a man-style viewer")
 	cmd.Flags().BoolVar(&roff, "roff", false, "print roff manpage source")
+	cmd.Flags().BoolVar(&cheatsheet, "cheatsheet", false, "print a compact CLI cheatsheet")
 	return cmd
 }
 

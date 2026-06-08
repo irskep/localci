@@ -1,7 +1,12 @@
 # Changelog
 
 
-## 0.2.12 - Unreleased
+## 0.2.12 - 2026-06-08
+
+- Add `localci cat` for printing selected task artifacts directly to stdout.
+- Add a compact CLI cheatsheet via `localci docs --cheatsheet`.
+- Document that `localci install-hooks` is idempotent for the LocalCI-managed hook entry.
+- Fix generated changelog output so it preserves a final newline.
 
 ## 0.2.11 - 2026-06-04
 

@@ -235,6 +235,24 @@ localci status \-\-commit 6bd8d389f3f550da3fccb11bac380d59268fe320
 Non\-interactive commands print bounded summaries.
 They do not dump full logs.
 .SS Find artifact paths
+Print the primary artifact for a task directly to stdout:
+.IP
+.EX
+localci cat \-\-task noisy\-fail
+.EE
+.PP
+Print a named artifact:
+.IP
+.EX
+localci cat report.txt \-\-task noisy\-fail
+.EE
+.PP
+Use raw mode for binary artifacts:
+.IP
+.EX
+localci cat dist/app.tar.gz \-\-task build \-\-raw
+.EE
+.PP
 Print artifact paths for the latest run:
 .IP
 .EX

@@ -1,0 +1,105 @@
+LocalCI CLI Cheatsheet
+
+Core workflow
+
+  localci start
+      Start the daemon.
+
+  localci install-hooks
+      Install the Git post-commit hook for the current repo.
+
+  localci wait
+      Wait for the latest run for the current repo.
+
+  localci status
+      Print a bounded summary for the latest run.
+
+  localci web
+      Open the latest run in the web UI.
+
+  localci dash
+      Open the terminal dashboard.
+
+Run checks manually
+
+  localci run --wait
+      Queue a daemon-managed run for HEAD and wait for it.
+
+  localci run --no-clone --wait
+      Queue a daemon-managed run against the current working tree.
+
+  localci run --task test --wait
+      Queue one task by full or unambiguous short task name.
+
+  localci invoke --task test --wait
+      Run a task directly in the current terminal instead of through the daemon queue.
+
+Inspect failures
+
+  localci wait --task noisy-fail
+      Wait for one selected task.
+
+  localci status --task noisy-fail
+      Show a bounded summary for one task.
+
+  localci cat --task noisy-fail
+      Print the selected task's primary artifact, usually combined.log.
+
+  localci cat report.txt --task noisy-fail
+      Print a named artifact.
+
+  localci cat dist/app.tar.gz --task build --raw
+      Print raw bytes for a binary artifact.
+
+Find artifacts
+
+  localci artifacts
+      List artifacts for the latest run.
+
+  localci artifacts --failed --primary
+      List primary artifacts for failed and timed-out tasks.
+
+  localci artifacts --task noisy-fail --primary --paths-only
+      Print only artifact paths for scripts.
+
+Select runs
+
+  localci status --commit HEAD
+      Select a specific commit.
+
+  localci status --commit 'HEAD*'
+      Select the current working-tree run created by --no-clone.
+
+  localci history
+      Show recent runs for the current repo.
+
+  localci history --task noisy-fail
+      Show recent results for one task.
+
+Manage queued work
+
+  localci cancel
+      Cancel the active task.
+
+  localci cancel --task noisy-fail
+      Cancel one queued or active task.
+
+Common selectors
+
+  --repo <path>
+      Select a repo instead of using the nearest Git repo ancestor.
+
+  --commit <ref>
+      Select a run by commit ref. Query commands default to the latest run.
+
+  --task <name>
+      Select a full task name or unambiguous short task name.
+
+  --attempt <n>
+      Select a task attempt. Defaults to the latest attempt.
+
+More help
+
+  localci --help
+  localci <command> --help
+  localci docs

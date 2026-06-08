@@ -2,8 +2,10 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	"localci/internal/localci"
@@ -25,6 +27,17 @@ type cliArtifactsOutput struct {
 	Repo      string           `json:"repo"`
 	Commit    string           `json:"commit"`
 	Artifacts []cliArtifactRow `json:"artifacts"`
+}
+
+type cliCatArtifactResponse struct {
+	Artifact localci.ArtifactView `json:"artifact"`
+	Content  string               `json:"content"`
+}
+
+type cliCatCandidate struct {
+	Task     localci.TaskStatusView
+	Artifact localci.ArtifactView
+	Primary  bool
 }
 
 func (a App) runArtifacts(flags cliFlags) error {
@@ -69,6 +82,50 @@ func (a App) runArtifacts(flags cliFlags) error {
 	return nil
 }
 
+func (a App) runCat(flags cliFlags) error {
+	if flags.Artifact != "" && flags.Primary {
+		return fmt.Errorf("[artifact-name] and --primary cannot be used together")
+	}
+
+	runner, err := a.newRunner()
+	if err != nil {
+		return err
+	}
+	client := localci.DaemonClient{Paths: runner.Paths}
+	repo, err := a.resolveSelectorRepo(flags.Repo)
+	if err != nil {
+		return err
+	}
+	commit, err := a.resolveQueryCommit(repo, flags)
+	if err != nil {
+		return err
+	}
+	view, err := client.Status(context.Background(), repo, commit)
+	if err != nil {
+		return err
+	}
+	taskName, err := resolveTaskName(view.Tasks, flags.Task)
+	if err != nil {
+		return err
+	}
+	tasks := filterStatusTasks(view.Tasks, taskName, flags.Failed)
+	candidate, err := selectCatArtifact(runner.Paths, repo, commit, tasks, flags)
+	if err != nil {
+		return err
+	}
+	state, err := client.Ping(context.Background())
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(state.HTTPBaseURL) == "" {
+		return fmt.Errorf("daemon did not report an HTTP URL")
+	}
+	if flags.Raw {
+		return streamRawCatArtifact(a.Stdout, state.HTTPBaseURL, repo, commit, candidate.Task, candidate.Artifact)
+	}
+	return printTextCatArtifact(a.Stdout, state.HTTPBaseURL, repo, commit, candidate.Task, candidate.Artifact)
+}
+
 func artifactRows(paths localci.Paths, repo string, commit string, tasks []localci.TaskStatusView, flags cliFlags) []cliArtifactRow {
 	rows := []cliArtifactRow{}
 	for _, task := range tasks {
@@ -96,6 +153,102 @@ func artifactRows(paths localci.Paths, repo string, commit string, tasks []local
 		}
 	}
 	return rows
+}
+
+func selectCatArtifact(paths localci.Paths, repo string, commit string, tasks []localci.TaskStatusView, flags cliFlags) (cliCatCandidate, error) {
+	matches := catArtifactCandidates(paths, repo, commit, tasks, flags)
+	switch len(matches) {
+	case 0:
+		if flags.Artifact != "" {
+			return cliCatCandidate{}, fmt.Errorf("artifact %q not found in selected run", flags.Artifact)
+		}
+		return cliCatCandidate{}, fmt.Errorf("primary artifact not found in selected run")
+	case 1:
+		return matches[0], nil
+	default:
+		return cliCatCandidate{}, fmt.Errorf("artifact selection is ambiguous; candidates: %s; add --task or an artifact name to narrow the selection", catCandidateLabels(matches))
+	}
+}
+
+func catArtifactCandidates(paths localci.Paths, repo string, commit string, tasks []localci.TaskStatusView, flags cliFlags) []cliCatCandidate {
+	candidates := []cliCatCandidate{}
+	for _, task := range tasks {
+		task = localci.ApplySelectedAttempt(paths, repo, commit, task, flags.Attempt)
+		primaryArtifact, hasPrimary := localci.PrimaryArtifact(task)
+		if flags.Artifact == "" {
+			if hasPrimary {
+				candidates = append(candidates, cliCatCandidate{Task: task, Artifact: primaryArtifact, Primary: true})
+			}
+			continue
+		}
+		for _, artifact := range task.Artifacts {
+			if artifact.DisplayName == flags.Artifact {
+				candidates = append(candidates, cliCatCandidate{
+					Task:     task,
+					Artifact: artifact,
+					Primary:  hasPrimary && artifact.DisplayName == primaryArtifact.DisplayName,
+				})
+			}
+		}
+	}
+	return candidates
+}
+
+func catCandidateLabels(candidates []cliCatCandidate) string {
+	labels := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		labels = append(labels, fmt.Sprintf("%s attempt %d %s", candidate.Task.ShortName, candidate.Task.Attempt, candidate.Artifact.DisplayName))
+	}
+	return strings.Join(labels, ", ")
+}
+
+func printTextCatArtifact(w io.Writer, baseURL string, repo string, commit string, task localci.TaskStatusView, artifact localci.ArtifactView) error {
+	apiPath, err := localci.ArtifactRoutePath(repo, commit, task.Name, task.Attempt, artifact.DisplayName)
+	if err != nil {
+		return err
+	}
+	var response cliCatArtifactResponse
+	if err := getDaemonJSON(baseURL, "/api"+apiPath, &response); err != nil {
+		return err
+	}
+	if !response.Artifact.IsText {
+		return fmt.Errorf("artifact %q is not displayable text; pass --raw to print raw bytes", artifact.DisplayName)
+	}
+	_, err = io.WriteString(w, response.Content)
+	return err
+}
+
+func streamRawCatArtifact(w io.Writer, baseURL string, repo string, commit string, task localci.TaskStatusView, artifact localci.ArtifactView) error {
+	rawPath, err := localci.RawArtifactRoutePath(repo, commit, task.Name, task.Attempt, artifact.DisplayName)
+	if err != nil {
+		return err
+	}
+	resp, err := http.Get(daemonURL(baseURL, rawPath))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("artifact request failed: %s", resp.Status)
+	}
+	_, err = io.Copy(w, resp.Body)
+	return err
+}
+
+func getDaemonJSON(baseURL string, apiPath string, target any) error {
+	resp, err := http.Get(daemonURL(baseURL, apiPath))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("artifact request failed: %s", resp.Status)
+	}
+	return json.NewDecoder(resp.Body).Decode(target)
+}
+
+func daemonURL(baseURL string, routePath string) string {
+	return strings.TrimRight(baseURL, "/") + routePath
 }
 
 func printArtifactsOutput(w io.Writer, output cliArtifactsOutput) {

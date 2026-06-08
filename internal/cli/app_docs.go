@@ -11,11 +11,16 @@ import (
 )
 
 type docsFlags struct {
-	Plain bool
-	Roff  bool
+	Plain      bool
+	Roff       bool
+	Cheatsheet bool
 }
 
 func (a App) runDocs(flags docsFlags) error {
+	if flags.Cheatsheet {
+		_, err := fmt.Fprint(a.Stdout, docs.Cheatsheet())
+		return err
+	}
 	if flags.Roff {
 		_, err := fmt.Fprint(a.Stdout, docs.ManPage())
 		return err

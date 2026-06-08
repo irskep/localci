@@ -44,6 +44,64 @@ func TestDocsRoffPrintsBundledManPage(t *testing.T) {
 	}
 }
 
+func TestDocsCheatsheetPrintsBundledCheatsheetWithoutRequirementCheck(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	app := App{
+		Stdout: &stdout,
+		Stderr: io.Discard,
+		CheckRequirements: func() error {
+			t.Fatalf("docs should not check daemon or repo requirements")
+			return nil
+		},
+	}
+
+	if err := app.Run([]string{"docs", "--cheatsheet"}); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	got := stdout.String()
+	for _, want := range []string{"LocalCI CLI Cheatsheet", "localci wait", "localci cat --task noisy-fail"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("cheatsheet output missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(strings.ToLower(got), "agent") {
+		t.Fatalf("cheatsheet should not mention agents:\n%s", got)
+	}
+}
+
+func TestDocsHelpMentionsCheatsheet(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	app := App{Stdout: &stdout, Stderr: io.Discard}
+
+	if err := app.Run([]string{"docs", "--help"}); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	got := stdout.String()
+	for _, want := range []string{"localci docs --cheatsheet", "--cheatsheet"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("docs help missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestDocsOutputFormatsAreMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+
+	app := App{Stdout: io.Discard, Stderr: io.Discard}
+
+	err := app.Run([]string{"docs", "--plain", "--cheatsheet"})
+	if err == nil {
+		t.Fatalf("Run returned nil error, want mutually exclusive error")
+	}
+	if got := err.Error(); !strings.Contains(got, "mutually exclusive") {
+		t.Fatalf("error = %q, want mutually exclusive", got)
+	}
+}
+
 func TestDocsDefaultRendersTempManPage(t *testing.T) {
 	t.Parallel()
 

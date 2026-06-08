@@ -26,7 +26,8 @@ func GenerateChangelog(inPath string, outPath string) error {
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(outPath, bytes.TrimRight(out.Bytes(), "\n"), 0o644); err != nil {
+	generated := append(bytes.TrimRight(out.Bytes(), "\n"), '\n')
+	if err := os.WriteFile(outPath, generated, 0o644); err != nil {
 		return fmt.Errorf("write generated changelog: %w", err)
 	}
 	return nil

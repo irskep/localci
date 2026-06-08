@@ -160,6 +160,24 @@ Non-interactive commands print bounded summaries. They do not dump full logs.
 
 ### Find artifact paths
 
+Print the primary artifact for a task directly to stdout:
+
+```sh
+localci cat --task noisy-fail
+```
+
+Print a named artifact:
+
+```sh
+localci cat report.txt --task noisy-fail
+```
+
+Use raw mode for binary artifacts:
+
+```sh
+localci cat dist/app.tar.gz --task build --raw
+```
+
 Print artifact paths for the latest run:
 
 ```sh
