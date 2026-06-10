@@ -39,6 +39,7 @@ const topBarItems = computed<MenuItem[]>(() => {
   if (repoMenuItems.value.length > 0) {
     items.push({
       label: 'Repos',
+      class: 'top-bar-repos-item',
       items: repoMenuItems.value,
     })
   }
@@ -96,6 +97,19 @@ onMounted(() => {
 :global(.top-bar .p-menubar-item-link) {
   gap: var(--app-space-3);
   padding-block: var(--app-space-2);
+}
+
+:global(.top-bar .top-bar-repos-item > .p-menubar-submenu) {
+  right: 0;
+  left: auto;
+  max-width: min(24rem, calc(100vw - var(--app-page-block-padding) * 2));
+  overflow-x: hidden;
+}
+
+:global(.top-bar .top-bar-repos-item > .p-menubar-submenu .p-menubar-item-label) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {

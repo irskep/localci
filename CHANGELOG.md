@@ -2,6 +2,10 @@
 
 <!-- loosely based on https://keepachangelog.com/en/1.0.0/ -->
 
+## 0.2.14 - 2026-06-10
+
+- Fix the web top navigation Repos menu so it stays inside the viewport.
+
 ## 0.2.13 - 2026-06-10
 
 - Fix terminal dashboard socket status flicker during websocket reconnect handling.
