@@ -181,7 +181,9 @@ type tuiEventMsg struct {
 	err   error
 }
 
-type tuiStreamStartedMsg struct{}
+type tuiStreamStartedMsg struct {
+	gen int
+}
 type tuiReconnectMsg struct {
 	gen   int
 	route tuiRoute
@@ -312,6 +314,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notice = fmt.Sprintf("%s: %s", msg.action, msg.path)
 		}
 	case tuiStreamStartedMsg:
+		if m.stream == nil || msg.gen != m.stream.gen {
+			break
+		}
 		m.socketState = "connecting"
 	case tuiEventMsg:
 		cmds = append(cmds, m.listenEvents())

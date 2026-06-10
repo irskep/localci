@@ -1,6 +1,10 @@
 # Changelog
 
 
+## 0.2.13 - 2026-06-10
+
+- Fix terminal dashboard socket status flicker during websocket reconnect handling.
+
 ## 0.2.12 - 2026-06-08
 
 - Add `localci cat` for printing selected task artifacts directly to stdout.

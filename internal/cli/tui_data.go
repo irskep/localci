@@ -186,7 +186,7 @@ func (m tuiModel) startStream(route tuiRoute) tea.Cmd {
 			case ch <- tuiEventMsg{gen: gen, err: err}:
 			}
 		}()
-		return tuiStreamStartedMsg{}
+		return tuiStreamStartedMsg{gen: gen}
 	}
 }
 

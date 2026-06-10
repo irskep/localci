@@ -119,6 +119,20 @@ func TestTUIResponsesAcceptPaginationFields(t *testing.T) {
 	}
 }
 
+func TestTUIIgnoresStaleStreamStartedMessage(t *testing.T) {
+	t.Parallel()
+
+	model := newTUIModel(nil, tuiRoute{view: tuiViewHome, apiPath: "/api", title: "Home"})
+	model.stream.gen = 2
+	model.socketState = "connected"
+
+	updated, _ := model.Update(tuiStreamStartedMsg{gen: 1})
+	got := updated.(tuiModel)
+	if got.socketState != "connected" {
+		t.Fatalf("socketState = %q, want connected", got.socketState)
+	}
+}
+
 func TestTUITaskHistoryRouteAndRender(t *testing.T) {
 	t.Parallel()
 
