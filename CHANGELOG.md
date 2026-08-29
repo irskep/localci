@@ -2,6 +2,16 @@
 
 <!-- loosely based on https://keepachangelog.com/en/1.0.0/ -->
 
+## 0.2.16 - Unreleased
+
+### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
 ## 0.2.15 - 2026-08-29
 
 - Show rolled-up start time, end time, and live duration on web commit pages, with relative timestamps and exact details on hover.
