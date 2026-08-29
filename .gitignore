@@ -8,3 +8,4 @@ docs/.cache/
 docs/site/
 webassets/assets/*
 !webassets/assets/app.js
+.DS_Store
