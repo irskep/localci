@@ -2,15 +2,9 @@
 
 <!-- loosely based on https://keepachangelog.com/en/1.0.0/ -->
 
-## 0.2.16 - Unreleased
+## 0.2.16 - 2026-08-29
 
-### Added
-
-### Changed
-
-### Fixed
-
-### Removed
+- Show compact, second-granularity durations throughout the web UI, using at most two units such as `2m1s` or `1h2m`.
 
 ## 0.2.15 - 2026-08-29
 

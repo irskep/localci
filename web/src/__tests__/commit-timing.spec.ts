@@ -17,13 +17,13 @@ describe('CommitTiming', () => {
 
     expect(wrapper.text()).toContain('In progress')
     expect(wrapper.text()).toContain('Duration so far')
-    expect(wrapper.text()).toContain('10.0s')
+    expect(wrapper.text()).toContain('10s')
     expect(wrapper.find('time').text()).toBe('just now')
     expect(wrapper.find('time').attributes('title')).toBeTruthy()
     expect(vi.getTimerCount()).toBe(1)
 
     await vi.advanceTimersByTimeAsync(2000)
-    expect(wrapper.text()).toContain('12.0s')
+    expect(wrapper.text()).toContain('12s')
 
     wrapper.unmount()
     expect(vi.getTimerCount()).toBe(0)
@@ -41,7 +41,7 @@ describe('CommitTiming', () => {
 
     expect(wrapper.text()).toContain('Duration')
     expect(wrapper.text()).not.toContain('Duration so far')
-    expect(wrapper.text()).toContain('5.0s')
+    expect(wrapper.text()).toContain('5s')
     expect(wrapper.text()).not.toContain('In progress')
     expect(wrapper.findAll('time').map((element) => element.text())).toEqual([
       'just now',

@@ -4,6 +4,7 @@ import {
   displayStatusSeverity,
   displayTaskFailure,
   displayTaskStatus,
+  formatDuration,
   formatElapsedDuration,
   formatRelativeTimestamp,
   formatTimestamp,
@@ -114,10 +115,10 @@ describe('api validation', () => {
   })
 
   it('formats completed and live elapsed durations', () => {
-    expect(formatElapsedDuration('2026-08-29T12:00:00Z', '2026-08-29T12:00:05Z')).toBe('5.0s')
+    expect(formatElapsedDuration('2026-08-29T12:00:00Z', '2026-08-29T12:00:05Z')).toBe('5s')
     expect(
       formatElapsedDuration('2026-08-29T12:00:00Z', undefined, Date.parse('2026-08-29T12:00:12Z')),
-    ).toBe('12.0s')
+    ).toBe('12s')
     expect(formatElapsedDuration('invalid')).toBe('')
     expect(
       formatRelativeTimestamp('2026-08-29T12:00:00Z', Date.parse('2026-08-29T12:01:00Z')),
@@ -125,6 +126,22 @@ describe('api validation', () => {
     expect(formatTimestamp('invalid')).toBe('')
     expect(formatTimestamp('2026-08-29T12:00:00')).toBe('2026-08-29 12:00:00 pm')
     expect(formatTimestamp('2026-08-29T03:04:05')).toBe('2026-08-29 3:04:05 am')
+  })
+
+  it.each([
+    [0, ''],
+    [1, '<1s'],
+    [999, '<1s'],
+    [1000, '1s'],
+    [59_999, '59s'],
+    [60_000, '1m'],
+    [121_000, '2m1s'],
+    [3_600_000, '1h'],
+    [3_721_000, '1h2m'],
+    [86_400_000, '1d'],
+    [93_600_000, '1d2h'],
+  ])('formats %dms as %s', (durationMs, expected) => {
+    expect(formatDuration(durationMs)).toBe(expected)
   })
 
   it('displays canceled task failures as canceled', () => {

@@ -620,8 +620,20 @@ export function displayStatusSeverity(
 
 export function formatDuration(durationMs: number): string {
   if (durationMs <= 0) return ''
-  if (durationMs < 1000) return `${durationMs}ms`
-  return `${(durationMs / 1000).toFixed(1)}s`
+  const totalSeconds = Math.floor(durationMs / 1000)
+  if (totalSeconds === 0) return '<1s'
+
+  const seconds = totalSeconds % 60
+  const totalMinutes = Math.floor(totalSeconds / 60)
+  const minutes = totalMinutes % 60
+  const totalHours = Math.floor(totalMinutes / 60)
+  const hours = totalHours % 24
+  const days = Math.floor(totalHours / 24)
+
+  if (days > 0) return `${days}d${hours > 0 ? `${hours}h` : ''}`
+  if (totalHours > 0) return `${totalHours}h${minutes > 0 ? `${minutes}m` : ''}`
+  if (totalMinutes > 0) return `${totalMinutes}m${seconds > 0 ? `${seconds}s` : ''}`
+  return `${seconds}s`
 }
 
 export function formatTimestamp(timestamp?: string): string {
@@ -682,7 +694,7 @@ export function formatElapsedDuration(
   const startMilliseconds = new Date(startedAt).getTime()
   const endMilliseconds = finishedAt ? new Date(finishedAt).getTime() : nowMilliseconds
   if (Number.isNaN(startMilliseconds) || Number.isNaN(endMilliseconds)) return ''
-  return formatDuration(Math.max(0, endMilliseconds - startMilliseconds)) || '0ms'
+  return formatDuration(Math.max(0, endMilliseconds - startMilliseconds)) || '0s'
 }
 
 export function shortCommit(commit: string): string {
