@@ -4,7 +4,11 @@ import {
   displayStatusSeverity,
   displayTaskFailure,
   displayTaskStatus,
+  formatElapsedDuration,
+  formatRelativeTimestamp,
+  formatTimestamp,
   parseAPIEvent,
+  parseCommitResponse,
   parseTaskResponse,
   shortCommit,
   summarizeCommit,
@@ -91,6 +95,36 @@ describe('api validation', () => {
     expect(response.task.marked_artifacts).toEqual([
       { name: 'docs html', path: 'site/index.html', action: 'open' },
     ])
+  })
+
+  it('parses optional commit timing metadata', () => {
+    const response = parseCommitResponse({
+      repo: { repo_dir: '/repo', repo_path: 'repo', repo_label: 'repo' },
+      commit: {
+        repo_dir: '/repo',
+        commit: 'abc123',
+        tasks: [],
+        started_at: '2026-08-29T12:00:00Z',
+        finished_at: '2026-08-29T12:00:05Z',
+      },
+    })
+
+    expect(response.commit.started_at).toBe('2026-08-29T12:00:00Z')
+    expect(response.commit.finished_at).toBe('2026-08-29T12:00:05Z')
+  })
+
+  it('formats completed and live elapsed durations', () => {
+    expect(formatElapsedDuration('2026-08-29T12:00:00Z', '2026-08-29T12:00:05Z')).toBe('5.0s')
+    expect(
+      formatElapsedDuration('2026-08-29T12:00:00Z', undefined, Date.parse('2026-08-29T12:00:12Z')),
+    ).toBe('12.0s')
+    expect(formatElapsedDuration('invalid')).toBe('')
+    expect(
+      formatRelativeTimestamp('2026-08-29T12:00:00Z', Date.parse('2026-08-29T12:01:00Z')),
+    ).toBe('1 minute ago')
+    expect(formatTimestamp('invalid')).toBe('')
+    expect(formatTimestamp('2026-08-29T12:00:00')).toBe('2026-08-29 12:00:00 pm')
+    expect(formatTimestamp('2026-08-29T03:04:05')).toBe('2026-08-29 3:04:05 am')
   })
 
   it('displays canceled task failures as canceled', () => {

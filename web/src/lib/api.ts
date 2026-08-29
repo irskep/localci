@@ -132,6 +132,8 @@ export type CommitStatusView = {
   commit: string
   annotations?: Record<string, string>
   tasks: TaskStatusView[]
+  started_at?: string
+  finished_at?: string
 }
 
 export type TaskStatusView = {
@@ -405,6 +407,8 @@ function parseCommitStatusView(value: unknown): CommitStatusView {
     commit: asString(data.commit, 'commit_status.commit'),
     annotations: parseOptionalStringRecord(data.annotations, 'commit_status.annotations'),
     tasks: asArray(data.tasks, 'commit_status.tasks').map(parseTaskStatusView),
+    started_at: optionalString(data.started_at, 'commit_status.started_at'),
+    finished_at: optionalString(data.finished_at, 'commit_status.finished_at'),
   }
 }
 
@@ -618,6 +622,67 @@ export function formatDuration(durationMs: number): string {
   if (durationMs <= 0) return ''
   if (durationMs < 1000) return `${durationMs}ms`
   return `${(durationMs / 1000).toFixed(1)}s`
+}
+
+export function formatTimestamp(timestamp?: string): string {
+  if (!timestamp) return ''
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return ''
+  const parts = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).formatToParts(date)
+  const value = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((part) => part.type === type)?.value ?? ''
+  return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')} ${value('dayPeriod').toLowerCase()}`
+}
+
+const RELATIVE_TIME = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+
+export function formatRelativeTimestamp(timestamp?: string, nowMilliseconds = Date.now()): string {
+  if (!timestamp) return ''
+  const timestampMilliseconds = new Date(timestamp).getTime()
+  if (Number.isNaN(timestampMilliseconds)) return ''
+
+  const deltaMilliseconds = timestampMilliseconds - nowMilliseconds
+  const absoluteDelta = Math.abs(deltaMilliseconds)
+  const minute = 60_000
+  const hour = 60 * minute
+  const day = 24 * hour
+  const month = 30 * day
+  const year = 365 * day
+
+  if (absoluteDelta < 45_000) return 'just now'
+  if (absoluteDelta < 45 * minute) {
+    return RELATIVE_TIME.format(Math.round(deltaMilliseconds / minute), 'minute')
+  }
+  if (absoluteDelta < 22 * hour) {
+    return RELATIVE_TIME.format(Math.round(deltaMilliseconds / hour), 'hour')
+  }
+  if (absoluteDelta < 26 * day) {
+    return RELATIVE_TIME.format(Math.round(deltaMilliseconds / day), 'day')
+  }
+  if (absoluteDelta < 11 * month) {
+    return RELATIVE_TIME.format(Math.round(deltaMilliseconds / month), 'month')
+  }
+  return RELATIVE_TIME.format(Math.round(deltaMilliseconds / year), 'year')
+}
+
+export function formatElapsedDuration(
+  startedAt?: string,
+  finishedAt?: string,
+  nowMilliseconds = Date.now(),
+): string {
+  if (!startedAt) return ''
+  const startMilliseconds = new Date(startedAt).getTime()
+  const endMilliseconds = finishedAt ? new Date(finishedAt).getTime() : nowMilliseconds
+  if (Number.isNaN(startMilliseconds) || Number.isNaN(endMilliseconds)) return ''
+  return formatDuration(Math.max(0, endMilliseconds - startMilliseconds)) || '0ms'
 }
 
 export function shortCommit(commit: string): string {

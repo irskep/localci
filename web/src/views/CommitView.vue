@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 
 import TopBar from '@/components/TopBar.vue'
 import CommitSubject from '@/components/CommitSubject.vue'
+import CommitTiming from '@/components/CommitTiming.vue'
 import {
   commitSubject,
   displayAnnotationEntries,
@@ -66,7 +67,8 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
       <section
         v-if="
           commitSubject(commit.annotations) ||
-          displayAnnotationEntries(commit.annotations).length > 0
+          displayAnnotationEntries(commit.annotations).length > 0 ||
+          commit.started_at
         "
         class="commit-meta"
       >
@@ -74,6 +76,11 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
           v-if="commitSubject(commit.annotations)"
           :subject="commitSubject(commit.annotations)"
           size="large"
+        />
+        <CommitTiming
+          v-if="commit.started_at"
+          :started-at="commit.started_at"
+          :finished-at="commit.finished_at"
         />
         <div v-if="displayAnnotationEntries(commit.annotations).length > 0" class="attribute-list">
           <PTag

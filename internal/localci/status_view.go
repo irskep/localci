@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 const maxTextArtifactBytes = 2 << 20
@@ -33,6 +34,8 @@ type CommitStatusView struct {
 	Commit      string            `json:"commit"`
 	Annotations map[string]string `json:"annotations,omitempty"`
 	Tasks       []TaskStatusView  `json:"tasks"`
+	StartedAt   *time.Time        `json:"started_at,omitempty"`
+	FinishedAt  *time.Time        `json:"finished_at,omitempty"`
 }
 
 type TaskStatusView struct {
@@ -95,6 +98,7 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 	}
 
 	queuedByTask := queuedEntriesByTask(queued, repoDir, commit, discovered)
+	timingRecords := []TaskRecord{}
 
 	for _, task := range discovered {
 		status := ExecutionStatusNotRun
@@ -110,7 +114,8 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 		var durationMilliseconds int64
 		var failure string
 		var markedArtifacts []MarkedArtifact
-		if record, ok := taskRecords[task.Name]; ok {
+		record, hasRecord := taskRecords[task.Name]
+		if hasRecord {
 			outputDir = record.OutputDir
 			attempt = record.Attempt
 			status = executionStatusFromTaskRecord(record)
@@ -131,6 +136,9 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 			outputDir = paths.TaskAttemptDir(repoDir, commit, task.Name, attempt)
 			durationMilliseconds = 0
 			failure = ""
+		}
+		if hasRecord && record.Attempt == attempt {
+			timingRecords = append(timingRecords, record)
 		}
 
 		outputFiles, err := listOutputFiles(outputDir)
@@ -160,8 +168,56 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 	sort.Slice(view.Tasks, func(i int, j int) bool {
 		return view.Tasks[i].Name < view.Tasks[j].Name
 	})
+	view.StartedAt, view.FinishedAt = commitTiming(timingRecords, view.Tasks, active, repoDir, commit)
 
 	return view, nil
+}
+
+func commitTiming(records []TaskRecord, tasks []TaskStatusView, active *ActiveTask, repoDir string, commit string) (*time.Time, *time.Time) {
+	var startedAt time.Time
+	var finishedAt time.Time
+	hasActiveRecord := false
+	for _, record := range records {
+		if !record.StartedAt.IsZero() && (startedAt.IsZero() || record.StartedAt.Before(startedAt)) {
+			startedAt = record.StartedAt
+		}
+		if record.FinishedAt.After(finishedAt) {
+			finishedAt = record.FinishedAt
+		}
+		if active != nil && record.Name == active.TaskName && record.Attempt == active.Attempt {
+			hasActiveRecord = true
+		}
+	}
+	if active != nil && !hasActiveRecord && activeTaskIsRunning(tasks, active) && active.RepoDir == repoDir && active.Commit == commit &&
+		!active.StartedAt.IsZero() && (startedAt.IsZero() || active.StartedAt.Before(startedAt)) {
+		startedAt = active.StartedAt
+	}
+	if startedAt.IsZero() {
+		return nil, nil
+	}
+
+	for _, task := range tasks {
+		if task.Status == ExecutionStatusQueued || task.Status == ExecutionStatusRunning {
+			return timePointer(startedAt), nil
+		}
+	}
+	if finishedAt.IsZero() {
+		return timePointer(startedAt), nil
+	}
+	return timePointer(startedAt), timePointer(finishedAt)
+}
+
+func activeTaskIsRunning(tasks []TaskStatusView, active *ActiveTask) bool {
+	for _, task := range tasks {
+		if task.Name == active.TaskName && task.Attempt == active.Attempt && task.Status == ExecutionStatusRunning {
+			return true
+		}
+	}
+	return false
+}
+
+func timePointer(value time.Time) *time.Time {
+	return &value
 }
 
 func queuedEntriesByTask(queued []QueueEntry, repoDir string, commit string, discovered []Task) map[string][]QueueEntry {

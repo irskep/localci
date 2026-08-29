@@ -1,6 +1,10 @@
 # Changelog
 
 
+## 0.2.15 - 2026-08-29
+
+- Show rolled-up start time, end time, and live duration on web commit pages, with relative timestamps and exact details on hover.
+
 ## 0.2.14 - 2026-06-10
 
 - Fix the web top navigation Repos menu so it stays inside the viewport.

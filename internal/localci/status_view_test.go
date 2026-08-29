@@ -101,6 +101,127 @@ func TestBuildCommitStatusView(t *testing.T) {
 	}
 }
 
+func TestBuildCommitStatusViewRollsUpLatestTaskTiming(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := Paths{Root: root}
+	repoDir := "/repo"
+	commit := "abc123"
+	req := InvokeRequest{RepoDir: repoDir, Commit: commit}
+	base := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+
+	oldBuild := newTaskRecord(paths, req, Task{Name: "localci:build"}, 1, base)
+	oldBuild.Status = TaskStatusSucceeded
+	oldBuild.FinishedAt = base.Add(time.Minute)
+	oldBuild.DurationMilliseconds = durationMilliseconds(oldBuild.StartedAt, oldBuild.FinishedAt)
+	latestBuild := newTaskRecord(paths, req, Task{Name: "localci:build"}, 2, base.Add(10*time.Minute))
+	latestBuild.Status = TaskStatusSucceeded
+	latestBuild.FinishedAt = base.Add(12 * time.Minute)
+	latestBuild.DurationMilliseconds = durationMilliseconds(latestBuild.StartedAt, latestBuild.FinishedAt)
+	testTask := newTaskRecord(paths, req, Task{Name: "localci:test"}, 1, base.Add(5*time.Minute))
+	testTask.Status = TaskStatusSucceeded
+	testTask.FinishedAt = base.Add(15 * time.Minute)
+	testTask.DurationMilliseconds = durationMilliseconds(testTask.StartedAt, testTask.FinishedAt)
+
+	for _, record := range []TaskRecord{oldBuild, latestBuild, testTask} {
+		if err := os.MkdirAll(record.OutputDir, 0o755); err != nil {
+			t.Fatalf("MkdirAll returned error: %v", err)
+		}
+		if err := writeTaskRecord(record); err != nil {
+			t.Fatalf("writeTaskRecord returned error: %v", err)
+		}
+	}
+	run := newRunRecord(req, oldBuild.StartedAt)
+	run.FinishedAt = testTask.FinishedAt
+	run.DiscoveredTasks = []Task{{Name: "localci:build"}, {Name: "localci:test"}}
+	run.TaskResults = []TaskRecord{latestBuild, testTask}
+	run.RefreshSummary()
+	if err := writeRunRecord(paths, run); err != nil {
+		t.Fatalf("writeRunRecord returned error: %v", err)
+	}
+
+	view, err := BuildCommitStatusView(paths, repoDir, commit, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("BuildCommitStatusView returned error: %v", err)
+	}
+	if view.StartedAt == nil || !view.StartedAt.Equal(testTask.StartedAt) {
+		t.Fatalf("StartedAt = %v, want %v", view.StartedAt, testTask.StartedAt)
+	}
+	if view.FinishedAt == nil || !view.FinishedAt.Equal(testTask.FinishedAt) {
+		t.Fatalf("FinishedAt = %v, want %v", view.FinishedAt, testTask.FinishedAt)
+	}
+}
+
+func TestBuildCommitStatusViewOmitsTimingForQueuedRetryWithoutMetadata(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := Paths{Root: root}
+	repoDir := "/repo"
+	commit := "abc123"
+	req := InvokeRequest{RepoDir: repoDir, Commit: commit}
+	previous := newTaskRecord(paths, req, Task{Name: "localci:test"}, 1, time.Now().UTC().Add(-time.Minute))
+	previous.Status = TaskStatusSucceeded
+	previous.FinishedAt = previous.StartedAt.Add(time.Second)
+	if err := os.MkdirAll(previous.OutputDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := writeTaskRecord(previous); err != nil {
+		t.Fatalf("writeTaskRecord returned error: %v", err)
+	}
+	run := newRunRecord(req, previous.StartedAt)
+	run.FinishedAt = previous.FinishedAt
+	run.DiscoveredTasks = []Task{{Name: previous.Name}}
+	run.TaskResults = []TaskRecord{previous}
+	run.RefreshSummary()
+	if err := writeRunRecord(paths, run); err != nil {
+		t.Fatalf("writeRunRecord returned error: %v", err)
+	}
+
+	view, err := BuildCommitStatusView(paths, repoDir, commit, nil, []QueueEntry{{
+		Kind: QueueEntryKindTask, RepoDir: repoDir, Commit: commit, TaskName: previous.Name, Attempt: 2,
+	}}, nil)
+	if err != nil {
+		t.Fatalf("BuildCommitStatusView returned error: %v", err)
+	}
+	if view.StartedAt != nil || view.FinishedAt != nil {
+		t.Fatalf("timing = (%v, %v), want no timing", view.StartedAt, view.FinishedAt)
+	}
+}
+
+func TestCommitTimingUsesActiveStartAndOmitsEnd(t *testing.T) {
+	t.Parallel()
+
+	startedAt := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	active := &ActiveTask{
+		QueueEntry: QueueEntry{RepoDir: "/repo", Commit: "abc123", TaskName: "localci:test", Attempt: 1},
+		StartedAt:  startedAt,
+	}
+	gotStart, gotFinish := commitTiming(nil, []TaskStatusView{{
+		Name: active.TaskName, Attempt: active.Attempt, Status: ExecutionStatusRunning,
+	}}, active, "/repo", "abc123")
+	if gotStart == nil || !gotStart.Equal(startedAt) {
+		t.Fatalf("started at = %v, want %v", gotStart, startedAt)
+	}
+	if gotFinish != nil {
+		t.Fatalf("finished at = %v, want nil", gotFinish)
+	}
+}
+
+func TestCommitTimingIgnoresActiveRunWithoutTaskMetadata(t *testing.T) {
+	t.Parallel()
+
+	active := &ActiveTask{
+		QueueEntry: QueueEntry{Kind: QueueEntryKindRun, RepoDir: "/repo", Commit: "abc123"},
+		StartedAt:  time.Now().UTC(),
+	}
+	gotStart, gotFinish := commitTiming(nil, nil, active, "/repo", "abc123")
+	if gotStart != nil || gotFinish != nil {
+		t.Fatalf("timing = (%v, %v), want no timing", gotStart, gotFinish)
+	}
+}
+
 func TestResolveArtifactPathRejectsSymlinkEscape(t *testing.T) {
 	t.Parallel()
 
