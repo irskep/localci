@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import TopBar from '@/components/TopBar.vue'
+import TerminalLog from '@/components/TerminalLog.vue'
 import ArtifactActions from '@/components/ArtifactActions.vue'
 import {
   artifactURL,
@@ -249,9 +250,12 @@ onUnmounted(() => store.unsubscribeTask())
               <span class="muted mono">{{ taskResponse?.primary_artifact || 'combined.log' }}</span>
             </div>
           </template>
-          <pre class="task-log-view">{{
-            taskResponse?.primary_log || 'No primary log content.'
-          }}</pre>
+          <TerminalLog
+            :key="parsed.apiPath"
+            class="task-log-view"
+            :text="taskResponse?.primary_log ?? ''"
+            empty="No primary log content."
+          />
         </PPanel>
       </section>
     </template>

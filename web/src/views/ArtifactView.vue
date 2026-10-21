@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import TopBar from '@/components/TopBar.vue'
+import TerminalLog from '@/components/TerminalLog.vue'
 import ArtifactActions from '@/components/ArtifactActions.vue'
 import { shortCommit } from '@/lib/api'
 import { entityKindIcon } from '@/lib/entity-icons'
@@ -88,9 +89,12 @@ onUnmounted(() => store.unsubscribeArtifact())
           :download-url="store.currentArtifact.artifact.download_url"
         />
       </div>
-      <pre v-if="store.currentArtifact.artifact.is_text" class="artifact-log-view">{{
-        store.currentArtifact.content
-      }}</pre>
+      <TerminalLog
+        v-if="store.currentArtifact.artifact.is_text"
+        :key="parsed.apiPath"
+        class="artifact-log-view"
+        :text="store.currentArtifact.content"
+      />
       <div v-else class="artifact-fallback">
         <i :class="artifactIcon" aria-hidden="true"></i>
         <div>
