@@ -39,6 +39,8 @@ type CommitStatusView struct {
 }
 
 type TaskStatusView struct {
+	Phase                string            `json:"phase,omitempty"`
+	PhaseStartedAt       *time.Time        `json:"phase_started_at,omitempty"`
 	Name                 string            `json:"name"`
 	ShortName            string            `json:"short_name"`
 	Attempt              int               `json:"attempt"`
@@ -187,6 +189,9 @@ func buildCommitStatusView(paths Paths, repoDir, commit string, discovered []Tas
 		})
 	}
 
+	for i, task := range view.Tasks {
+		view.Tasks[i].Phase, view.Tasks[i].PhaseStartedAt = taskPhase(task, active, queuedByTask[task.Name], repoDir, commit)
+	}
 	sort.Slice(view.Tasks, func(i int, j int) bool {
 		return view.Tasks[i].Name < view.Tasks[j].Name
 	})

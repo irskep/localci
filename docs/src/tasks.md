@@ -39,7 +39,8 @@ Mise documents this format in [TOML tasks](https://mise.en.dev/tasks/toml-tasks.
 TOML tasks also work from nested Mise config roots. Tell Mise which child directories are config roots from the repo-level `mise.toml`:
 
 ```toml title="mise.toml"
-experimental_monorepo_root = true
+min_version = "2026.6.6"
+monorepo_root = true
 
 [monorepo]
 config_roots = ["web", "docs"]
@@ -113,12 +114,12 @@ Tasks run either in shallow clones of a specific commit, or on your working dire
 
 Every task receives these environment variables:
 
-| Variable | Meaning |
-| --- | --- |
-| `LOCALCI_TASK_OUTPUT_DIR` | Directory for artifacts from this task attempt. |
+| Variable                      | Meaning                                                               |
+| ----------------------------- | --------------------------------------------------------------------- |
+| `LOCALCI_TASK_OUTPUT_DIR`     | Directory for artifacts from this task attempt.                       |
 | `LOCALCI_TASK_ARTIFACTS_FILE` | JSON manifest path for named artifact actions from this task attempt. |
-| `LOCALCI_TASK_CACHE_DIR` | Cache directory for this task. |
-| `LOCALCI_CACHE_DIR` | Cache directory shared by LocalCI tasks. |
+| `LOCALCI_TASK_CACHE_DIR`      | Cache directory for this task.                                        |
+| `LOCALCI_CACHE_DIR`           | Cache directory shared by LocalCI tasks.                              |
 
 Write reports and inspectable artifacts under `LOCALCI_TASK_OUTPUT_DIR`. LocalCI exposes those files in the web and terminal UIs.
 
@@ -157,25 +158,25 @@ Valid actions are `open`, `download`, `reveal`, and `view`.
 Here‘s how you might configure a browser testing tool like Playwright to put its filesystem output in the right place:
 
 ```ts title="playwright.config.ts"
-import { defineConfig } from '@playwright/test'
+import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   outputDir: process.env.LOCALCI_TASK_OUTPUT_DIR
     ? `${process.env.LOCALCI_TASK_OUTPUT_DIR}/playwright-artifacts`
-    : 'test-results',
+    : "test-results",
   reporter: [
-    ['list'],
+    ["list"],
     [
-      'html',
+      "html",
       {
         outputFolder: process.env.LOCALCI_TASK_OUTPUT_DIR
           ? `${process.env.LOCALCI_TASK_OUTPUT_DIR}/playwright-report`
-          : 'playwright-report',
-        open: 'never',
+          : "playwright-report",
+        open: "never",
       },
     ],
   ],
-})
+});
 ```
 
 ```sh title="mise-tasks/localci/playwright"

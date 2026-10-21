@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 
 	"localci/internal/localci"
 )
@@ -28,13 +29,18 @@ func (a App) runStart() error {
 	return nil
 }
 
-func (a App) runRestart() error {
+func (a App) runRestart(immediate bool) error {
 	manager, err := a.newDaemonManager()
 	if err != nil {
 		return err
 	}
 
-	result, err := manager.Restart(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	if !immediate {
+		fmt.Fprintln(a.Stdout, "Waiting for current work to finish before restarting…")
+	}
+	result, err := manager.Restart(ctx, immediate)
 	if err != nil {
 		return err
 	}

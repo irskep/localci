@@ -14,6 +14,7 @@ import (
 )
 
 type App struct {
+	Stdin             io.Reader
 	Stdout            io.Writer
 	Stderr            io.Writer
 	Cwd               string
@@ -220,6 +221,7 @@ func (a App) runStatus(flags cliFlags) error {
 		})
 	}
 
+	a.printPruneHint(runner.Paths)
 	if taskName != "" {
 		a.printCommitHeader("Status", statusView)
 		fmt.Fprintln(a.Stdout)
@@ -299,7 +301,8 @@ func (a App) runInvoke(flags cliFlags) error {
 		return err
 	}
 
-	ctx := context.Background()
+	ctx, cancel := localci.DaemonContext()
+	defer cancel()
 	annotations, err := a.runAnnotations(ctx, repo, commit, flags.NoClone, flags.Annotation)
 	if err != nil {
 		return err
@@ -349,12 +352,15 @@ func (a App) runCancel(flags cliFlags) error {
 		if err != nil {
 			return err
 		}
-		if active == nil || active.Kind != localci.QueueEntryKindTask {
+		if active == nil || (active.Kind != localci.QueueEntryKindTask && active.CurrentTask == "") {
 			return fmt.Errorf("no active task to cancel")
 		}
 		repoDir = active.RepoDir
 		commit = active.Commit
 		taskName = active.TaskName
+		if active.CurrentTask != "" {
+			taskName = active.CurrentTask
+		}
 	} else {
 		repoDir, err = a.resolveSelectorRepo(flags.Repo)
 		if err != nil {

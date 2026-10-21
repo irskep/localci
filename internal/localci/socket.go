@@ -48,6 +48,11 @@ func (c DaemonClient) Ping(ctx context.Context) (DaemonState, error) {
 	return *resp.State, nil
 }
 
+func (c DaemonClient) Drain(ctx context.Context) error {
+	_, err := c.call(ctx, DaemonRequest{Method: "drain"})
+	return err
+}
+
 func (c DaemonClient) Shutdown(ctx context.Context) error {
 	_, err := c.call(ctx, DaemonRequest{Method: "shutdown"})
 	return err
@@ -169,6 +174,7 @@ type DaemonServer struct {
 	DiscoverTasks func(context.Context, string) ([]Task, error)
 	Events        *EventNotifier
 	Shutdown      func()
+	Drain         func()
 	mu            sync.Mutex
 }
 
@@ -261,6 +267,12 @@ func (s *DaemonServer) dispatch(req DaemonRequest) DaemonResponse {
 			return errorResponse(err)
 		}
 		return DaemonResponse{OK: true, ActiveTask: &active}
+	case "drain":
+		if s.Drain == nil {
+			return errorResponse(fmt.Errorf("graceful shutdown is unavailable"))
+		}
+		s.Drain()
+		return DaemonResponse{OK: true}
 	case "shutdown":
 		if s.Shutdown != nil {
 			s.Shutdown()

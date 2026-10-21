@@ -357,6 +357,7 @@ func ensureHistorySchema(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, `
 		pragma busy_timeout = 5000;
 		pragma journal_mode = wal;
+		create table if not exists artifact_prunes (repo_dir text not null, commit_ref text not null, activity_at text not null, primary key(repo_dir,commit_ref));
 		create table if not exists runs (
 			repo_dir text not null,
 			repo_id text not null,

@@ -102,7 +102,7 @@ File: \f[CR]mise.toml\f[R]
 .IP
 .EX
 \f[B][tools]\f[R]
-\(dqgithub:irskep/localci\(dq = \(dq0.2.10\(dq
+\(dqgithub:irskep/localci\(dq = \(dq0.3.0\(dq
 .EE
 .IP
 .EX
@@ -351,6 +351,59 @@ Task history in the web UI shows 50 runs per page; use \f[B]Older\f[R]
 and \f[B]Newer\f[R] to browse.
 The terminal dashboard shows the latest 50 matching runs;
 \f[CR]localci history\f[R] can retrieve older runs.
+.SS Prune logs and artifacts
+LocalCI keeps outputs until you remove them.
+Preview pruning across all repositories:
+.IP
+.EX
+localci prune \-\-dry\-run
+.EE
+.PP
+Run \f[CR]localci prune\f[R] to see the removal summary and confirm with
+\f[CR]y\f[R].
+The default limits are 30 days and 10 GiB: remove outputs from runs last
+active more than 30 days ago, then remove the oldest remaining run
+outputs until their combined size is at most 10 GiB.
+All attempts of a selected run are included.
+.PP
+Override the limits for one invocation, or pass \f[CR]\-\-yes\f[R] to
+skip confirmation:
+.IP
+.EX
+localci prune \-\-max\-age 7d \-\-max\-size 5GiB \-\-yes
+.EE
+.PP
+Set either limit to \f[CR]0\f[R] to disable it.
+No settings are saved, and pruning never runs automatically.
+.PP
+To remove individual large files regardless of age, use
+\f[CR]\-\-larger\-than\f[R] instead of the age and total\-size limits:
+.IP
+.EX
+localci prune \-\-larger\-than 100MiB
+.EE
+.PP
+This lists and removes files strictly larger than 100 MiB, leaving
+smaller files in the same run.
+Sizes accept bytes, decimal \f[CR]KB\f[R]/\f[CR]MB\f[R]/\f[CR]GB\f[R],
+or binary \f[CR]KiB\f[R]/\f[CR]MiB\f[R]/\f[CR]GiB\f[R].
+For example, \f[CR]1GB\f[R] is 1,000,000,000 bytes and \f[CR]1GiB\f[R]
+is 1,073,741,824 bytes.
+Ages accept whole days (\f[CR]30d\f[R]) or durations such as
+\f[CR]24h\f[R].
+.PP
+Active and queued runs are protected, even if that prevents reaching the
+size limit.
+Runs or files that change after the preview are skipped.
+Task results, exit codes, failure messages, and attempt history remain;
+logs and artifact contents are deleted.
+Task and shared caches are untouched.
+Symlink targets are never followed or deleted.
+.PP
+Text output from \f[CR]localci status\f[R] suggests pruning when history
+contains completed runs older than 30 days.
+This is an age\-based hint, not a disk\-space measurement; only
+\f[CR]prune\f[R] scans output files to calculate their sizes.
 .SH Tasks
 LocalCI runs checks that are defined as Mise tasks.
 A task is eligible when its task name starts with \f[CR]localci:\f[R].
@@ -400,7 +453,8 @@ Tell Mise which child directories are config roots from the repo\-level
 File: \f[CR]mise.toml\f[R]
 .IP
 .EX
-experimental_monorepo_root = true
+min_version = \(dq2026.6.6\(dq
+monorepo_root = true
 
 \f[B][monorepo]\f[R]
 config_roots = [\(dqweb\(dq, \(dqdocs\(dq]
@@ -504,7 +558,7 @@ Every task receives these environment variables:
 .PP
 .TS
 tab(@);
-lw(35.0n) lw(35.0n).
+lw(20.7n) lw(49.3n).
 T{
 Variable
 T}@T{
@@ -586,25 +640,25 @@ to put its filesystem output in the right place:
 File: \f[CR]playwright.config.ts\f[R]
 .IP
 .EX
-\f[B]import\f[R] { defineConfig } \f[B]from\f[R] \(aq\(atplaywright/test\(aq
+\f[B]import\f[R] { defineConfig } \f[B]from\f[R] \(dq\(atplaywright/test\(dq;
 
 \f[B]export\f[R] \f[B]default\f[R] defineConfig({
   outputDir: process.env.LOCALCI_TASK_OUTPUT_DIR
     ? \(ga${process.env.LOCALCI_TASK_OUTPUT_DIR}/playwright\-artifacts\(ga
-    : \(aqtest\-results\(aq,
+    : \(dqtest\-results\(dq,
   reporter: [
-    [\(aqlist\(aq],
+    [\(dqlist\(dq],
     [
-      \(aqhtml\(aq,
+      \(dqhtml\(dq,
       {
         outputFolder: process.env.LOCALCI_TASK_OUTPUT_DIR
           ? \(ga${process.env.LOCALCI_TASK_OUTPUT_DIR}/playwright\-report\(ga
-          : \(aqplaywright\-report\(aq,
-        open: \(aqnever\(aq,
+          : \(dqplaywright\-report\(dq,
+        open: \(dqnever\(dq,
       },
     ],
   ],
-})
+});
 .EE
 .PP
 File: \f[CR]mise\-tasks/localci/playwright\f[R]

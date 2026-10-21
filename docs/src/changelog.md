@@ -1,27 +1,32 @@
 # Changelog
 
 
-## 0.2.17 - Unreleased
+## 0.3.0 - 2026-10-21
 
 ### Added
 
-- Show terminal colors in task logs and text artifacts in the web UI, with plain text while scrolling and colors added to visible lines when scrolling stops.
+- Add `localci prune` with default limits of 30 days and 10 GiB, a removal preview, confirmation, `--dry-run`, and `--yes`. Override limits with `--max-age` and `--max-size`, or remove individual large files with `--larger-than`. Accept decimal `KB`/`MB`/`GB` and binary `KiB`/`MiB`/`GiB`. Preserve task records, caches, and active or queued runs; skip runs whose outputs change after the preview.
+- Suggest pruning in CLI status when completed runs are older than 30 days, without scanning output directories.
+- Add graceful restart by default: finish the current task or setup step, then restart and resume queued work. Use `restart --immediate` to interrupt current work and retry it after restart.
+- Include execution phases and their start times in task status and queue API responses.
+- Allow `localci cancel` to cancel an active setup task.
+- Show terminal colors in task logs and text artifacts in the web UI, with plain text while scrolling and colors added to visible lines when scrolling stops. Limit log previews to 2 MiB, with the complete log available to download.
 - Add pagination to task history in the web UI.
 
 ### Changed
 
-- Limit web log previews to 2 MiB, with the complete log available to download.
+- Use Mise’s `monorepo_root` setting in the repository and task examples; require Mise 2026.6.6 or newer for this configuration.
 
 ### Fixed
 
+- Stop child processes when tasks are canceled, time out, or finish, and when the daemon shuts down. Handle interruption of foreground `invoke` runs and bound waits for inherited output pipes.
+- Preserve interrupted queue entries for recovery after daemon shutdown.
 - Run root setup tasks with qualified Mise names when retrying or recovering interrupted tasks. Recreate missing checkouts through setup.
 - Keep live logs in sync when output contains Unicode or overlaps a snapshot.
 - Show load errors and recover when a web page's initial snapshot stalls.
 - Avoid scanning unrelated task outputs or reading whole artifacts to serve a task page or report asset.
 - Reuse the web server's history database connection and coalesce queued updates instead of repeatedly reconnecting slow clients.
 - Keep stalled control-socket clients from blocking other commands.
-
-### Removed
 
 ## 0.2.16 - 2026-08-29
 

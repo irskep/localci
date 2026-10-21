@@ -44,6 +44,7 @@ func (a App) newRootCommand() *cobra.Command {
 		a.newStartCommand(),
 		a.newRestartCommand(),
 		a.newStopCommand(),
+		a.newPruneCommand(),
 		a.newDaemonCommand(),
 		a.newPostcommitCommand(),
 		a.newRunCommand(),
@@ -109,7 +110,10 @@ func (a App) newStartCommand() *cobra.Command {
 }
 
 func (a App) newRestartCommand() *cobra.Command {
-	return a.noArgCommand(managementGroupID, "restart", "Restart the daemon", "Restart the LocalCI daemon.", a.runRestart)
+	var immediate bool
+	cmd := a.noArgCommand(managementGroupID, "restart", "Restart the daemon", "Finish current work, then restart the daemon. Queued tasks resume after restart. Use --immediate to interrupt current work and retry it after restart.", func() error { return a.runRestart(immediate) })
+	cmd.Flags().BoolVar(&immediate, "immediate", false, "Interrupt current work instead of waiting for it to finish")
+	return cmd
 }
 
 func (a App) newStopCommand() *cobra.Command {

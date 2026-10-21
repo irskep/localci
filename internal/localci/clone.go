@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -126,6 +127,8 @@ func localFileURL(path string) string {
 
 func runCloneGit(ctx context.Context, dir string, args ...string) error {
 	cmd := exec.CommandContext(ctx, "git", args...)
+	configureTaskProcess(cmd)
+	defer signalTaskGroup(cmd, syscall.SIGKILL)
 	if dir != "" {
 		cmd.Dir = dir
 	}

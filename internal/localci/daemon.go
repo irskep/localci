@@ -16,6 +16,7 @@ import (
 )
 
 type DaemonState struct {
+	Draining    bool      `json:"draining,omitempty"`
 	PID         int       `json:"pid"`
 	StartedAt   time.Time `json:"started_at"`
 	HTTPAddress string    `json:"http_address,omitempty"`
@@ -81,11 +82,44 @@ func (m DaemonManager) Start(ctx context.Context) (StartResult, error) {
 	}, nil
 }
 
-func (m DaemonManager) Restart(ctx context.Context) (StartResult, error) {
-	if err := m.Stop(); err != nil {
-		return StartResult{}, err
+func (m DaemonManager) Restart(ctx context.Context, immediate bool) (StartResult, error) {
+	if immediate {
+		if err := m.Stop(); err != nil {
+			return StartResult{}, err
+		}
+	} else {
+		state, alive, err := m.readAliveState()
+		if err != nil {
+			return StartResult{}, err
+		}
+		if alive {
+			requestCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			err := (DaemonClient{Paths: m.Paths}).Drain(requestCtx)
+			cancel()
+			if err != nil {
+				return StartResult{}, fmt.Errorf("request graceful restart: %w (use restart --immediate to interrupt work)", err)
+			}
+			ticker := time.NewTicker(100 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				alive, err := processAlive(state.PID)
+				if err != nil {
+					return StartResult{}, err
+				}
+				if !alive {
+					break
+				}
+				select {
+				case <-ctx.Done():
+					return StartResult{}, ctx.Err()
+				case <-ticker.C:
+				}
+			}
+			if err := m.clearState(); err != nil {
+				return StartResult{}, err
+			}
+		}
 	}
-
 	return m.Start(ctx)
 }
 
@@ -102,8 +136,10 @@ func (m DaemonManager) Stop() error {
 	}
 
 	client := DaemonClient{Paths: m.Paths}
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer shutdownCancel()
 	sentSignal := false
-	if err := client.Shutdown(context.Background()); err != nil {
+	if err := client.Shutdown(shutdownCtx); err != nil {
 		if signalErr := signalProcess(state.PID, syscall.SIGTERM); signalErr != nil {
 			return signalErr
 		}
@@ -213,11 +249,18 @@ func (m DaemonManager) Run(ctx context.Context) error {
 	scheduler := m.Scheduler
 	scheduler.Events = eventNotifier
 	scheduler.Runner.Events = eventNotifier
+	lifecycle := &daemonLifecycle{queue: scheduler.Queue, cancel: cancel}
+	scheduler.claimNext = lifecycle.claimNext
 
 	server := &DaemonServer{
-		Paths:         m.Paths,
-		Queue:         scheduler.Queue,
-		ReadState:     m.ReadState,
+		Paths: m.Paths,
+		Queue: scheduler.Queue,
+		ReadState: func() (DaemonState, error) {
+			state, err := m.ReadState()
+			state.Draining = lifecycle.isDraining()
+			return state, err
+		},
+		Drain:         lifecycle.drain,
 		DiscoverTasks: scheduler.Runner.DiscoverTasks,
 		Events:        eventNotifier,
 		Shutdown:      cancel,
@@ -258,6 +301,10 @@ func (m DaemonManager) Run(ctx context.Context) error {
 			return err
 		case <-ticker.C:
 			_, err := scheduler.RunNext(ctx)
+			lifecycle.finished()
+			if ctx.Err() != nil {
+				continue
+			}
 			if err != nil && !errors.Is(err, errTaskFailed) && !errors.Is(err, errTaskTimedOut) {
 				return err
 			}

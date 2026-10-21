@@ -21,7 +21,7 @@ If you want everyone working in a repository to use the same LocalCI toolchain, 
 
 ```toml title="mise.toml"
 [tools]
-"github:irskep/localci" = "0.2.10"
+"github:irskep/localci" = "0.3.0"
 ```
 
 ```sh
@@ -279,3 +279,47 @@ log's download action or `localci cat --raw`. Text artifact previews also have a
 limit. Task history in the web UI shows 50 runs per page; use **Older** and
 **Newer** to browse. The terminal dashboard shows the latest 50 matching runs;
 `localci history` can retrieve older runs.
+
+## Prune logs and artifacts
+
+LocalCI keeps outputs until you remove them. Preview pruning across all repositories:
+
+```sh
+localci prune --dry-run
+```
+
+Run `localci prune` to see the removal summary and confirm with `y`. The default
+limits are 30 days and 10 GiB: remove outputs from runs last active more than
+30 days ago, then remove the oldest remaining run outputs until their combined
+size is at most 10 GiB. All attempts of a selected run are included.
+
+Override the limits for one invocation, or pass `--yes` to skip confirmation:
+
+```sh
+localci prune --max-age 7d --max-size 5GiB --yes
+```
+
+Set either limit to `0` to disable it. No settings are saved, and pruning never
+runs automatically.
+
+To remove individual large files regardless of age, use `--larger-than` instead
+of the age and total-size limits:
+
+```sh
+localci prune --larger-than 100MiB
+```
+
+This lists and removes files strictly larger than 100 MiB, leaving smaller files
+in the same run. Sizes accept bytes, decimal `KB`/`MB`/`GB`, or binary
+`KiB`/`MiB`/`GiB`. For example, `1GB` is 1,000,000,000 bytes and `1GiB` is
+1,073,741,824 bytes. Ages accept whole days (`30d`) or durations such as `24h`.
+
+Active and queued runs are protected, even if that prevents reaching the size
+limit. Runs or files that change after the preview are skipped. Task results,
+exit codes, failure messages, and attempt history remain; logs and artifact
+contents are deleted. Task and shared caches are untouched. Symlink targets are
+never followed or deleted.
+
+Text output from `localci status` suggests pruning when history contains completed
+runs older than 30 days. This is an age-based hint, not a disk-space measurement;
+only `prune` scans output files to calculate their sizes.

@@ -9,10 +9,11 @@ import (
 )
 
 type Scheduler struct {
-	Queue  QueueStore
-	Runner Runner
-	Clones CloneManager
-	Events *EventNotifier
+	claimNext func() (QueueEntry, QueueClaimState, error)
+	Queue     QueueStore
+	Runner    Runner
+	Clones    CloneManager
+	Events    *EventNotifier
 }
 
 type RunNextResult struct {
@@ -23,7 +24,11 @@ type RunNextResult struct {
 }
 
 func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
-	entry, claimState, err := s.Queue.ClaimNext()
+	claim := s.claimNext
+	if claim == nil {
+		claim = s.Queue.ClaimNext
+	}
+	entry, claimState, err := claim()
 	if err != nil {
 		return RunNextResult{}, err
 	}
@@ -37,7 +42,16 @@ func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
 		return RunNextResult{}, nil
 	}
 
+	unlock, err := lockOutputs(s.Runner.Paths, entry.RepoDir, entry.Commit, false)
+	if err != nil {
+		return RunNextResult{}, err
+	}
+	defer unlock()
+
 	defer func() {
+		if ctx.Err() != nil {
+			return
+		} // Recovery needs the interrupted entry and checkout.
 		_ = s.Queue.ClearActive()
 		_ = s.cleanupCloneIfDrained(entry)
 		if s.Events != nil {
@@ -50,6 +64,20 @@ func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
 
 	if s.Events != nil {
 		s.Events.QueueChanged()
+	}
+
+	s.Runner.BeforeTask = func(record TaskRecord) error {
+		phase := "running"
+		if isSetupTask(record.Name) {
+			phase = "setup"
+		}
+		if err := s.Queue.SetPhase(entry, phase, record.Name, record.Attempt); err != nil {
+			return err
+		}
+		if s.Events != nil {
+			s.Events.EntryChanged(entry)
+		}
+		return nil
 	}
 
 	if entry.Kind == QueueEntryKindRun {
@@ -83,6 +111,9 @@ func (s Scheduler) runPreparedTask(ctx context.Context, entry QueueEntry) (RunNe
 		workDir = entry.RepoDir
 	}
 	taskRecord, runErr := s.Runner.runTask(ctx, req, workDir, Task{Name: entry.TaskName}, entry.Attempt)
+	if ctx.Err() != nil {
+		return RunNextResult{}, ctx.Err()
+	}
 
 	runRecord, writeErr := upsertTaskRecord(s.Runner.Paths, req, taskRecord, s.Runner.now())
 	if writeErr != nil {
@@ -115,6 +146,9 @@ func (s Scheduler) runUnpreparedTask(ctx context.Context, entry QueueEntry) (Run
 	workDir := entry.RepoDir
 	clones := s.cloneManager()
 	if !entry.NoClone {
+		if err := s.setPhase(entry, "preparing"); err != nil {
+			return RunNextResult{}, err
+		}
 		info, err := clones.Prepare(ctx, entry.RepoDir, entry.Commit)
 		if err != nil {
 			task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
@@ -127,6 +161,9 @@ func (s Scheduler) runUnpreparedTask(ctx context.Context, entry QueueEntry) (Run
 		workDir = info.Worktree
 	}
 
+	if err := s.setPhase(entry, "trusting"); err != nil {
+		return RunNextResult{}, err
+	}
 	if err := s.Runner.Trust(ctx, workDir); err != nil {
 		task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
 		if recordErr != nil {
@@ -138,6 +175,9 @@ func (s Scheduler) runUnpreparedTask(ctx context.Context, entry QueueEntry) (Run
 		return RunNextResult{DidWork: true, Entry: entry, Task: task, Run: run}, errTaskFailed
 	}
 
+	if err := s.setPhase(entry, "discovering"); err != nil {
+		return RunNextResult{}, err
+	}
 	tasks, err := s.Runner.DiscoverTasks(ctx, workDir)
 	if err != nil {
 		task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
@@ -161,6 +201,9 @@ func (s Scheduler) runUnpreparedTask(ctx context.Context, entry QueueEntry) (Run
 	if hasSetup {
 		var setupErr error
 		setupRecord, setupErr = s.Runner.runTask(ctx, req, workDir, setup, 0)
+		if ctx.Err() != nil {
+			return RunNextResult{}, ctx.Err()
+		}
 		run, err = upsertTaskRecord(s.Runner.Paths, req, setupRecord, s.Runner.now())
 		if err != nil {
 			return RunNextResult{}, err
@@ -195,6 +238,9 @@ func (s Scheduler) runUnpreparedTask(ctx context.Context, entry QueueEntry) (Run
 	}
 
 	taskRecord, runErr := s.Runner.runTask(ctx, req, workDir, task, entry.Attempt)
+	if ctx.Err() != nil {
+		return RunNextResult{}, ctx.Err()
+	}
 	run, err = upsertTaskRecord(s.Runner.Paths, req, taskRecord, s.Runner.now())
 	if err != nil {
 		return RunNextResult{}, err
@@ -220,6 +266,9 @@ func (s Scheduler) expandRun(ctx context.Context, entry QueueEntry) (RunNextResu
 		return s.expandNoCloneRun(ctx, entry)
 	}
 	clones := s.cloneManager()
+	if err := s.setPhase(entry, "preparing"); err != nil {
+		return RunNextResult{}, err
+	}
 	info, err := clones.Prepare(ctx, entry.RepoDir, entry.Commit)
 	if err != nil {
 		task, run, recordErr := recordSetupFailure(s.Runner.Paths, InvokeRequest{RepoDir: entry.RepoDir, Commit: entry.Commit}, err, s.Runner.now())
@@ -234,6 +283,9 @@ func (s Scheduler) expandRun(ctx context.Context, entry QueueEntry) (RunNextResu
 		RepoDir: entry.RepoDir,
 		Commit:  entry.Commit,
 	}
+	if err := s.setPhase(entry, "trusting"); err != nil {
+		return RunNextResult{}, err
+	}
 	if err := s.Runner.Trust(ctx, info.Worktree); err != nil {
 		task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
 		if recordErr != nil {
@@ -243,6 +295,9 @@ func (s Scheduler) expandRun(ctx context.Context, entry QueueEntry) (RunNextResu
 		return RunNextResult{DidWork: true, Entry: entry, Task: task, Run: run}, errTaskFailed
 	}
 
+	if err := s.setPhase(entry, "discovering"); err != nil {
+		return RunNextResult{}, err
+	}
 	tasks, err := s.Runner.DiscoverTasks(ctx, info.Worktree)
 	if err != nil {
 		task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
@@ -268,6 +323,9 @@ func (s Scheduler) expandRun(ctx context.Context, entry QueueEntry) (RunNextResu
 	if hasSetup {
 		var setupErr error
 		setupRecord, setupErr = s.Runner.runTask(ctx, req, info.Worktree, setup, 0)
+		if ctx.Err() != nil {
+			return RunNextResult{}, ctx.Err()
+		}
 		run, err = upsertTaskRecord(s.Runner.Paths, InvokeRequest{
 			RepoDir: entry.RepoDir,
 			Commit:  entry.Commit,
@@ -316,6 +374,9 @@ func (s Scheduler) expandNoCloneRun(ctx context.Context, entry QueueEntry) (RunN
 		Commit:  entry.Commit,
 		NoClone: true,
 	}
+	if err := s.setPhase(entry, "trusting"); err != nil {
+		return RunNextResult{}, err
+	}
 	if err := s.Runner.Trust(ctx, entry.RepoDir); err != nil {
 		task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
 		if recordErr != nil {
@@ -324,6 +385,9 @@ func (s Scheduler) expandNoCloneRun(ctx context.Context, entry QueueEntry) (RunN
 		return RunNextResult{DidWork: true, Entry: entry, Task: task, Run: run}, errTaskFailed
 	}
 
+	if err := s.setPhase(entry, "discovering"); err != nil {
+		return RunNextResult{}, err
+	}
 	tasks, err := s.Runner.DiscoverTasks(ctx, entry.RepoDir)
 	if err != nil {
 		task, run, recordErr := recordSetupFailure(s.Runner.Paths, req, err, s.Runner.now())
@@ -344,6 +408,9 @@ func (s Scheduler) expandNoCloneRun(ctx context.Context, entry QueueEntry) (RunN
 	if hasSetup {
 		var setupErr error
 		setupRecord, setupErr = s.Runner.runTask(ctx, req, entry.RepoDir, setup, 0)
+		if ctx.Err() != nil {
+			return RunNextResult{}, ctx.Err()
+		}
 		run, err = upsertTaskRecord(s.Runner.Paths, req, setupRecord, s.Runner.now())
 		if err != nil {
 			return RunNextResult{}, err

@@ -616,10 +616,17 @@ func (s WebServer) apiQueueResponse() (apiQueueResponse, error) {
 		Pending: make([]apiQueueEntry, 0, len(queueEntries)),
 	}
 	if hasActive {
-		activeEntry, err := s.apiQueueEntry(summaries, active.QueueEntry)
+		displayEntry := active.QueueEntry
+		if active.CurrentTask != "" {
+			displayEntry.TaskName = active.CurrentTask
+			displayEntry.Attempt = active.CurrentAttempt
+		}
+		activeEntry, err := s.apiQueueEntry(summaries, displayEntry)
 		if err != nil {
 			return apiQueueResponse{}, err
 		}
+		activeEntry.Phase = active.Phase
+		activeEntry.PhaseStartedAt = timePointer(active.PhaseStartedAt)
 		resp.Active = &activeEntry
 	}
 	for _, entry := range queueEntries {
@@ -644,11 +651,13 @@ func (s WebServer) apiQueueEntry(summaries apiRepoSummaries, entry QueueEntry) (
 		}
 	}
 	return apiQueueEntry{
-		Repo:      repo,
-		Commit:    entry.Commit,
-		Task:      entry.TaskName,
-		Attempt:   entry.Attempt,
-		Artifacts: artifacts,
+		Phase:          "queued",
+		PhaseStartedAt: timePointer(entry.EnqueuedAt),
+		Repo:           repo,
+		Commit:         entry.Commit,
+		Task:           entry.TaskName,
+		Attempt:        entry.Attempt,
+		Artifacts:      artifacts,
 	}, nil
 }
 
@@ -955,6 +964,8 @@ func (s WebServer) selectedTaskMetadata(repoDir, commit, taskName string, select
 				continue
 			}
 			found = true
+			task.Phase = ""
+			task.PhaseStartedAt = nil
 			task.Attempt, task.Status, task.DurationMilliseconds, task.Failure = a.Attempt, a.Status, a.DurationMilliseconds, a.Failure
 			task.OutputDir = s.Paths.TaskAttemptDir(repoDir, commit, taskName, selectedAttempt)
 			task.MarkedArtifacts = nil

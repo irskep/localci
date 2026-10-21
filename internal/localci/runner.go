@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -20,6 +21,7 @@ const (
 )
 
 type Runner struct {
+	BeforeTask        func(TaskRecord) error
 	Paths             Paths
 	MiseBin           string
 	Env               []string
@@ -45,6 +47,12 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 	if strings.TrimSpace(req.Commit) == "" {
 		return RunRecord{}, fmt.Errorf("commit must not be empty")
 	}
+
+	unlock, err := lockOutputs(r.Paths, req.RepoDir, req.Commit, false)
+	if err != nil {
+		return RunRecord{}, err
+	}
+	defer unlock()
 
 	if err := os.MkdirAll(r.Paths.CommitRoot(req.RepoDir, req.Commit), 0o755); err != nil {
 		return RunRecord{}, fmt.Errorf("create commit root: %w", err)
@@ -94,6 +102,9 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 	setup, userTasks, hasSetup := splitSetupTask(tasks)
 	if hasSetup {
 		taskRecord, runErr := r.runTask(ctx, req, workDir, setup, 0)
+		if ctx.Err() != nil {
+			return record, ctx.Err()
+		}
 		record, err = upsertTaskRecord(r.Paths, req, taskRecord, r.now())
 		if err != nil {
 			return RunRecord{}, err
@@ -105,6 +116,9 @@ func (r Runner) Invoke(ctx context.Context, req InvokeRequest) (RunRecord, error
 
 	for _, task := range userTasks {
 		taskRecord, runErr := r.runTask(ctx, req, workDir, task, 0)
+		if ctx.Err() != nil {
+			return record, ctx.Err()
+		}
 		record.TaskResults = append(record.TaskResults, taskRecord)
 		record.FinishedAt = r.now()
 		record.RefreshSummary()
@@ -149,6 +163,8 @@ func filterRequestedTasks(tasks []Task, requested []string) []Task {
 func (r Runner) DiscoverTasks(ctx context.Context, repoDir string) ([]Task, error) {
 	miseBin := r.miseBin()
 	cmd := exec.CommandContext(ctx, miseBin, "tasks", "--json", "--all")
+	configureTaskProcess(cmd)
+	defer signalTaskGroup(cmd, syscall.SIGKILL)
 	cmd.Dir = repoDir
 	cmd.Env = r.envForDir(repoDir)
 
@@ -178,6 +194,8 @@ func (r Runner) DiscoverTasks(ctx context.Context, repoDir string) ([]Task, erro
 
 func (r Runner) Trust(ctx context.Context, workDir string) error {
 	cmd := exec.CommandContext(ctx, r.miseBin(), "trust")
+	configureTaskProcess(cmd)
+	defer signalTaskGroup(cmd, syscall.SIGKILL)
 	cmd.Dir = workDir
 	cmd.Env = r.envForDir(workDir)
 	output, err := cmd.CombinedOutput()
@@ -193,6 +211,9 @@ var (
 )
 
 func (r Runner) runTask(ctx context.Context, req InvokeRequest, workDir string, task Task, reservedAttempt int) (TaskRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return TaskRecord{}, err
+	}
 	startedAt := r.now()
 	attempt := reservedAttempt
 	if attempt <= 0 {
@@ -232,7 +253,13 @@ func (r Runner) runTask(ctx context.Context, req InvokeRequest, workDir string, 
 		r.Events.EntryChanged(entry)
 	}
 
-	cmd := exec.CommandContext(ctx, r.miseBin(), "run", task.Name)
+	if r.BeforeTask != nil {
+		if err := r.BeforeTask(record); err != nil {
+			return TaskRecord{}, err
+		}
+	}
+	cmd := exec.Command(r.miseBin(), "run", task.Name)
+	configureTaskProcess(cmd)
 	cmd.Dir = workDir
 	cmd.Env = append(r.envForDir(workDir),
 		"LOCALCI_TASK_OUTPUT_DIR="+record.OutputDir,

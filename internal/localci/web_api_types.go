@@ -28,11 +28,13 @@ type apiTaskSummary struct {
 }
 
 type apiQueueEntry struct {
-	Repo      apiRepoSummary `json:"repo"`
-	Commit    string         `json:"commit"`
-	Task      string         `json:"task"`
-	Attempt   int            `json:"attempt"`
-	Artifacts []ArtifactView `json:"artifacts,omitempty"`
+	Phase          string         `json:"phase,omitempty"`
+	PhaseStartedAt *time.Time     `json:"phase_started_at,omitempty"`
+	Repo           apiRepoSummary `json:"repo"`
+	Commit         string         `json:"commit"`
+	Task           string         `json:"task"`
+	Attempt        int            `json:"attempt"`
+	Artifacts      []ArtifactView `json:"artifacts,omitempty"`
 }
 
 type apiQueueResponse struct {

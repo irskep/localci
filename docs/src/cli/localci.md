@@ -33,6 +33,7 @@ localci [flags]
 * [localci install-hooks](../localci_install-hooks/)	 - Install the Git post-commit hook
 * [localci invoke](../localci_invoke/)	 - Run an ad hoc check directly
 * [localci postcommit](../localci_postcommit/)	 - Enqueue tasks for a committed revision
+* [localci prune](../localci_prune/)	 - Remove old or large task outputs
 * [localci restart](../localci_restart/)	 - Restart the daemon
 * [localci run](../localci_run/)	 - Queue a daemon-managed run manually
 * [localci start](../localci_start/)	 - Start the daemon

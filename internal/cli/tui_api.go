@@ -29,11 +29,13 @@ func (r tuiRepoSummary) DisplayLabel() string {
 }
 
 type tuiQueueEntry struct {
-	Repo      tuiRepoSummary         `json:"repo"`
-	Commit    string                 `json:"commit"`
-	Task      string                 `json:"task"`
-	Attempt   int                    `json:"attempt"`
-	Artifacts []localci.ArtifactView `json:"artifacts,omitempty"`
+	Phase          string                 `json:"phase,omitempty"`
+	PhaseStartedAt *time.Time             `json:"phase_started_at,omitempty"`
+	Repo           tuiRepoSummary         `json:"repo"`
+	Commit         string                 `json:"commit"`
+	Task           string                 `json:"task"`
+	Attempt        int                    `json:"attempt"`
+	Artifacts      []localci.ArtifactView `json:"artifacts,omitempty"`
 }
 
 type tuiQueueResponse struct {

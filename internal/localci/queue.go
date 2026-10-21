@@ -36,6 +36,10 @@ type QueueEntry struct {
 }
 
 type ActiveTask struct {
+	Phase          string    `json:"phase,omitempty"`
+	PhaseStartedAt time.Time `json:"phase_started_at"`
+	CurrentTask    string    `json:"current_task,omitempty"`
+	CurrentAttempt int       `json:"current_attempt,omitempty"`
 	QueueEntry
 	StartedAt time.Time `json:"started_at"`
 }
@@ -60,6 +64,12 @@ func (s QueueStore) Enqueue(repoDir string, commit string, taskName string) (Que
 }
 
 func (s QueueStore) EnqueueWithOptions(repoDir string, commit string, taskName string, noClone bool) (QueueEntry, error) {
+	unlock, err := lockOutputs(s.Paths, repoDir, commit, false)
+	if err != nil {
+		return QueueEntry{}, err
+	}
+	defer unlock()
+
 	queueMutationMu.Lock()
 	defer queueMutationMu.Unlock()
 
@@ -71,6 +81,12 @@ func (s QueueStore) EnqueuePrepared(repoDir string, commit string, taskName stri
 }
 
 func (s QueueStore) EnqueuePreparedWithOptions(repoDir string, commit string, taskName string, noClone bool) (QueueEntry, error) {
+	unlock, err := lockOutputs(s.Paths, repoDir, commit, false)
+	if err != nil {
+		return QueueEntry{}, err
+	}
+	defer unlock()
+
 	queueMutationMu.Lock()
 	defer queueMutationMu.Unlock()
 
@@ -82,6 +98,12 @@ func (s QueueStore) EnqueueRun(repoDir string, commit string, requestedTasks []s
 }
 
 func (s QueueStore) EnqueueRunWithOptions(repoDir string, commit string, requestedTasks []string, noClone bool) (QueueEntry, error) {
+	unlock, err := lockOutputs(s.Paths, repoDir, commit, false)
+	if err != nil {
+		return QueueEntry{}, err
+	}
+	defer unlock()
+
 	queueMutationMu.Lock()
 	defer queueMutationMu.Unlock()
 
@@ -236,8 +258,10 @@ func (s QueueStore) markActiveLocked(entry QueueEntry) (ActiveTask, error) {
 		entry.Attempt = attempt
 	}
 	active := ActiveTask{
-		QueueEntry: entry,
-		StartedAt:  s.now(),
+		QueueEntry:     entry,
+		StartedAt:      s.now(),
+		Phase:          "preparing",
+		PhaseStartedAt: s.now(),
 	}
 
 	if err := os.MkdirAll(s.Paths.ActiveRoot(), 0o755); err != nil {
@@ -329,11 +353,15 @@ func (s QueueStore) Cancel(repoDir string, commit string, taskName string) (Queu
 		}
 		return QueueCancelResult{}, err
 	}
-	if active.RepoDir != repoDir || active.Commit != commit || active.TaskName != taskName {
+	if active.RepoDir != repoDir || active.Commit != commit || (active.TaskName != taskName && active.CurrentTask != taskName) {
 		return result, nil
 	}
 
-	outputDir := s.Paths.TaskAttemptDir(repoDir, commit, taskName, active.Attempt)
+	attempt := active.Attempt
+	if active.CurrentTask == taskName {
+		attempt = active.CurrentAttempt
+	}
+	outputDir := s.Paths.TaskAttemptDir(repoDir, commit, taskName, attempt)
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return QueueCancelResult{}, err
 	}
