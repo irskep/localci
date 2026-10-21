@@ -2,6 +2,16 @@
 
 <!-- loosely based on https://keepachangelog.com/en/1.0.0/ -->
 
+## 0.3.1 - Unreleased
+
+### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
 ## 0.3.0 - 2026-10-21
 
 ### Added
