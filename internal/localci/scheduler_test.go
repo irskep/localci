@@ -17,7 +17,7 @@ func TestSchedulerRunNextExecutesQueuedTaskAndClearsActive(t *testing.T) {
 	repoDir := t.TempDir()
 	binDir := t.TempDir()
 	paths := Paths{Root: root}
-	if err := os.MkdirAll(paths.CloneWorktreeDir(repoDir, "abc123"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(paths.CloneWorktreeDir(repoDir, "abc123"), ".git"), 0o755); err != nil {
 		t.Fatalf("MkdirAll clone worktree returned error: %v", err)
 	}
 
@@ -274,7 +274,7 @@ func TestSchedulerRunNextReusesTimeoutWatcher(t *testing.T) {
 	repoDir := t.TempDir()
 	binDir := t.TempDir()
 	paths := Paths{Root: root}
-	if err := os.MkdirAll(paths.CloneWorktreeDir(repoDir, "abc123"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(paths.CloneWorktreeDir(repoDir, "abc123"), ".git"), 0o755); err != nil {
 		t.Fatalf("MkdirAll clone worktree returned error: %v", err)
 	}
 
@@ -321,5 +321,121 @@ exit 1
 	}
 	if result.Run.Summary.TimedOut != 1 {
 		t.Fatalf("timed out summary = %#v, want TimedOut=1", result.Run.Summary)
+	}
+}
+
+func TestSchedulerRecreatesPreparedCheckoutWithQualifiedSetup(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repoDir := t.TempDir()
+	binDir := t.TempDir()
+	initGitRepo(t, repoDir, "abc123")
+	paths := Paths{Root: root}
+
+	writeExecutable(t, filepath.Join(binDir, "mise"), `#!/bin/sh
+set -eu
+if [ "$1" = "trust" ]; then
+  exit 0
+fi
+if [ "$1" = "tasks" ] && [ "$2" = "--json" ] && [ "$3" = "--all" ]; then
+  printf '%s\n' '[{"name":"//:localci:setup"},{"name":"//:localci:test"}]'
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "//:localci:setup" ]; then
+  touch setup.marker
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "//:localci:test" ]; then
+  test -f README.md
+  test -f setup.marker
+  printf 'direct task output\n'
+  exit 0
+fi
+exit 1
+`)
+
+	queue := QueueStore{Paths: paths}
+	entry, err := queue.EnqueuePrepared(repoDir, "abc123", "//:localci:test")
+	if err != nil {
+		t.Fatalf("Enqueue returned error: %v", err)
+	}
+	if !entry.Prepared {
+		t.Fatalf("prepared entry was not marked prepared")
+	}
+
+	runner := Runner{
+		Paths:        paths,
+		MiseBin:      filepath.Join(binDir, "mise"),
+		Env:          append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH")),
+		PollInterval: 10 * time.Millisecond,
+	}
+	scheduler := Scheduler{
+		Queue:  queue,
+		Runner: runner,
+	}
+
+	result, err := scheduler.RunNext(context.Background())
+	if err != nil {
+		t.Fatalf("RunNext returned error: %v", err)
+	}
+	if result.Task.Status != TaskStatusSucceeded {
+		t.Fatalf("task status = %q, want %q", result.Task.Status, TaskStatusSucceeded)
+	}
+
+	combinedPath := filepath.Join(result.Task.OutputDir, combinedLogName)
+	combined, err := os.ReadFile(combinedPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", combinedPath, err)
+	}
+	if !strings.Contains(string(combined), "direct task output") {
+		t.Fatalf("combined log = %q, want direct task output", string(combined))
+	}
+}
+
+func TestRecoveryRerunsQualifiedSetupInRecreatedCheckout(t *testing.T) {
+	repoDir := t.TempDir()
+	initGitRepo(t, repoDir, "abc123")
+	paths := Paths{Root: t.TempDir()}
+	mise := filepath.Join(t.TempDir(), "mise")
+	writeExecutable(t, mise, `#!/bin/sh
+set -eu
+case "$1" in
+ trust) exit 0 ;;
+ tasks) printf '%s\n' '[{"name":"//:localci:setup"},{"name":"//:localci:test"}]'; exit 0 ;;
+ run)
+  case "$2" in
+   //:localci:setup) mkdir -p node_modules; touch node_modules/dependency; exit 0 ;;
+   //:localci:test) test -f node_modules/dependency; exit 0 ;;
+  esac ;;
+esac
+exit 1
+`)
+	queue := QueueStore{Paths: paths}
+	scheduler := Scheduler{Queue: queue, Runner: Runner{Paths: paths, MiseBin: mise, PollInterval: time.Millisecond}}
+	if _, err := queue.EnqueueRun(repoDir, "abc123", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := scheduler.RunNext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate the daemon stopping after it claims the test, before completion.
+	if _, state, err := queue.ClaimNext(); err != nil || state != QueueClaimClaimed {
+		t.Fatalf("claim: %v, %v", state, err)
+	}
+	manager := DaemonManager{Paths: paths, Scheduler: scheduler}
+	if err := manager.recoverInterruptedWork(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(paths.CloneWorktreeDir(repoDir, "abc123")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("checkout wasn't removed: %v", err)
+	}
+	setup, err := scheduler.RunNext(context.Background())
+	if err != nil || setup.Task.Name != "//:localci:setup" || setup.Task.Status != TaskStatusSucceeded {
+		t.Fatalf("recovered setup: %#v, %v", setup.Task, err)
+	}
+	result, err := scheduler.RunNext(context.Background())
+	if err != nil || result.Task.Status != TaskStatusSucceeded {
+		t.Fatalf("recovered test: %#v, %v", result.Task, err)
 	}
 }

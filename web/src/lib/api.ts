@@ -56,6 +56,7 @@ export type RepoTaskHistoryResponse = {
   task: string
   short_name: string
   runs: RepoTaskHistoryItem[]
+  next_offset?: number
 }
 
 export type RepoTaskHistoryItem = {
@@ -78,6 +79,8 @@ export type TaskResponse = {
   is_live: boolean
   primary_artifact: string
   primary_log: string
+  primary_log_end: number
+  primary_log_truncated: boolean
 }
 
 export type RetryResponse = {
@@ -113,6 +116,7 @@ export type ArtifactResponse = {
   attempt: number
   artifact: ArtifactView
   content: string
+  content_end: number
 }
 
 export type RevealArtifactResponse = {
@@ -123,7 +127,7 @@ export type RevealArtifactResponse = {
 export type APIEvent<T = unknown> =
   | { type: 'snapshot'; resource: string; data: T }
   | { type: 'replace'; resource: string; data: T }
-  | { type: 'append'; resource: string; offset: number; text: string }
+  | { type: 'append'; resource: string; offset: number; end_offset: number; text: string }
   | { type: 'remove'; resource: string }
   | { type: 'error'; resource: string; message: string }
 
@@ -176,8 +180,12 @@ export const COMMIT_SUBJECT_ANNOTATION = 'commit_subject'
 
 type Validator<T> = (value: unknown) => T
 
-export async function getJSON<T>(path: string, validate?: Validator<T>): Promise<T> {
-  const response = await fetch(path)
+export async function getJSON<T>(
+  path: string,
+  validate?: Validator<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const response = await fetch(path, signal ? { signal } : undefined)
   if (!response.ok) {
     const message = await response.text()
     throw new Error(message || `request failed with ${response.status}`)
@@ -209,6 +217,7 @@ export function parseAPIEvent<T>(value: unknown, validateData: Validator<T>): AP
         type,
         resource,
         offset: asNumber(event.offset, 'event.offset'),
+        end_offset: asNumber(event.end_offset, 'event.end_offset'),
         text: asString(event.text, 'event.text'),
       }
     case 'remove':
@@ -260,6 +269,10 @@ export function parseRepoTaskHistoryResponse(value: unknown): RepoTaskHistoryRes
     task: asString(data.task, 'repo_task_history.task'),
     short_name: asString(data.short_name, 'repo_task_history.short_name'),
     runs: asArray(data.runs, 'repo_task_history.runs').map(parseRepoTaskHistoryItem),
+    next_offset:
+      data.next_offset === undefined
+        ? undefined
+        : asNumber(data.next_offset, 'repo_task_history.next_offset'),
   }
 }
 
@@ -281,6 +294,8 @@ export function parseTaskResponse(value: unknown): TaskResponse {
     is_live: asBoolean(data.is_live, 'task.is_live'),
     primary_artifact: asString(data.primary_artifact, 'task.primary_artifact'),
     primary_log: asString(data.primary_log, 'task.primary_log'),
+    primary_log_end: asNumber(data.primary_log_end, 'task.primary_log_end'),
+    primary_log_truncated: asBoolean(data.primary_log_truncated, 'task.primary_log_truncated'),
   }
 }
 
@@ -328,6 +343,7 @@ export function parseArtifactResponse(value: unknown): ArtifactResponse {
     attempt: asNumber(data.attempt, 'artifact.attempt'),
     artifact: parseArtifactView(data.artifact),
     content: asString(data.content, 'artifact.content'),
+    content_end: asNumber(data.content_end, 'artifact.content_end'),
   }
 }
 

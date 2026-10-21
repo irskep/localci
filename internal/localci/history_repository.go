@@ -16,7 +16,9 @@ import (
 )
 
 type RunRepository struct {
-	Paths Paths
+	Paths   Paths
+	DB      *sql.DB
+	Context context.Context
 }
 
 type RunPage struct {
@@ -26,13 +28,13 @@ type RunPage struct {
 }
 
 func (r RunRepository) ListRepoSummaries() ([]RepoHistory, error) {
-	db, err := r.open()
+	db, release, err := r.acquire()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer release()
 
-	rows, err := db.QueryContext(context.Background(), `
+	rows, err := db.QueryContext(r.context(), `
 		select repo_dir, max(repo_id), max(activity_at) as latest_activity
 		from runs
 		group by repo_dir
@@ -106,16 +108,16 @@ func (r RunRepository) ListRepos() ([]RepoHistory, error) {
 }
 
 func (r RunRepository) listRunPage(repoDir string, before time.Time, limit int) (RunPage, error) {
-	db, err := r.open()
+	db, release, err := r.acquire()
 	if err != nil {
 		return RunPage{}, err
 	}
-	defer db.Close()
+	defer release()
 
 	if limit <= 0 {
 		limit = 20
 	}
-	runs, err := queryRunPage(context.Background(), db, repoDir, before, limit+1)
+	runs, err := queryRunPage(r.context(), db, repoDir, before, limit+1)
 	if err != nil {
 		return RunPage{}, err
 	}
@@ -129,7 +131,7 @@ func (r RunRepository) listRunPage(repoDir string, before time.Time, limit int) 
 		page.Runs = page.Runs[:limit]
 	}
 	if !before.IsZero() {
-		newerBefore, err := queryNewerBefore(context.Background(), db, repoDir, before, limit)
+		newerBefore, err := queryNewerBefore(r.context(), db, repoDir, before, limit)
 		if err != nil {
 			return RunPage{}, err
 		}
@@ -214,13 +216,13 @@ func queryNewerBefore(ctx context.Context, db *sql.DB, repoDir string, before ti
 }
 
 func (r RunRepository) ListRuns() ([]RunRecord, error) {
-	db, err := r.open()
+	db, release, err := r.acquire()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer release()
 
-	rows, err := db.QueryContext(context.Background(), `
+	rows, err := db.QueryContext(r.context(), `
 		select repo_dir, run_json
 		from runs
 		order by activity_at desc, repo_dir asc, commit_ref desc
@@ -233,13 +235,13 @@ func (r RunRepository) ListRuns() ([]RunRecord, error) {
 }
 
 func (r RunRepository) ListRepoCommits(repoDir string) ([]RunRecord, error) {
-	db, err := r.open()
+	db, release, err := r.acquire()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer release()
 
-	rows, err := db.QueryContext(context.Background(), `
+	rows, err := db.QueryContext(r.context(), `
 		select repo_dir, run_json
 		from runs
 		where repo_dir = ?
@@ -294,14 +296,14 @@ func scanRunRows(rows *sql.Rows) ([]RunRecord, error) {
 }
 
 func (r RunRepository) ReadRun(repoDir string, commit string) (RunRecord, error) {
-	db, err := r.open()
+	db, release, err := r.acquire()
 	if err != nil {
 		return RunRecord{}, err
 	}
-	defer db.Close()
+	defer release()
 
 	var raw string
-	err = db.QueryRowContext(context.Background(), `
+	err = db.QueryRowContext(r.context(), `
 		select run_json
 		from runs
 		where repo_dir = ? and commit_ref = ?
@@ -321,12 +323,12 @@ func (r RunRepository) ReadRun(repoDir string, commit string) (RunRecord, error)
 }
 
 func (r RunRepository) WriteRun(run RunRecord) error {
-	db, err := r.open()
+	db, release, err := r.acquire()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
-	return upsertRun(context.Background(), db, run)
+	defer release()
+	return upsertRun(r.context(), db, run)
 }
 
 func (r RunRepository) open() (*sql.DB, error) {
@@ -344,7 +346,7 @@ func (r RunRepository) open() (*sql.DB, error) {
 		return nil, fmt.Errorf("open history database: %w", err)
 	}
 	db.SetMaxOpenConns(1)
-	if err := ensureHistorySchema(context.Background(), db); err != nil {
+	if err := ensureHistorySchema(r.context(), db); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -415,4 +417,45 @@ func nullableTime(value time.Time) any {
 
 func formatDBTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func (r RunRepository) context() context.Context {
+	if r.Context != nil {
+		return r.Context
+	}
+	return context.Background()
+}
+
+func (r RunRepository) acquire() (*sql.DB, func(), error) {
+	if r.DB != nil {
+		return r.DB, func() {}, nil
+	}
+	db, err := r.open()
+	if err != nil {
+		return nil, nil, err
+	}
+	return db, func() { _ = db.Close() }, nil
+}
+
+// Filter in SQLite and decode only one page, rather than loading every run and
+// constructing summaries for unrelated tasks.
+func (r RunRepository) ListRepoTaskRuns(repoDir, taskName string, offset, limit int) ([]RunRecord, error) {
+	db, release, err := r.acquire()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	rows, err := db.QueryContext(r.context(), `
+  select run_json from runs
+  where repo_dir = ? and (
+   exists (select 1 from json_each(run_json, '$.discovered_tasks') where json_extract(value, '$.name') = ?)
+   or exists (select 1 from json_each(run_json, '$.task_results') where json_extract(value, '$.name') = ?)
+  )
+  order by activity_at desc, commit_ref desc limit ? offset ?
+ `, repoDir, taskName, taskName, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanRunRows(rows)
 }

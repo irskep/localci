@@ -2,6 +2,7 @@ package localci
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,8 @@ import (
 )
 
 type WebServer struct {
+	historyDB              *sql.DB
+	requestContext         context.Context
 	Paths                  Paths
 	Queue                  QueueStore
 	DiscoverTasks          func(context.Context, string) ([]Task, error)
@@ -59,6 +62,15 @@ type TaskPageView struct {
 }
 
 func (s WebServer) Serve(ctx context.Context, listener net.Listener) error {
+	db, err := (RunRepository{Paths: s.Paths, Context: ctx}).open()
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return err
+	}
+	defer db.Close()
+	s.historyDB = db
 	assetFS, err := s.assetFS()
 	if err != nil {
 		return err
@@ -313,6 +325,10 @@ func (s WebServer) handleRetry(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s WebServer) buildStatusView(repoDir string, commit string) (CommitStatusView, error) {
+	return s.buildStatusViewWithArtifacts(repoDir, commit, true)
+}
+
+func (s WebServer) buildStatusViewWithArtifacts(repoDir string, commit string, includeArtifacts bool) (CommitStatusView, error) {
 	if repoDir == "" || commit == "" {
 		return CommitStatusView{}, fmt.Errorf("repo and commit are required")
 	}
@@ -331,7 +347,16 @@ func (s WebServer) buildStatusView(repoDir string, commit string) (CommitStatusV
 		activePtr = &active
 	}
 
-	return BuildCommitStatusView(s.Paths, repoDir, commit, nil, queue, activePtr)
+	view, err := buildCommitStatusView(s.Paths, repoDir, commit, nil, queue, activePtr, "", includeArtifacts, s.runRepository())
+	if err != nil {
+		return CommitStatusView{}, err
+	}
+	if !includeArtifacts {
+		for i, task := range view.Tasks {
+			view.Tasks[i].Artifacts = s.markedArtifactViewsFromRecord(repoDir, commit, TaskRecord{Name: task.Name, Attempt: task.Attempt, OutputDir: task.OutputDir, MarkedArtifacts: task.MarkedArtifacts})
+		}
+	}
+	return view, nil
 }
 
 var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html>
@@ -762,4 +787,8 @@ func repoLabel(repoDir string) string {
 		return repoDir
 	}
 	return label
+}
+
+func (s WebServer) runRepository() RunRepository {
+	return RunRepository{Paths: s.Paths, DB: s.historyDB, Context: s.requestContext}
 }

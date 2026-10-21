@@ -293,6 +293,9 @@ func (m tuiModel) renderRepoTaskHistory(theme tuiTheme, height int) string {
 		return loadingText(m.loading)
 	}
 	rows := []string{theme.title().Render(m.taskHistory.ShortName + " history")}
+	if m.taskHistory.NextOffset > 0 {
+		rows = append(rows, theme.muted().Render("Latest 50 runs. Use localci history for older runs."))
+	}
 	for i, run := range visibleTaskHistoryRows(m.taskHistory.Runs, m.scroll, height-2) {
 		rows = append(rows, selectableLine(theme, m.scroll+i == m.cursor, taskHistoryLine(run, m.width-8)))
 	}

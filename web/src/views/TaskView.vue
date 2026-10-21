@@ -250,6 +250,9 @@ onUnmounted(() => store.unsubscribeTask())
               <span class="muted mono">{{ taskResponse?.primary_artifact || 'combined.log' }}</span>
             </div>
           </template>
+          <PMessage v-if="taskResponse?.primary_log_truncated" severity="info" :closable="false"
+            >Showing the first 2 MiB. Download the log above to read the complete output.</PMessage
+          >
           <TerminalLog
             :key="parsed.apiPath"
             class="task-log-view"

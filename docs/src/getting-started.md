@@ -271,3 +271,11 @@ Cancel a specific task:
 ```sh
 localci cancel --commit HEAD --task test
 ```
+
+## Large logs and task history
+
+The web UI previews the first 2 MiB of a task log. For the complete output, use the
+log's download action or `localci cat --raw`. Text artifact previews also have a 2 MiB
+limit. Task history in the web UI shows 50 runs per page; use **Older** and
+**Newer** to browse. The terminal dashboard shows the latest 50 matching runs;
+`localci history` can retrieve older runs.

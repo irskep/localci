@@ -1,8 +1,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import type { APIEvent, HomeResponse } from '@/lib/api'
-import { getJSON, parseAPIEvent, parseHomeResponse } from '@/lib/api'
+import type { HomeResponse } from '@/lib/api'
+import { parseHomeResponse } from '@/lib/api'
+import { snapshotStream } from '@/stores/localci'
 import { notificationForRun, runHasLiveTasks, runIsComplete } from '@/lib/run-notifications'
 
 type PermissionState = NotificationPermission | 'unsupported'
@@ -16,9 +17,6 @@ export const useNotificationStore = defineStore('notifications', () => {
   const error = ref('')
   const seenLiveRuns = new Set<string>()
   const notifiedRuns = new Set<string>()
-  let socket: WebSocket | null = null
-  let reconnectTimer: number | null = null
-  let reconnectAttempts = 0
   let seeded = false
 
   const supported = computed(() => permission.value !== 'unsupported')
@@ -68,14 +66,18 @@ export const useNotificationStore = defineStore('notifications', () => {
     if (monitorStarted.value) return
     monitorStarted.value = true
     refreshPermission()
-    connect()
-    void getJSON('/api', parseHomeResponse)
-      .then((data) => {
+    snapshotStream(
+      '/api',
+      parseHomeResponse,
+      (data) => {
+        error.value = ''
         applyHome(data)
-      })
-      .catch((err) => {
-        error.value = err instanceof Error ? err.message : String(err)
-      })
+      },
+      () => true,
+      (message) => {
+        error.value = message
+      },
+    )
   }
 
   function applyHome(data: HomeResponse): void {
@@ -97,54 +99,6 @@ export const useNotificationStore = defineStore('notifications', () => {
         notifiedRuns.add(notification.key)
       }
     }
-  }
-
-  function connect(): void {
-    let nextSocket: WebSocket
-    try {
-      nextSocket = openHomeEventSocket()
-    } catch {
-      scheduleReconnect()
-      return
-    }
-    socket = nextSocket
-    nextSocket.addEventListener('open', () => {
-      if (socket !== nextSocket) return
-      reconnectAttempts = 0
-      error.value = ''
-    })
-    nextSocket.addEventListener('message', (message) => {
-      if (socket !== nextSocket) return
-      let event: APIEvent<HomeResponse>
-      try {
-        event = parseAPIEvent(JSON.parse(message.data as string) as unknown, parseHomeResponse)
-      } catch (err) {
-        error.value = err instanceof Error ? err.message : String(err)
-        return
-      }
-      if (event.type === 'snapshot' || event.type === 'replace') {
-        applyHome(event.data)
-      }
-      if (event.type === 'error') error.value = event.message
-    })
-    nextSocket.addEventListener('close', () => {
-      if (socket !== nextSocket) return
-      scheduleReconnect()
-    })
-    nextSocket.addEventListener('error', () => {
-      if (socket !== nextSocket) return
-      nextSocket.close()
-    })
-  }
-
-  function scheduleReconnect(): void {
-    if (reconnectTimer !== null) return
-    const delay = Math.min(5000, 250 * 2 ** reconnectAttempts)
-    reconnectAttempts += 1
-    reconnectTimer = window.setTimeout(() => {
-      reconnectTimer = null
-      connect()
-    }, delay)
   }
 
   function sendNotification(title: string, body: string): void {
@@ -186,10 +140,4 @@ function loadEnabled(): boolean {
   } catch {
     return true
   }
-}
-
-function openHomeEventSocket(): WebSocket {
-  const url = new URL('/api/events', window.location.href)
-  url.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return new WebSocket(url)
 }

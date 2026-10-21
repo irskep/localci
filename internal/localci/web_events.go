@@ -37,6 +37,7 @@ func (s WebServer) handleAPIEvents(w http.ResponseWriter, r *http.Request, segme
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
 	ctx := conn.CloseRead(r.Context())
+	s.requestContext = ctx
 
 	events, unsubscribe := s.eventHub().Subscribe(resource)
 	defer unsubscribe()
@@ -60,6 +61,8 @@ func (s WebServer) handleAPIEvents(w http.ResponseWriter, r *http.Request, segme
 				}
 				continue
 			}
+			// The replacement snapshot includes changes already queued.
+			drainEvents(events)
 			if err := s.writeResourceSnapshot(ctx, conn, resource, EventTypeReplace); err != nil {
 				_ = conn.Close(websocket.StatusInternalError, err.Error())
 				return
@@ -138,7 +141,7 @@ func (s WebServer) apiSnapshot(resource string) (any, error) {
 }
 
 func (s WebServer) apiHomeSnapshot() (apiHomeResponse, error) {
-	repository := RunRepository{Paths: s.Paths}
+	repository := s.runRepository()
 	repos, err := repository.ListRepoSummaries()
 	if err != nil {
 		return apiHomeResponse{}, err
@@ -180,7 +183,7 @@ func (s WebServer) apiHomeSnapshot() (apiHomeResponse, error) {
 
 func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 	if len(segments) == 0 {
-		repos, err := (RunRepository{Paths: s.Paths}).ListRepoSummaries()
+		repos, err := s.runRepository().ListRepoSummaries()
 		if err != nil {
 			return nil, err
 		}
@@ -206,7 +209,7 @@ func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 		return nil, err
 	}
 	if len(tail) == 0 {
-		runPage, err := (RunRepository{Paths: s.Paths}).ListRepoRunPage(repoDir, time.Time{}, defaultRunListLimit)
+		runPage, err := s.runRepository().ListRepoRunPage(repoDir, time.Time{}, defaultRunListLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -237,7 +240,7 @@ func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 
 	commit := tail[1]
 	if len(tail) == 2 {
-		view, err := s.buildStatusView(repoDir, commit)
+		view, err := s.buildStatusViewWithArtifacts(repoDir, commit, false)
 		if err != nil {
 			return nil, err
 		}
@@ -251,7 +254,7 @@ func (s WebServer) apiRepoSnapshot(segments []string) (any, error) {
 		return nil, fmt.Errorf("unsupported commit resource: %s", strings.Join(tail, "/"))
 	}
 	if len(tail) == 3 {
-		view, err := s.buildStatusView(repoDir, commit)
+		view, err := s.buildStatusViewWithArtifacts(repoDir, commit, false)
 		if err != nil {
 			return nil, err
 		}
@@ -302,32 +305,30 @@ func (s WebServer) apiTaskSnapshot(repoDir string, commit string, taskName strin
 		return apiTaskResponse{}, err
 	}
 	task = s.enrichTaskArtifacts(repoDir, commit, task)
-	primaryArtifact, primaryLog := LoadPrimaryLog(task)
+	primaryArtifact, primaryLog, logEnd, truncated := loadPrimaryLogPreview(task)
 	repo, err := s.apiRepoSummary(repoDir)
 	if err != nil {
 		return apiTaskResponse{}, err
 	}
 	return apiTaskResponse{
-		Repo:            repo,
-		Commit:          commit,
-		Task:            task,
-		SelectedAttempt: task.Attempt,
-		IsLive:          isLatestAttempt(task),
-		PrimaryArtifact: primaryArtifact,
-		PrimaryLog:      primaryLog,
+		Repo:                repo,
+		Commit:              commit,
+		Task:                task,
+		SelectedAttempt:     task.Attempt,
+		IsLive:              isLatestAttempt(task),
+		PrimaryArtifact:     primaryArtifact,
+		PrimaryLog:          primaryLog,
+		PrimaryLogEnd:       logEnd,
+		PrimaryLogTruncated: truncated,
 	}, nil
 }
 
 func (s WebServer) apiArtifactSnapshot(repoDir string, commit string, taskName string, attempt int, artifactPath string) (apiArtifactResponse, error) {
-	task, err := s.selectedTaskStatus(repoDir, commit, taskName, attempt)
+	task, artifact, err := s.artifactForRoute(repoDir, commit, taskName, attempt, artifactPath)
 	if err != nil {
 		return apiArtifactResponse{}, err
 	}
-	task = s.enrichTaskArtifacts(repoDir, commit, task)
-	artifact, ok := findArtifactByDisplayName(task.Artifacts, artifactPath)
-	if !ok {
-		return apiArtifactResponse{}, fmt.Errorf("artifact not found")
-	}
+
 	data, err := readTextTaskArtifact(task, artifact.DisplayName)
 	if err != nil {
 		if errors.Is(err, ErrArtifactNotDisplayable) {
@@ -341,12 +342,13 @@ func (s WebServer) apiArtifactSnapshot(repoDir string, commit string, taskName s
 		return apiArtifactResponse{}, err
 	}
 	return apiArtifactResponse{
-		Repo:     repo,
-		Commit:   commit,
-		Task:     task.Name,
-		Attempt:  task.Attempt,
-		Artifact: artifact,
-		Content:  string(data),
+		Repo:       repo,
+		Commit:     commit,
+		Task:       task.Name,
+		Attempt:    task.Attempt,
+		Artifact:   artifact,
+		Content:    string(data),
+		ContentEnd: int64(len(data)),
 	}, nil
 }
 

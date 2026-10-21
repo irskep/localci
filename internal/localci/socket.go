@@ -207,10 +207,12 @@ func (s *DaemonServer) Serve(ctx context.Context) error {
 			return err
 		}
 
-		if err := s.handleConn(conn); err != nil {
-			_ = conn.Close()
-			return err
-		}
+		go func() {
+			stop := context.AfterFunc(ctx, func() { _ = conn.SetReadDeadline(time.Now()) })
+			defer stop()
+			_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
+			_ = s.handleConn(conn)
+		}()
 	}
 }
 
@@ -230,8 +232,12 @@ func (s *DaemonServer) handleConn(conn net.Conn) error {
 }
 
 func (s *DaemonServer) dispatch(req DaemonRequest) DaemonResponse {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Serialize mutations; status and ping must not wait for unrelated work.
+	switch req.Method {
+	case "postcommit", "retry", "cancel", "shutdown":
+		s.mu.Lock()
+		defer s.mu.Unlock()
+	}
 
 	switch req.Method {
 	case "ping":

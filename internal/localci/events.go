@@ -14,12 +14,13 @@ const (
 )
 
 type APIEvent struct {
-	Type     string `json:"type"`
-	Resource string `json:"resource"`
-	Data     any    `json:"data,omitempty"`
-	Offset   int64  `json:"offset,omitempty"`
-	Text     string `json:"text,omitempty"`
-	Message  string `json:"message,omitempty"`
+	Type      string `json:"type"`
+	Resource  string `json:"resource"`
+	Data      any    `json:"data,omitempty"`
+	Offset    int64  `json:"offset"`
+	EndOffset int64  `json:"end_offset"`
+	Text      string `json:"text,omitempty"`
+	Message   string `json:"message,omitempty"`
 }
 
 type EventHub struct {
@@ -70,7 +71,7 @@ func (h *EventHub) PublishReplace(resource string) {
 }
 
 func (h *EventHub) PublishAppend(resource string, offset int64, text string) {
-	h.publish(APIEvent{Type: EventTypeAppend, Resource: resource, Offset: offset, Text: text})
+	h.publish(APIEvent{Type: EventTypeAppend, Resource: resource, Offset: offset, EndOffset: offset + int64(len(text)), Text: text})
 }
 
 func (h *EventHub) publish(event APIEvent) {
@@ -88,8 +89,10 @@ func (h *EventHub) publish(event APIEvent) {
 		select {
 		case sub.events <- event:
 		default:
-			delete(h.subscribers, sub)
-			close(sub.events)
+			// A snapshot subsumes pending appends and replacements. Keep the
+			// connection instead of making a busy client reconnect repeatedly.
+			drainEvents(sub.events)
+			sub.events <- APIEvent{Type: EventTypeReplace, Resource: sub.resource}
 		}
 	}
 }
@@ -160,4 +163,17 @@ func (n EventNotifier) entryResources(entry QueueEntry) (string, string, string,
 	task := "/api" + taskPath
 	attempt := "/api" + attemptPath
 	return repo, commit, task, attempt
+}
+
+func drainEvents(events <-chan APIEvent) {
+	for range cap(events) {
+		select {
+		case _, ok := <-events:
+			if !ok {
+				return
+			}
+		default:
+			return
+		}
+	}
 }

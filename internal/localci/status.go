@@ -2,7 +2,7 @@ package localci
 
 import (
 	"errors"
-	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 )
@@ -48,30 +48,36 @@ func (r StatusReader) readTaskRecords(repoDir string, commit string) ([]TaskReco
 	root := filepath.Join(r.Paths.CommitRoot(repoDir, commit), "out")
 	taskRecords := map[string]TaskRecord{}
 
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				return nil
-			}
-			return err
-		}
-		if d.IsDir() || d.Name() != taskRecordFileName {
-			return nil
-		}
-
-		record, err := readTaskRecord(path)
-		if err != nil {
-			return err
-		}
-		existing, ok := taskRecords[record.Name]
-		if !ok || record.Attempt > existing.Attempt {
-			taskRecords[record.Name] = record
-		}
-		return nil
-	})
-	if err != nil {
+	entries, err := os.ReadDir(root)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
+	for _, task := range entries {
+		if !task.IsDir() {
+			continue
+		}
+		attempts, err := os.ReadDir(filepath.Join(root, task.Name()))
+		if err != nil {
+			return nil, err
+		}
+		for _, attempt := range attempts {
+			if !attempt.IsDir() {
+				continue
+			}
+			record, err := readTaskRecord(filepath.Join(root, task.Name(), attempt.Name(), taskRecordFileName))
+			if errors.Is(err, ErrRecordNotFound) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			existing, ok := taskRecords[record.Name]
+			if !ok || record.Attempt > existing.Attempt {
+				taskRecords[record.Name] = record
+			}
+		}
+	}
+
 	if len(taskRecords) == 0 {
 		run, err := (RunRepository{Paths: r.Paths}).ReadRun(repoDir, commit)
 		if err != nil {

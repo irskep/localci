@@ -25,7 +25,7 @@ func TestEventHubPublishesToMatchingResourceOnly(t *testing.T) {
 	}
 }
 
-func TestEventHubDropsSlowSubscriber(t *testing.T) {
+func TestEventHubResyncsSlowSubscriberWithoutDisconnecting(t *testing.T) {
 	t.Parallel()
 
 	hub := NewEventHub()
@@ -36,11 +36,16 @@ func TestEventHubDropsSlowSubscriber(t *testing.T) {
 		hub.PublishReplace("/api/queue")
 	}
 
-	received := 0
-	for range events {
-		received++
+	event := <-events
+	if event.Type != EventTypeReplace {
+		t.Fatalf("expected resync, got %#v", event)
 	}
-	if received != 16 {
-		t.Fatalf("received %d events, want buffered events before drop", received)
+	if eventHubSubscriberCount(hub) != 1 {
+		t.Fatal("slow subscriber was disconnected")
+	}
+	drainEvents(events)
+	hub.PublishAppend("/api/queue", 0, "still connected")
+	if event := <-events; event.Type != EventTypeAppend {
+		t.Fatalf("event: %#v", event)
 	}
 }

@@ -64,6 +64,15 @@ func (s Scheduler) RunNext(ctx context.Context) (RunNextResult, error) {
 }
 
 func (s Scheduler) runPreparedTask(ctx context.Context, entry QueueEntry) (RunNextResult, error) {
+	// Recovery can remove the checkout while prepared entries remain queued.
+	// Recreate it through setup, never run a task in an unprepared checkout.
+	if !entry.NoClone {
+		if _, err := os.Stat(filepath.Join(s.Runner.Paths.CloneWorktreeDir(entry.RepoDir, entry.Commit), ".git")); errors.Is(err, os.ErrNotExist) {
+			return s.runUnpreparedTask(ctx, entry)
+		} else if err != nil {
+			return RunNextResult{}, err
+		}
+	}
 	req := InvokeRequest{
 		RepoDir: entry.RepoDir,
 		Commit:  entry.Commit,

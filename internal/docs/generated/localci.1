@@ -342,6 +342,15 @@ Cancel a specific task:
 .EX
 localci cancel \-\-commit HEAD \-\-task test
 .EE
+.SS Large logs and task history
+The web UI previews the first 2 MiB of a task log.
+For the complete output, use the log\(cqs download action or
+\f[CR]localci cat \-\-raw\f[R].
+Text artifact previews also have a 2 MiB limit.
+Task history in the web UI shows 50 runs per page; use \f[B]Older\f[R]
+and \f[B]Newer\f[R] to browse.
+The terminal dashboard shows the latest 50 matching runs;
+\f[CR]localci history\f[R] can retrieve older runs.
 .SH Tasks
 LocalCI runs checks that are defined as Mise tasks.
 A task is eligible when its task name starts with \f[CR]localci:\f[R].

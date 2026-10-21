@@ -49,6 +49,7 @@ type EventStream = {
   reconnectAttempts: number
   stopped: boolean
   removeVisibilityListener: (() => void) | null
+  cleanup?: () => void
 }
 
 export const useLocalciStore = defineStore('localci', () => {
@@ -202,6 +203,26 @@ export const useLocalciStore = defineStore('localci', () => {
     })
   }
 
+  async function loadRepoTaskHistoryPage(apiPath: string, offset: number): Promise<void> {
+    unsubscribePage()
+    const key = `${apiPath}?offset=${offset}`
+    const stream: EventStream = {
+      key: apiPath,
+      socket: null,
+      reconnectTimer: null,
+      reconnectAttempts: 0,
+      stopped: true,
+      removeVisibilityListener: null,
+    }
+    // Retain a route identity while browsing a static history page.
+    pageStream = stream
+    const result = await load(() =>
+      getJSON(key, parseRepoTaskHistoryResponse, AbortSignal.timeout(10000)),
+    )
+    if (result && pageStream === stream) currentRepoTaskHistory.value = result
+    repoTaskHistoryLoaded.value = true
+  }
+
   async function loadCommit(apiPath: string): Promise<void> {
     commitLoaded.value = false
     currentCommit.value = null
@@ -227,47 +248,20 @@ export const useLocalciStore = defineStore('localci', () => {
     unsubscribePage()
     loading.value = true
     error.value = ''
-    let applied = false
-    const applyData = (data: T): void => {
-      apply(data)
-      applied = true
-      error.value = ''
-      loading.value = false
-    }
-    const stream = openReconnectingEventStream(apiPath, {
-      onMessage(message) {
-        try {
-          const event = parseAPIEvent(JSON.parse(message.data as string) as unknown, validateData)
-          if (event.type === 'snapshot' || event.type === 'replace') {
-            applyData(event.data)
-          }
-          if (event.type === 'error') {
-            error.value = event.message
-            loading.value = false
-          }
-        } catch (err) {
-          error.value = err instanceof Error ? err.message : String(err)
-          loading.value = false
-        }
-      },
-      onDisconnect() {
+    pageStream = snapshotStream(
+      apiPath,
+      validateData,
+      (data) => {
+        apply(data)
+        error.value = ''
         loading.value = false
       },
-      onReconnect() {
-        if (error.value === 'Reconnecting to daemon') error.value = ''
-      },
-    })
-    pageStream = stream
-    void getJSON(apiPath, validateData)
-      .then((data) => {
-        if (pageStream !== stream) return
-        applyData(data)
-      })
-      .catch((err) => {
-        if (pageStream !== stream || applied) return
-        error.value = err instanceof Error ? err.message : String(err)
+      () => true,
+      (message) => {
+        error.value = message
         loading.value = false
-      })
+      },
+    )
   }
 
   function unsubscribePage(key?: string): void {
@@ -300,21 +294,23 @@ export const useLocalciStore = defineStore('localci', () => {
     taskLoaded.value = false
     const previous = taskResponseFor(apiPath)
     taskRequest.value = { state: 'loading', key: apiPath, previous }
+    const pendingRequest = taskRequest.value
     loading.value = true
     error.value = ''
     try {
       const result = await getJSON(apiPath, parseTaskResponse)
-      if (taskRequest.value.state === 'loading' && taskRequest.value.key === apiPath) {
+      if (taskRequest.value === pendingRequest) {
         taskRequest.value = { state: 'loaded', key: apiPath, data: result }
       }
     } catch (err) {
+      if (taskRequest.value !== pendingRequest) return
       const message = err instanceof Error ? err.message : String(err)
       error.value = message
-      if (taskRequest.value.state === 'loading' && taskRequest.value.key === apiPath) {
+      if (taskRequest.value === pendingRequest) {
         taskRequest.value = { state: 'error', key: apiPath, message, previous }
       }
     } finally {
-      if (taskRequest.value.state !== 'loading' || taskRequest.value.key === apiPath) {
+      if (taskRequest.value === pendingRequest || taskRequest.value.key === apiPath) {
         loading.value = false
         taskLoaded.value = true
       }
@@ -326,62 +322,49 @@ export const useLocalciStore = defineStore('localci', () => {
     unsubscribeTask()
     const previous = taskResponseFor(apiPath)
     taskRequest.value = { state: 'loading', key: apiPath, previous }
-    taskStream = openReconnectingEventStream(apiPath, {
-      onMessage(message) {
-        let event: APIEvent<TaskResponse>
-        try {
-          event = parseAPIEvent(JSON.parse(message.data as string) as unknown, parseTaskResponse)
-        } catch (err) {
-          error.value = err instanceof Error ? err.message : String(err)
-          return
-        }
-        if (event.type === 'snapshot' || event.type === 'replace') {
-          taskRequest.value = { state: 'loaded', key: apiPath, data: event.data }
-          taskLoaded.value = true
-          return
-        }
-        if (event.type === 'append') {
-          const current = taskResponseFor(apiPath)
-          if (!current || current.primary_artifact !== 'combined.log') return
-          if (current.primary_log.length === event.offset) {
-            taskRequest.value = {
-              state: 'loaded',
-              key: apiPath,
-              data: {
-                ...current,
-                primary_log: current.primary_log + event.text,
-              },
-            }
-            taskLoaded.value = true
-            return
-          }
-          void loadTask(apiPath)
-          return
-        }
-        if (event.type === 'error') {
-          taskRequest.value = {
-            state: 'error',
-            key: apiPath,
-            message: event.message,
-            previous: taskResponseFor(apiPath),
-          }
-          error.value = event.message
-        }
+    loading.value = true
+    error.value = ''
+    taskStream = snapshotStream(
+      apiPath,
+      parseTaskResponse,
+      (data) => {
+        taskRequest.value = { state: 'loaded', key: apiPath, data }
+        taskLoaded.value = true
+        loading.value = false
+        error.value = ''
       },
-      onDisconnect() {
-        const previous = taskResponseFor(apiPath)
+      (event) => {
+        const current = taskResponseFor(apiPath)
+        if (!current) return false
+        if (current.primary_artifact !== 'combined.log' || current.primary_log_truncated)
+          return true
+        if (event.end_offset <= current.primary_log_end) return true
+        if (event.offset !== current.primary_log_end) return false
+        // Stop the preview at 2 MiB; the download retains the complete log.
+        const truncated = event.end_offset > 2 * 1024 * 1024
+        taskRequest.value = {
+          state: 'loaded',
+          key: apiPath,
+          data: {
+            ...current,
+            primary_log: truncated ? current.primary_log : current.primary_log + event.text,
+            primary_log_end: truncated ? current.primary_log_end : event.end_offset,
+            primary_log_truncated: truncated,
+          },
+        }
+        return true
+      },
+      (message) => {
         taskRequest.value = {
           state: 'error',
           key: apiPath,
-          message: 'Reconnecting to daemon',
-          previous,
+          message,
+          previous: taskResponseFor(apiPath),
         }
+        loading.value = false
+        error.value = message
       },
-      onReconnect() {
-        const previous = taskResponseFor(apiPath)
-        if (previous) taskRequest.value = { state: 'loaded', key: apiPath, data: previous }
-      },
-    })
+    )
   }
 
   function unsubscribeTask(): void {
@@ -413,45 +396,42 @@ export const useLocalciStore = defineStore('localci', () => {
     unsubscribeArtifact()
     artifactLoaded.value = false
     currentArtifact.value = null
-    artifactStream = openReconnectingEventStream(apiPath, {
-      onMessage(message) {
-        let event: APIEvent<ArtifactResponse>
-        try {
-          event = parseAPIEvent(
-            JSON.parse(message.data as string) as unknown,
-            parseArtifactResponse,
-          )
-        } catch (err) {
-          error.value = err instanceof Error ? err.message : String(err)
-          return
-        }
-        if (event.type === 'snapshot' || event.type === 'replace') {
-          currentArtifact.value = event.data
-          artifactLoaded.value = true
-          return
-        }
-        if (event.type === 'append' && currentArtifact.value) {
-          const currentLength = currentArtifact.value.content.length
-          if (currentLength === event.offset) {
-            currentArtifact.value = {
-              ...currentArtifact.value,
-              content: currentArtifact.value.content + event.text,
-            }
-            return
+    loading.value = true
+    error.value = ''
+    artifactStream = snapshotStream(
+      apiPath,
+      parseArtifactResponse,
+      (data) => {
+        currentArtifact.value = data
+        artifactLoaded.value = true
+        loading.value = false
+        error.value = ''
+      },
+      (event) => {
+        const current = currentArtifact.value
+        if (!current) return false
+        if (!current.artifact.is_text || event.end_offset <= current.content_end) return true
+        if (event.offset !== current.content_end) return false
+        if (event.end_offset > 2 * 1024 * 1024) {
+          currentArtifact.value = {
+            ...current,
+            artifact: { ...current.artifact, is_text: false },
+            content: '',
           }
-          void loadArtifact(apiPath)
+          return true
         }
-        if (event.type === 'error') {
-          error.value = event.message
+        currentArtifact.value = {
+          ...current,
+          content: current.content + event.text,
+          content_end: event.end_offset,
         }
+        return true
       },
-      onDisconnect() {
-        error.value = currentArtifact.value ? 'Reconnecting to daemon' : error.value
+      (message) => {
+        error.value = message
+        loading.value = false
       },
-      onReconnect() {
-        if (error.value === 'Reconnecting to daemon') error.value = ''
-      },
-    })
+    )
   }
 
   function unsubscribeArtifact(): void {
@@ -494,6 +474,7 @@ export const useLocalciStore = defineStore('localci', () => {
     loadArtifact,
     loadArtifactList,
     loadCommit,
+    loadRepoTaskHistoryPage,
     loadHome,
     loadHomePage,
     loadQueue,
@@ -631,8 +612,96 @@ function scheduleReconnect(
 function closeEventStream(stream: EventStream | null): void {
   if (!stream) return
   stream.stopped = true
+  stream.cleanup?.()
   if (stream.reconnectTimer !== null) window.clearTimeout(stream.reconnectTimer)
   stream.removeVisibilityListener?.()
   stream.socket?.close()
   useWebsocketStore().removeStream(stream.key)
+}
+
+// The socket is the normal snapshot source. HTTP is a delayed fallback, with
+// one in-flight request and a deadline. New socket data wins over HTTP replies.
+export function snapshotStream<T>(
+  apiPath: string,
+  validate: (value: unknown) => T,
+  apply: (data: T) => void,
+  append: (event: Extract<APIEvent<T>, { type: 'append' }>) => boolean,
+  fail: (message: string) => void,
+): EventStream {
+  let revision = 0
+  let received = false
+  let pending: AbortController | null = null
+  let fallbackTimer: ReturnType<typeof setTimeout> | undefined
+  let deadline: ReturnType<typeof setTimeout> | undefined
+  const stream = openReconnectingEventStream(apiPath, {
+    onMessage(message) {
+      try {
+        const event = parseAPIEvent(JSON.parse(message.data as string) as unknown, validate)
+        if (event.type === 'snapshot' || event.type === 'replace') {
+          revision++
+          received = true
+          clearTimeout(fallbackTimer)
+          clearTimeout(deadline)
+          pending?.abort()
+          apply(event.data)
+        } else if (event.type === 'append') {
+          if (!received || !append(event)) {
+            // One reconnect replaces any number of overlapping recovery GETs.
+            stream.socket?.close()
+          } else {
+            revision++
+          }
+        } else if (event.type === 'error') {
+          fail(event.message)
+        }
+      } catch (err) {
+        fail(err instanceof Error ? err.message : String(err))
+      }
+    },
+    onDisconnect() {
+      fail('Reconnecting to daemon')
+    },
+    onReconnect() {
+      armFallback()
+    },
+  })
+  function armFallback(): void {
+    clearTimeout(fallbackTimer)
+    fallbackTimer = setTimeout(() => {
+      void fallback()
+    }, 1500)
+  }
+  async function fallback(): Promise<void> {
+    if (stream.stopped || pending) return
+    const version = revision
+    const controller = new AbortController()
+    pending = controller
+    deadline = setTimeout(() => {
+      controller.abort()
+      if (!stream.stopped && revision === version) {
+        fail('Loading timed out. Reconnecting to daemon…')
+        stream.socket?.close()
+      }
+    }, 10000)
+    try {
+      const data = await getJSON(apiPath, validate, controller.signal)
+      if (!stream.stopped && revision === version && !controller.signal.aborted) {
+        received = true
+        apply(data)
+      }
+    } catch (err) {
+      if (!stream.stopped && revision === version && !controller.signal.aborted)
+        fail(err instanceof Error ? err.message : String(err))
+    } finally {
+      clearTimeout(deadline)
+      if (pending === controller) pending = null
+    }
+  }
+  stream.cleanup = () => {
+    clearTimeout(fallbackTimer)
+    clearTimeout(deadline)
+    pending?.abort()
+  }
+  armFallback()
+  return stream
 }

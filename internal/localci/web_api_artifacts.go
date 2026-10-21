@@ -85,29 +85,46 @@ func (s WebServer) handleAPIArtifact(w http.ResponseWriter, repoDir string, comm
 		return
 	}
 	writeJSON(w, http.StatusOK, apiArtifactResponse{
-		Repo:     repo,
-		Commit:   commit,
-		Task:     task.Name,
-		Attempt:  task.Attempt,
-		Artifact: artifact,
-		Content:  string(data),
+		Repo:       repo,
+		Commit:     commit,
+		Task:       task.Name,
+		Attempt:    task.Attempt,
+		Artifact:   artifact,
+		Content:    string(data),
+		ContentEnd: int64(len(data)),
 	})
 }
 
 func (s WebServer) artifactForRoute(repoDir string, commit string, taskName string, attempt int, artifactPath string) (TaskStatusView, ArtifactView, error) {
-	task, err := s.selectedTaskStatus(repoDir, commit, taskName, attempt)
+	task, err := s.selectedTaskMetadata(repoDir, commit, taskName, attempt)
 	if err != nil {
 		return TaskStatusView{}, ArtifactView{}, err
 	}
-	task = s.enrichTaskArtifacts(repoDir, commit, task)
-	artifact, ok := findArtifactByDisplayName(task.Artifacts, artifactPath)
-	if !ok {
+	if shouldHideArtifact(artifactPath) {
 		return TaskStatusView{}, ArtifactView{}, ErrRecordNotFound
 	}
+	resolved, err := resolveArtifactPath(task.OutputDir, artifactPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return TaskStatusView{}, ArtifactView{}, ErrRecordNotFound
+	}
+	if err != nil {
+		return TaskStatusView{}, ArtifactView{}, err
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return TaskStatusView{}, ArtifactView{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return TaskStatusView{}, ArtifactView{}, ErrRecordNotFound
+	}
+	artifact := ArtifactView{Name: info.Name(), DisplayName: artifactPath, Path: resolved}
+	artifact = applyMarkedArtifactMetadata([]ArtifactView{artifact}, task.MarkedArtifacts)[0]
+	artifact = s.enrichArtifact(repoDir, commit, task, artifact)
 	return task, artifact, nil
 }
 
 func (s WebServer) handleRawArtifact(w http.ResponseWriter, r *http.Request) {
+	s.requestContext = r.Context()
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		methodNotAllowed(w, "GET, HEAD")
 		return
@@ -267,7 +284,7 @@ func markedArtifactViews(task TaskStatusView) []ArtifactView {
 }
 
 func (s WebServer) enrichArtifact(repoDir string, commit string, task TaskStatusView, artifact ArtifactView) ArtifactView {
-	_, textErr := readTextTaskArtifact(task, artifact.DisplayName)
+	textErr := classifyTextTaskArtifact(task, artifact.DisplayName)
 	artifact.IsText = textErr == nil
 	if rawURL, err := RawArtifactRoutePath(repoDir, commit, task.Name, task.Attempt, artifact.DisplayName); err == nil {
 		artifact.RawURL = rawURL

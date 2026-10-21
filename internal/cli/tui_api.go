@@ -57,10 +57,11 @@ type tuiRepoResponse struct {
 }
 
 type tuiRepoTaskHistoryResponse struct {
-	Repo      tuiRepoSummary           `json:"repo"`
-	Task      string                   `json:"task"`
-	ShortName string                   `json:"short_name"`
-	Runs      []tuiRepoTaskHistoryItem `json:"runs"`
+	NextOffset int                      `json:"next_offset,omitempty"`
+	Repo       tuiRepoSummary           `json:"repo"`
+	Task       string                   `json:"task"`
+	ShortName  string                   `json:"short_name"`
+	Runs       []tuiRepoTaskHistoryItem `json:"runs"`
 }
 
 type tuiRepoTaskHistoryItem struct {
@@ -95,13 +96,15 @@ type tuiCommitResponse struct {
 }
 
 type tuiTaskResponse struct {
-	Repo            tuiRepoSummary         `json:"repo"`
-	Commit          string                 `json:"commit"`
-	Task            localci.TaskStatusView `json:"task"`
-	SelectedAttempt int                    `json:"selected_attempt"`
-	IsLive          bool                   `json:"is_live"`
-	PrimaryArtifact string                 `json:"primary_artifact"`
-	PrimaryLog      string                 `json:"primary_log"`
+	Repo                tuiRepoSummary         `json:"repo"`
+	Commit              string                 `json:"commit"`
+	Task                localci.TaskStatusView `json:"task"`
+	SelectedAttempt     int                    `json:"selected_attempt"`
+	IsLive              bool                   `json:"is_live"`
+	PrimaryArtifact     string                 `json:"primary_artifact"`
+	PrimaryLog          string                 `json:"primary_log"`
+	PrimaryLogEnd       int64                  `json:"primary_log_end"`
+	PrimaryLogTruncated bool                   `json:"primary_log_truncated"`
 }
 
 type tuiArtifactListResponse struct {
@@ -113,12 +116,13 @@ type tuiArtifactListResponse struct {
 }
 
 type tuiArtifactResponse struct {
-	Repo     tuiRepoSummary       `json:"repo"`
-	Commit   string               `json:"commit"`
-	Task     string               `json:"task"`
-	Attempt  int                  `json:"attempt"`
-	Artifact localci.ArtifactView `json:"artifact"`
-	Content  string               `json:"content"`
+	Repo       tuiRepoSummary       `json:"repo"`
+	Commit     string               `json:"commit"`
+	Task       string               `json:"task"`
+	Attempt    int                  `json:"attempt"`
+	Artifact   localci.ArtifactView `json:"artifact"`
+	Content    string               `json:"content"`
+	ContentEnd int64                `json:"content_end"`
 }
 
 type tuiRetryResponse struct {
@@ -145,12 +149,13 @@ type tuiRevealArtifactResponse struct {
 }
 
 type tuiAPIEvent struct {
-	Type     string          `json:"type"`
-	Resource string          `json:"resource"`
-	Data     json.RawMessage `json:"data,omitempty"`
-	Offset   int64           `json:"offset,omitempty"`
-	Text     string          `json:"text,omitempty"`
-	Message  string          `json:"message,omitempty"`
+	Type      string          `json:"type"`
+	Resource  string          `json:"resource"`
+	Data      json.RawMessage `json:"data,omitempty"`
+	Offset    int64           `json:"offset"`
+	EndOffset int64           `json:"end_offset"`
+	Text      string          `json:"text,omitempty"`
+	Message   string          `json:"message,omitempty"`
 }
 
 type tuiClient struct {

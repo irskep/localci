@@ -3,13 +3,13 @@ package localci
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -72,28 +72,24 @@ type TaskAttemptView struct {
 }
 
 func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovered []Task, queued []QueueEntry, active *ActiveTask) (CommitStatusView, error) {
+	return buildCommitStatusView(paths, repoDir, commit, discovered, queued, active, "", true, RunRepository{Paths: paths})
+}
+
+func buildCommitStatusView(paths Paths, repoDir, commit string, discovered []Task, queued []QueueEntry, active *ActiveTask, taskName string, includeArtifacts bool, repository RunRepository) (CommitStatusView, error) {
 	view := CommitStatusView{
 		RepoDir: repoDir,
 		Commit:  commit,
 		Tasks:   make([]TaskStatusView, 0, len(discovered)),
 	}
 
-	reader := StatusReader{Paths: paths}
-	commitStatus, err := reader.ReadCommit(repoDir, commit)
+	run, err := repository.ReadRun(repoDir, commit)
 	if err != nil && !errors.Is(err, ErrRecordNotFound) {
 		return CommitStatusView{}, err
 	}
 	if err == nil {
-		view.Annotations = cloneAnnotations(commitStatus.Run.Annotations)
+		view.Annotations = cloneAnnotations(run.Annotations)
 		if len(discovered) == 0 {
-			discovered = append([]Task{}, commitStatus.Run.DiscoveredTasks...)
-		}
-	}
-
-	taskRecords := map[string]TaskRecord{}
-	if err == nil {
-		for _, record := range commitStatus.Tasks {
-			taskRecords[record.Name] = record
+			discovered = run.DiscoveredTasks
 		}
 	}
 
@@ -101,12 +97,32 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 	timingRecords := []TaskRecord{}
 
 	for _, task := range discovered {
+		if taskName != "" && task.Name != taskName {
+			continue
+		}
 		status := ExecutionStatusNotRun
 		outputDir := paths.TaskOutputDir(repoDir, commit, task.Name)
 		attempt := 0
-		attempts, err := listTaskAttemptViews(paths, repoDir, commit, task.Name)
+		records, err := listTaskAttemptRecords(paths, repoDir, commit, task.Name)
 		if err != nil {
 			return CommitStatusView{}, err
+		}
+		attempts := make([]TaskAttemptView, 0, len(records))
+		for _, r := range records {
+			attempts = append(attempts, TaskAttemptView{Attempt: r.Attempt, Status: executionStatusFromTaskRecord(r), DurationMilliseconds: r.DurationMilliseconds, Failure: r.Failure})
+		}
+		var record TaskRecord
+		hasRecord := len(records) > 0
+		if hasRecord {
+			record = records[0]
+		} else {
+			for _, r := range run.TaskResults {
+				if r.Name == task.Name {
+					record = r
+					hasRecord = true
+					break
+				}
+			}
 		}
 		attempts = mergeLiveAttemptViews(attempts, queuedByTask[task.Name], active, repoDir, commit, task.Name)
 
@@ -114,24 +130,28 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 		var durationMilliseconds int64
 		var failure string
 		var markedArtifacts []MarkedArtifact
-		record, hasRecord := taskRecords[task.Name]
 		if hasRecord {
 			outputDir = record.OutputDir
 			attempt = record.Attempt
 			status = executionStatusFromTaskRecord(record)
 			markedArtifacts = append([]MarkedArtifact{}, record.MarkedArtifacts...)
-			artifacts = buildArtifactViews(record.OutputDir, outputFilesOrNil(record.OutputDir), markedArtifacts)
 			durationMilliseconds = record.DurationMilliseconds
 			failure = record.Failure
 		}
 		if active != nil && active.RepoDir == repoDir && active.Commit == commit && active.TaskName == task.Name {
 			status = ExecutionStatusRunning
+			if attempt != active.Attempt {
+				markedArtifacts = nil
+			}
 			attempt = active.Attempt
 			outputDir = paths.TaskAttemptDir(repoDir, commit, task.Name, active.Attempt)
 			durationMilliseconds = 0
 			failure = ""
 		} else if queuedEntries := queuedByTask[task.Name]; len(queuedEntries) > 0 {
 			status = ExecutionStatusQueued
+			if attempt != latestQueuedAttempt(queuedEntries) {
+				markedArtifacts = nil
+			}
 			attempt = latestQueuedAttempt(queuedEntries)
 			outputDir = paths.TaskAttemptDir(repoDir, commit, task.Name, attempt)
 			durationMilliseconds = 0
@@ -141,11 +161,13 @@ func BuildCommitStatusView(paths Paths, repoDir string, commit string, discovere
 			timingRecords = append(timingRecords, record)
 		}
 
-		outputFiles, err := listOutputFiles(outputDir)
-		if err != nil {
-			return CommitStatusView{}, err
-		}
-		if len(artifacts) == 0 {
+		outputFiles := []string{}
+		artifacts = []ArtifactView{}
+		if includeArtifacts {
+			outputFiles, err = listOutputFiles(outputDir)
+			if err != nil {
+				return CommitStatusView{}, err
+			}
 			artifacts = buildArtifactViews(outputDir, outputFiles, markedArtifacts)
 		}
 
@@ -362,26 +384,29 @@ func listTaskAttemptRecords(paths Paths, repoDir string, commit string, taskName
 	root := paths.TaskOutputDir(repoDir, commit, taskName)
 	records := []TaskRecord{}
 
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				return nil
-			}
-			return err
-		}
-		if d.IsDir() || d.Name() != taskRecordFileName {
-			return nil
-		}
-
-		record, err := readTaskRecord(path)
-		if err != nil {
-			return err
-		}
-		records = append(records, record)
-		return nil
-	})
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return records, nil
+	}
 	if err != nil {
 		return nil, err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		attempt, err := strconv.Atoi(strings.TrimPrefix(entry.Name(), "attempt-"))
+		if err != nil || attempt <= 0 {
+			continue
+		}
+		record, err := readTaskRecord(filepath.Join(root, entry.Name(), taskRecordFileName))
+		if errors.Is(err, ErrRecordNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
 	}
 
 	sort.Slice(records, func(i int, j int) bool {
@@ -519,7 +544,7 @@ func readTaskArtifact(task TaskStatusView, displayName string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-func readTextTaskArtifact(task TaskStatusView, displayName string) ([]byte, error) {
+func openTextTaskArtifact(task TaskStatusView, displayName string) (*os.File, error) {
 	path, err := resolveArtifactPath(task.OutputDir, displayName)
 	if err != nil {
 		return nil, err
@@ -528,29 +553,54 @@ func readTextTaskArtifact(task TaskStatusView, displayName string) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	if err := classifyTextFile(file); err != nil {
+		file.Close()
+		return nil, err
+	}
+	return file, nil
+}
 
+func classifyTextFile(file *os.File) error {
 	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Size() > maxTextArtifactBytes {
+		return ErrArtifactNotDisplayable
+	}
+	sample := make([]byte, 512)
+	n, err := file.ReadAt(sample, 0)
+	if err != nil && err != io.EOF {
+		return err
+	}
+	if !isDisplayableText(sample[:n]) {
+		return ErrArtifactNotDisplayable
+	}
+	return nil
+}
+
+func classifyTextTaskArtifact(task TaskStatusView, displayName string) error {
+	file, err := openTextTaskArtifact(task, displayName)
+	if err != nil {
+		return err
+	}
+	return file.Close()
+}
+
+func readTextTaskArtifact(task TaskStatusView, displayName string) ([]byte, error) {
+	file, err := openTextTaskArtifact(task, displayName)
 	if err != nil {
 		return nil, err
 	}
-	if info.Size() > maxTextArtifactBytes {
-		return nil, fmt.Errorf("%w: artifact is larger than %d bytes", ErrArtifactNotDisplayable, maxTextArtifactBytes)
-	}
-
-	sample := make([]byte, min(512, max(0, int(info.Size()))))
-	n, err := file.Read(sample)
-	if err != nil && err != io.EOF {
-		return nil, err
-	}
-	sample = sample[:n]
-	if !isDisplayableText(sample) {
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, maxTextArtifactBytes+1))
+	if len(data) > maxTextArtifactBytes {
 		return nil, ErrArtifactNotDisplayable
 	}
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return nil, err
+	if task.Status == ExecutionStatusRunning {
+		data = data[:completeUTF8Prefix(data)]
 	}
-	return io.ReadAll(file)
+	return data, err
 }
 
 func isDisplayableText(sample []byte) bool {
@@ -606,4 +656,39 @@ func verifyPathUnderDir(dir string, candidate string) error {
 		return errors.New("artifact path is outside task output")
 	}
 	return nil
+}
+
+// Primary logs use a bounded prefix in API snapshots. Downloads and `cat` keep
+// access to the complete file. Exclude unfinished UTF-8 at the live write edge.
+func loadPrimaryLogPreview(task TaskStatusView) (name, text string, end int64, truncated bool) {
+	artifact, ok := PrimaryArtifact(task)
+	if !ok {
+		return
+	}
+	name = artifact.DisplayName
+	path, err := resolveArtifactPath(task.OutputDir, name)
+	if err != nil {
+		return
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxTextArtifactBytes+1))
+	if err != nil {
+		return
+	}
+	truncated = len(data) > maxTextArtifactBytes
+	if truncated {
+		data = data[:maxTextArtifactBytes]
+	}
+	if truncated || task.Status == ExecutionStatusRunning {
+		data = data[:completeUTF8Prefix(data)]
+	}
+	return name, string(data), int64(len(data)), truncated
 }

@@ -457,3 +457,12 @@ exit 1
 		t.Fatalf("runTask did not stop after cancellation")
 	}
 }
+
+func TestRequestedTasksKeepRootSetup(t *testing.T) {
+	for _, name := range []string{"localci:setup", "//:localci:setup"} {
+		got := filterRequestedTasks([]Task{{Name: name}, {Name: "//web:localci:setup"}, {Name: "//:localci:test"}, {Name: "//:localci:lint"}}, []string{"//:localci:test"})
+		if len(got) != 2 || got[0].Name != name || got[1].Name != "//:localci:test" {
+			t.Fatalf("filtered tasks = %#v", got)
+		}
+	}
+}

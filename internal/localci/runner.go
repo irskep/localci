@@ -139,7 +139,7 @@ func filterRequestedTasks(tasks []Task, requested []string) []Task {
 	}
 	filtered := make([]Task, 0, len(tasks))
 	for _, task := range tasks {
-		if allowed[task.Name] || task.Name == setupTaskName {
+		if allowed[task.Name] || isRootSetupTask(task.Name) {
 			filtered = append(filtered, task)
 		}
 	}

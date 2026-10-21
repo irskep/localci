@@ -376,3 +376,34 @@ func isSocketPermissionError(err error) bool {
 	}
 	return false
 }
+
+func TestDaemonPingDoesNotWaitForIncompleteRequest(t *testing.T) {
+	paths := Paths{Root: t.TempDir()}
+	if !canBindUnixSocket(t, paths.DaemonSocketPath()) {
+		t.Skip("unix sockets unavailable")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	server := &DaemonServer{Paths: paths, ReadState: func() (DaemonState, error) { return DaemonState{PID: 123}, nil }}
+	done := make(chan error, 1)
+	go func() { done <- server.Serve(ctx) }()
+	waitForSocket(t, paths.DaemonSocketPath())
+	stalled, err := net.Dial("unix", paths.DaemonSocketPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stalled.Close()
+	if _, err := stalled.Write([]byte(`{"method":`)); err != nil {
+		t.Fatal(err)
+	}
+	timeout, stop := context.WithTimeout(ctx, time.Second)
+	defer stop()
+	state, err := (DaemonClient{Paths: paths}).Ping(timeout)
+	if err != nil || state.PID != 123 {
+		t.Fatalf("ping blocked: %#v, %v", state, err)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}

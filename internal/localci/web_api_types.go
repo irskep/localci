@@ -56,10 +56,11 @@ type apiRepoResponse struct {
 }
 
 type apiRepoTaskHistoryResponse struct {
-	Repo      apiRepoSummary           `json:"repo"`
-	Task      string                   `json:"task"`
-	ShortName string                   `json:"short_name"`
-	Runs      []apiRepoTaskHistoryItem `json:"runs"`
+	NextOffset int                      `json:"next_offset,omitempty"`
+	Repo       apiRepoSummary           `json:"repo"`
+	Task       string                   `json:"task"`
+	ShortName  string                   `json:"short_name"`
+	Runs       []apiRepoTaskHistoryItem `json:"runs"`
 }
 
 type apiRepoTaskHistoryItem struct {
@@ -75,13 +76,15 @@ type apiCommitResponse struct {
 }
 
 type apiTaskResponse struct {
-	Repo            apiRepoSummary `json:"repo"`
-	Commit          string         `json:"commit"`
-	Task            TaskStatusView `json:"task"`
-	SelectedAttempt int            `json:"selected_attempt"`
-	IsLive          bool           `json:"is_live"`
-	PrimaryArtifact string         `json:"primary_artifact"`
-	PrimaryLog      string         `json:"primary_log"`
+	Repo                apiRepoSummary `json:"repo"`
+	Commit              string         `json:"commit"`
+	Task                TaskStatusView `json:"task"`
+	SelectedAttempt     int            `json:"selected_attempt"`
+	IsLive              bool           `json:"is_live"`
+	PrimaryArtifact     string         `json:"primary_artifact"`
+	PrimaryLog          string         `json:"primary_log"`
+	PrimaryLogEnd       int64          `json:"primary_log_end"`
+	PrimaryLogTruncated bool           `json:"primary_log_truncated"`
 }
 
 type apiArtifactListResponse struct {
@@ -93,12 +96,13 @@ type apiArtifactListResponse struct {
 }
 
 type apiArtifactResponse struct {
-	Repo     apiRepoSummary `json:"repo"`
-	Commit   string         `json:"commit"`
-	Task     string         `json:"task"`
-	Attempt  int            `json:"attempt"`
-	Artifact ArtifactView   `json:"artifact"`
-	Content  string         `json:"content"`
+	Repo       apiRepoSummary `json:"repo"`
+	Commit     string         `json:"commit"`
+	Task       string         `json:"task"`
+	Attempt    int            `json:"attempt"`
+	Artifact   ArtifactView   `json:"artifact"`
+	Content    string         `json:"content"`
+	ContentEnd int64          `json:"content_end"`
 }
 
 type apiRevealArtifactResponse struct {

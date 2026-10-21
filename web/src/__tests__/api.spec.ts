@@ -23,6 +23,7 @@ describe('api validation', () => {
           type: 'append',
           resource: '/api/repo/example',
           offset: 12,
+          end_offset: 17,
           text: 'hello',
         },
         parseTaskResponse,
@@ -30,6 +31,7 @@ describe('api validation', () => {
     ).toMatchObject({
       type: 'append',
       offset: 12,
+      end_offset: 17,
       text: 'hello',
     })
   })
@@ -79,6 +81,8 @@ describe('api validation', () => {
       is_live: false,
       primary_artifact: 'combined.log',
       primary_log: 'ok',
+      primary_log_end: 2,
+      primary_log_truncated: false,
     })
 
     expect(response.task.artifacts).toEqual([

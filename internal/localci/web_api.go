@@ -21,6 +21,7 @@ type runListPageParams struct {
 }
 
 func (s WebServer) handleAPI(w http.ResponseWriter, r *http.Request) {
+	s.requestContext = r.Context()
 	escapedPath := requestEscapedPath(r)
 	segments, err := splitEscapedPath(escapedPath)
 	if err != nil {
@@ -87,7 +88,7 @@ func (s WebServer) handleAPIHome(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	repository := RunRepository{Paths: s.Paths}
+	repository := s.runRepository()
 	repos, err := repository.ListRepoSummaries()
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
@@ -191,7 +192,7 @@ func (s WebServer) handleAPIRepoRoutes(w http.ResponseWriter, r *http.Request, s
 			methodNotAllowed(w, http.MethodGet)
 			return
 		}
-		s.handleAPIRepoTaskHistory(w, repoDir, tail[1])
+		s.handleAPIRepoTaskHistory(w, r, repoDir, tail[1])
 		return
 	}
 
@@ -258,7 +259,7 @@ func (s WebServer) handleAPIRepoRoutes(w http.ResponseWriter, r *http.Request, s
 }
 
 func (s WebServer) handleAPIRepoIndex(w http.ResponseWriter, _ *http.Request) {
-	repos, err := (RunRepository{Paths: s.Paths}).ListRepoSummaries()
+	repos, err := s.runRepository().ListRepoSummaries()
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
@@ -286,7 +287,7 @@ func (s WebServer) handleAPIRepo(w http.ResponseWriter, r *http.Request, repoDir
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	runPage, err := (RunRepository{Paths: s.Paths}).ListRepoRunPage(repoDir, page.Before, page.Limit)
+	runPage, err := s.runRepository().ListRepoRunPage(repoDir, page.Before, page.Limit)
 	if err != nil {
 		if errorsIsRecordNotFound(err) {
 			writeAPIError(w, http.StatusNotFound, fmt.Errorf("repo not found"))
@@ -313,8 +314,17 @@ func (s WebServer) handleAPIRepo(w http.ResponseWriter, r *http.Request, repoDir
 	})
 }
 
-func (s WebServer) handleAPIRepoTaskHistory(w http.ResponseWriter, repoDir string, taskName string) {
-	resp, err := s.apiRepoTaskHistory(repoDir, taskName)
+func (s WebServer) handleAPIRepoTaskHistory(w http.ResponseWriter, r *http.Request, repoDir string, taskName string) {
+	offset := 0
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 0 {
+			writeAPIError(w, http.StatusBadRequest, fmt.Errorf("offset must be a nonnegative integer"))
+			return
+		}
+		offset = value
+	}
+	resp, err := s.apiRepoTaskHistoryPage(repoDir, taskName, offset)
 	if err != nil {
 		if errorsIsRecordNotFound(err) {
 			writeAPIError(w, http.StatusNotFound, fmt.Errorf("repo not found"))
@@ -360,7 +370,7 @@ func parseRunListPageParams(r *http.Request) (runListPageParams, error) {
 }
 
 func (s WebServer) handleAPICommit(w http.ResponseWriter, repoDir string, commit string) {
-	view, err := s.buildStatusView(repoDir, commit)
+	view, err := s.buildStatusViewWithArtifacts(repoDir, commit, false)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
@@ -377,7 +387,7 @@ func (s WebServer) handleAPICommit(w http.ResponseWriter, repoDir string, commit
 }
 
 func (s WebServer) handleAPITaskIndex(w http.ResponseWriter, repoDir string, commit string) {
-	view, err := s.buildStatusView(repoDir, commit)
+	view, err := s.buildStatusViewWithArtifacts(repoDir, commit, false)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
@@ -396,20 +406,22 @@ func (s WebServer) handleAPITask(w http.ResponseWriter, repoDir string, commit s
 		return
 	}
 	task = s.enrichTaskArtifacts(repoDir, commit, task)
-	primaryArtifact, primaryLog := LoadPrimaryLog(task)
+	primaryArtifact, primaryLog, logEnd, truncated := loadPrimaryLogPreview(task)
 	repo, err := s.apiRepoSummary(repoDir)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, apiTaskResponse{
-		Repo:            repo,
-		Commit:          commit,
-		Task:            task,
-		SelectedAttempt: task.Attempt,
-		IsLive:          isLatestAttempt(task),
-		PrimaryArtifact: primaryArtifact,
-		PrimaryLog:      primaryLog,
+		Repo:                repo,
+		Commit:              commit,
+		Task:                task,
+		SelectedAttempt:     task.Attempt,
+		IsLive:              isLatestAttempt(task),
+		PrimaryArtifact:     primaryArtifact,
+		PrimaryLog:          primaryLog,
+		PrimaryLogEnd:       logEnd,
+		PrimaryLogTruncated: truncated,
 	})
 }
 
@@ -477,7 +489,7 @@ func (s WebServer) handleAPIAttemptRoutes(w http.ResponseWriter, r *http.Request
 }
 
 func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit string, taskName string) {
-	view, err := s.buildStatusView(repoDir, commit)
+	view, err := s.buildStatusViewWithArtifacts(repoDir, commit, false)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
@@ -530,7 +542,7 @@ func (s WebServer) handleAPIRetry(w http.ResponseWriter, repoDir string, commit 
 }
 
 func (s WebServer) handleAPICancel(w http.ResponseWriter, repoDir string, commit string, taskName string) {
-	view, err := s.buildStatusView(repoDir, commit)
+	view, err := s.buildStatusViewWithArtifacts(repoDir, commit, false)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
@@ -641,7 +653,7 @@ func (s WebServer) apiQueueEntry(summaries apiRepoSummaries, entry QueueEntry) (
 }
 
 func (s WebServer) taskRecord(repoDir string, commit string, taskName string, attempt int) (TaskRecord, error) {
-	run, err := (RunRepository{Paths: s.Paths}).ReadRun(repoDir, commit)
+	run, err := s.runRepository().ReadRun(repoDir, commit)
 	if err != nil {
 		return TaskRecord{}, err
 	}
@@ -666,7 +678,7 @@ type apiRepoSummaries struct {
 }
 
 func (s WebServer) apiRepoSummaries(extraRepoDirs ...string) (apiRepoSummaries, error) {
-	repos, err := (RunRepository{Paths: s.Paths}).ListRepoSummaries()
+	repos, err := s.runRepository().ListRepoSummaries()
 	if err != nil {
 		return apiRepoSummaries{}, err
 	}
@@ -772,9 +784,23 @@ func (s WebServer) buildRunCommitSummariesWithRepos(runs []RunRecord, summaries 
 }
 
 func (s WebServer) apiRepoTaskHistory(repoDir string, taskName string) (apiRepoTaskHistoryResponse, error) {
-	commits, err := HistoryReader{Paths: s.Paths}.ListRepoCommits(repoDir)
+	return s.apiRepoTaskHistoryPage(repoDir, taskName, 0)
+}
+
+const taskHistoryPageSize = 50
+
+func (s WebServer) apiRepoTaskHistoryPage(repoDir, taskName string, offset int) (apiRepoTaskHistoryResponse, error) {
+	commits, err := s.runRepository().ListRepoTaskRuns(repoDir, taskName, offset, taskHistoryPageSize+1)
 	if err != nil {
 		return apiRepoTaskHistoryResponse{}, err
+	}
+	nextOffset := 0
+	if len(commits) > taskHistoryPageSize {
+		nextOffset = offset + taskHistoryPageSize
+		commits = commits[:taskHistoryPageSize]
+	}
+	for i := range commits {
+		commits[i].DiscoveredTasks = []Task{{Name: taskName}}
 	}
 	summaries, err := s.buildRepoCommitSummaries(repoDir, commits)
 	if err != nil {
@@ -786,10 +812,11 @@ func (s WebServer) apiRepoTaskHistory(repoDir string, taskName string) (apiRepoT
 	}
 
 	resp := apiRepoTaskHistoryResponse{
-		Repo:      repo,
-		Task:      taskName,
-		ShortName: trimTaskPrefix(taskName),
-		Runs:      make([]apiRepoTaskHistoryItem, 0, len(summaries)),
+		NextOffset: nextOffset,
+		Repo:       repo,
+		Task:       taskName,
+		ShortName:  trimTaskPrefix(taskName),
+		Runs:       make([]apiRepoTaskHistoryItem, 0, len(summaries)),
 	}
 	for _, summary := range summaries {
 		task, ok := findAPITaskSummary(summary.Tasks, taskName)
@@ -888,7 +915,32 @@ func (s WebServer) discoverTasks(repoDir string) ([]Task, error) {
 }
 
 func (s WebServer) selectedTaskStatus(repoDir string, commit string, taskName string, selectedAttempt int) (TaskStatusView, error) {
-	view, err := s.buildStatusView(repoDir, commit)
+	task, err := s.selectedTaskMetadata(repoDir, commit, taskName, selectedAttempt)
+	if err != nil {
+		return TaskStatusView{}, err
+	}
+	task.OutputFiles, err = listOutputFiles(task.OutputDir)
+	if err != nil {
+		return TaskStatusView{}, err
+	}
+	task.Artifacts = buildArtifactViews(task.OutputDir, task.OutputFiles, task.MarkedArtifacts)
+	return task, nil
+}
+
+func (s WebServer) selectedTaskMetadata(repoDir, commit, taskName string, selectedAttempt int) (TaskStatusView, error) {
+	queue, err := s.Queue.List()
+	if err != nil {
+		return TaskStatusView{}, err
+	}
+	active, err := s.Queue.ReadActive()
+	if err != nil && !errors.Is(err, ErrRecordNotFound) {
+		return TaskStatusView{}, err
+	}
+	var activePtr *ActiveTask
+	if err == nil {
+		activePtr = &active
+	}
+	view, err := buildCommitStatusView(s.Paths, repoDir, commit, nil, queue, activePtr, taskName, false, s.runRepository())
 	if err != nil {
 		return TaskStatusView{}, err
 	}
@@ -896,7 +948,25 @@ func (s WebServer) selectedTaskStatus(repoDir string, commit string, taskName st
 	if !ok {
 		return TaskStatusView{}, fmt.Errorf("task not found")
 	}
-	task = ApplySelectedAttempt(s.Paths, repoDir, commit, task, selectedAttempt)
+	if selectedAttempt > 0 && selectedAttempt != task.Attempt {
+		found := false
+		for _, a := range task.Attempts {
+			if a.Attempt != selectedAttempt {
+				continue
+			}
+			found = true
+			task.Attempt, task.Status, task.DurationMilliseconds, task.Failure = a.Attempt, a.Status, a.DurationMilliseconds, a.Failure
+			task.OutputDir = s.Paths.TaskAttemptDir(repoDir, commit, taskName, selectedAttempt)
+			task.MarkedArtifacts = nil
+			if record, err := readTaskRecord(s.Paths.TaskRecordPath(repoDir, commit, taskName, selectedAttempt)); err == nil {
+				task.MarkedArtifacts = record.MarkedArtifacts
+			}
+			break
+		}
+		if !found {
+			return TaskStatusView{}, ErrRecordNotFound
+		}
+	}
 	if selectedAttempt > 0 && task.Attempt != selectedAttempt {
 		return TaskStatusView{}, fmt.Errorf("attempt not found")
 	}
@@ -908,7 +978,7 @@ func (s WebServer) repoDirFromRoute(repoSegments []string) (string, error) {
 }
 
 func (s WebServer) repoLabel(repoDir string) (string, error) {
-	repos, err := (RunRepository{Paths: s.Paths}).ListRepoSummaries()
+	repos, err := s.runRepository().ListRepoSummaries()
 	if err != nil {
 		return "", err
 	}

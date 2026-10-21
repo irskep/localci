@@ -6,9 +6,21 @@
 
 ### Added
 
+- Show terminal colors in task logs and text artifacts in the web UI, with plain text while scrolling and colors added to visible lines when scrolling stops.
+- Add pagination to task history in the web UI.
+
 ### Changed
 
+- Limit web log previews to 2 MiB, with the complete log available to download.
+
 ### Fixed
+
+- Run root setup tasks with qualified Mise names when retrying or recovering interrupted tasks. Recreate missing checkouts through setup.
+- Keep live logs in sync when output contains Unicode or overlaps a snapshot.
+- Show load errors and recover when a web page's initial snapshot stalls.
+- Avoid scanning unrelated task outputs or reading whole artifacts to serve a task page or report asset.
+- Reuse the web server's history database connection and coalesce queued updates instead of repeatedly reconnecting slow clients.
+- Keep stalled control-socket clients from blocking other commands.
 
 ### Removed
 

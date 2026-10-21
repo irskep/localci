@@ -23,6 +23,7 @@ const parsed = computed(() => parseRepoRoute(route.path))
 const history = computed(() => store.currentRepoTaskHistory)
 const rows = computed(() => history.value?.runs ?? [])
 const subscribedPage = ref('')
+const offset = ref(0)
 const title = computed(() => {
   const repoLabel = history.value?.repo.repo_label ?? parsed.value.repoPath
   const taskLabel = history.value?.short_name ?? parsed.value.taskName ?? 'Task'
@@ -33,8 +34,18 @@ useDocumentTitle(title)
 
 function subscribe(): void {
   if (parsed.value.kind !== 'repo-task') return
+  offset.value = 0
   subscribedPage.value = parsed.value.apiPath
   store.subscribeRepoTaskHistory(parsed.value.apiPath)
+}
+
+function loadPage(next: number): void {
+  offset.value = next
+  if (next === 0) {
+    subscribe()
+    return
+  }
+  void store.loadRepoTaskHistoryPage(parsed.value.apiPath, next)
 }
 
 function activityTime(row: RepoTaskHistoryItem): string {
@@ -127,5 +138,17 @@ onUnmounted(() => store.unsubscribePage(subscribedPage.value))
       </PColumn>
       <template #empty>No history recorded for this task.</template>
     </PDataTable>
+    <div v-if="history && (offset || history.next_offset)" class="artifact-toolbar">
+      <PButton
+        label="Newer"
+        :disabled="!offset || store.loading"
+        @click="loadPage(Math.max(0, offset - 50))"
+      />
+      <PButton
+        label="Older"
+        :disabled="!history.next_offset || store.loading"
+        @click="loadPage(history.next_offset ?? 0)"
+      />
+    </div>
   </main>
 </template>

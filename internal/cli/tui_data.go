@@ -56,6 +56,9 @@ func (m tuiModel) selectedTaskArtifactContent() string {
 	}
 	name := m.selectedTaskArtifactName()
 	if name == "" || name == m.task.PrimaryArtifact {
+		if m.task.PrimaryLogTruncated {
+			return m.task.PrimaryLog + "\n\n[Showing the first 2 MiB. Use localci cat --raw or download the full log.]"
+		}
 		return m.task.PrimaryLog
 	}
 	if m.taskArtifact != nil && m.taskArtifact.Artifact.DisplayName == name {
@@ -218,18 +221,30 @@ func (m tuiModel) listenEvents() tea.Cmd {
 func (m *tuiModel) applyEvent(event tuiAPIEvent) tea.Cmd {
 	if event.Type == "append" {
 		if m.route.view == tuiViewTask && m.task != nil && m.task.PrimaryArtifact == "combined.log" {
-			if int64(len(m.task.PrimaryLog)) == event.Offset {
+			if m.task.PrimaryLogTruncated || event.EndOffset <= m.task.PrimaryLogEnd {
+				return nil
+			}
+			if m.task.PrimaryLogEnd == event.Offset {
 				wasBottom := m.log.AtBottom()
-				m.task.PrimaryLog += event.Text
+				if event.EndOffset > 2<<20 {
+					m.task.PrimaryLogTruncated = true
+				} else {
+					m.task.PrimaryLog += event.Text
+				}
+				m.task.PrimaryLogEnd = event.EndOffset
 				m.syncViewports(wasBottom)
 				return nil
 			}
 			return m.loadRoute(m.route)
 		}
 		if m.route.view == tuiViewArtifact && m.artifact != nil {
-			if int64(len(m.artifact.Content)) == event.Offset {
+			if !m.artifact.Artifact.IsText || event.EndOffset <= m.artifact.ContentEnd {
+				return nil
+			}
+			if m.artifact.ContentEnd == event.Offset {
 				wasBottom := m.artifactLog.AtBottom()
 				m.artifact.Content += event.Text
+				m.artifact.ContentEnd = event.EndOffset
 				m.syncViewports(wasBottom)
 				return nil
 			}
